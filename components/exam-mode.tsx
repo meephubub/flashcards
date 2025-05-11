@@ -681,6 +681,76 @@ export function ExamMode({ deckId }: ExamModeProps) {
     touchStartRef.current = null
   }
 
+  // Add keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Don't handle keyboard shortcuts if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      switch (e.key.toLowerCase()) {
+        case "enter":
+          if (currentQuestionIndex < questions.length - 1) {
+            handleNextQuestion()
+          } else {
+            handleFinish()
+          }
+          break
+        case "h":
+          if (showHint) {
+            setShowHint(false)
+          } else if (difficulty !== "hard") {
+            setShowHint(true)
+          }
+          break
+        case " ":
+          if (currentQuestionIndex < questions.length - 1) {
+            handleNextQuestion()
+          }
+          break
+        case "p":
+          if (currentQuestionIndex > 0) {
+            setCurrentQuestionIndex((prev) => prev - 1)
+          }
+          break
+        case "1":
+        case "2":
+        case "3":
+        case "4":
+          if (currentQuestion?.type === "multiple-choice" && currentQuestion.options) {
+            const index = parseInt(e.key) - 1
+            if (index >= 0 && index < currentQuestion.options.length) {
+              setUserAnswers((prev) => ({
+                ...prev,
+                [currentQuestion.id]: currentQuestion.options![index],
+              }))
+            }
+          }
+          break
+        case "t":
+          if (currentQuestion?.type === "true-false") {
+            setUserAnswers((prev) => ({
+              ...prev,
+              [currentQuestion.id]: "True",
+            }))
+          }
+          break
+        case "f":
+          if (currentQuestion?.type === "true-false") {
+            setUserAnswers((prev) => ({
+              ...prev,
+              [currentQuestion.id]: "False",
+            }))
+          }
+          break
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyPress)
+    return () => window.removeEventListener("keydown", handleKeyPress)
+  }, [currentQuestion, currentQuestionIndex, questions.length, showHint, difficulty])
+
   if (loading || isGeneratingQuestions) {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
@@ -1199,6 +1269,26 @@ export function ExamMode({ deckId }: ExamModeProps) {
           </div>
         </CardFooter>
       </Card>
+
+      {/* Add keyboard shortcuts help */}
+      <div className="text-sm text-muted-foreground mt-4">
+        <p className="font-medium mb-2">Keyboard Shortcuts:</p>
+        <ul className="space-y-1">
+          <li><kbd className="px-2 py-1 bg-muted rounded">Enter</kbd> - Submit answer / Next question</li>
+          <li><kbd className="px-2 py-1 bg-muted rounded">H</kbd> - Toggle hint</li>
+          <li><kbd className="px-2 py-1 bg-muted rounded">N</kbd> - Next question</li>
+          <li><kbd className="px-2 py-1 bg-muted rounded">P</kbd> - Previous question</li>
+          {currentQuestion?.type === "multiple-choice" && (
+            <li><kbd className="px-2 py-1 bg-muted rounded">1-4</kbd> - Select answer</li>
+          )}
+          {currentQuestion?.type === "true-false" && (
+            <>
+              <li><kbd className="px-2 py-1 bg-muted rounded">T</kbd> - True</li>
+              <li><kbd className="px-2 py-1 bg-muted rounded">F</kbd> - False</li>
+            </>
+          )}
+        </ul>
+      </div>
     </div>
   )
 }
