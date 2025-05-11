@@ -3,7 +3,7 @@ import { getSettings, saveSettings, resetSettings } from "@/lib/settings"
 
 export async function GET() {
   try {
-    const settings = getSettings()
+    const settings = await getSettings()
     return NextResponse.json(settings)
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 })
@@ -13,7 +13,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const settings = await request.json()
-    saveSettings(settings)
+    await saveSettings(settings)
     return NextResponse.json(settings)
   } catch (error) {
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 })
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const { action } = await request.json()
 
     if (action === "reset") {
-      const defaultSettings = resetSettings()
+      const defaultSettings = await resetSettings()
       return NextResponse.json(defaultSettings)
     }
 

@@ -1,10 +1,4 @@
-import fs from "fs"
-import path from "path"
-import { initializeDataStorage } from "./data"
-
-// Define the data directory path
-const DATA_DIR = path.join(process.cwd(), "data")
-const SETTINGS_FILE = path.join(DATA_DIR, "settings.json")
+import { supabase } from "./supabase"
 
 export interface StudySettings {
   cardsPerSession: number
@@ -36,42 +30,75 @@ const defaultSettings: AppSettings = {
 }
 
 // Get settings
-export function getSettings(): AppSettings {
+export async function getSettings(): Promise<AppSettings> {
   try {
-    initializeDataStorage()
+    const { data, error } = await supabase
+      .from("settings")
+      .select("*")
+      .single()
 
-    if (!fs.existsSync(SETTINGS_FILE)) {
-      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(defaultSettings, null, 2))
+    if (error) {
+      if (error.code === "PGRST116") {
+        // No settings found, create default settings
+        const { data: newSettings, error: createError } = await supabase
+          .from("settings")
+          .insert([defaultSettings])
+          .select()
+          .single()
+
+        if (createError) {
+          console.error("Error creating default settings:", createError)
+          return defaultSettings
+        }
+
+        return newSettings
+      }
+
+      console.error("Error fetching settings:", error)
       return defaultSettings
     }
 
-    const data = fs.readFileSync(SETTINGS_FILE, "utf8")
-    return JSON.parse(data)
+    return data
   } catch (error) {
-    console.error("Error reading settings:", error)
+    console.error("Error in getSettings:", error)
     return defaultSettings
   }
 }
 
 // Save settings
-export function saveSettings(settings: AppSettings) {
+export async function saveSettings(settings: AppSettings): Promise<void> {
   try {
-    initializeDataStorage()
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2))
+    const { error } = await supabase
+      .from("settings")
+      .upsert([settings])
+      .select()
+
+    if (error) {
+      console.error("Error saving settings:", error)
+      throw new Error("Failed to save settings")
+    }
   } catch (error) {
-    console.error("Error saving settings:", error)
+    console.error("Error in saveSettings:", error)
     throw new Error("Failed to save settings")
   }
 }
 
 // Reset settings to default
-export function resetSettings() {
+export async function resetSettings(): Promise<AppSettings> {
   try {
-    initializeDataStorage()
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(defaultSettings, null, 2))
+    const { error } = await supabase
+      .from("settings")
+      .upsert([defaultSettings])
+      .select()
+
+    if (error) {
+      console.error("Error resetting settings:", error)
+      throw new Error("Failed to reset settings")
+    }
+
     return defaultSettings
   } catch (error) {
-    console.error("Error resetting settings:", error)
+    console.error("Error in resetSettings:", error)
     throw new Error("Failed to reset settings")
   }
 }
