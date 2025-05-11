@@ -60,15 +60,40 @@ export function StudyMode({ deckId }: StudyModeProps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Toggle AI chat with 'a' key
-      if (e.key === "a") {
-        setIsAIChatOpen((prev) => !prev)
+      // Don't handle keyboard shortcuts if rating dialog is shown
+      if (showRating) return
+
+      switch (e.key) {
+        case " ": // Space
+        case "Enter":
+          if (!isFlipped) {
+            handleFlip()
+          } else {
+            handleNext()
+          }
+          break
+        case "ArrowRight":
+        case "Right":
+          if (isFlipped) {
+            handleNext()
+          }
+          break
+        case "ArrowLeft":
+        case "Left":
+          if (currentCardIndex > 0) {
+            handlePrevious()
+          }
+          break
+        case "r":
+        case "R":
+          resetStudySession()
+          break
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [])
+  }, [isFlipped, currentCardIndex, showRating])
 
   if (loading) {
     return (
@@ -300,11 +325,10 @@ export function StudyMode({ deckId }: StudyModeProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Ask AI (A)</p>
+                <p>Ask AI</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-
           {isFlipped && !isSpacedRepetitionEnabled && !showRating && (
             <>
               <Button variant="destructive" size="icon" onClick={handleNext}>

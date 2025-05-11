@@ -110,7 +110,7 @@ export function GenerateFlashcardsDialog({ open, onOpenChange }: GenerateFlashca
             <Slider
               id="number-of-cards"
               min={3}
-              max={15}
+              max={50}
               step={1}
               value={[numberOfCards]}
               onValueChange={(value) => setNumberOfCards(value[0])}
