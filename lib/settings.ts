@@ -42,7 +42,12 @@ export async function getSettings(): Promise<AppSettings> {
         // No settings found, create default settings
         const { data: newSettings, error: createError } = await supabase
           .from("settings")
-          .insert([defaultSettings])
+          .insert([{
+            theme: defaultSettings.theme,
+            enable_animations: defaultSettings.enableAnimations,
+            enable_sounds: defaultSettings.enableSounds,
+            study_settings: defaultSettings.studySettings
+          }])
           .select()
           .single()
 
@@ -51,14 +56,24 @@ export async function getSettings(): Promise<AppSettings> {
           return defaultSettings
         }
 
-        return newSettings
+        return {
+          theme: newSettings.theme,
+          enableAnimations: newSettings.enable_animations,
+          enableSounds: newSettings.enable_sounds,
+          studySettings: newSettings.study_settings
+        }
       }
 
       console.error("Error fetching settings:", error)
       return defaultSettings
     }
 
-    return data
+    return {
+      theme: data.theme,
+      enableAnimations: data.enable_animations,
+      enableSounds: data.enable_sounds,
+      studySettings: data.study_settings
+    }
   } catch (error) {
     console.error("Error in getSettings:", error)
     return defaultSettings
@@ -70,7 +85,12 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   try {
     const { error } = await supabase
       .from("settings")
-      .upsert([settings])
+      .upsert([{
+        theme: settings.theme,
+        enable_animations: settings.enableAnimations,
+        enable_sounds: settings.enableSounds,
+        study_settings: settings.studySettings
+      }])
       .select()
 
     if (error) {
@@ -88,7 +108,12 @@ export async function resetSettings(): Promise<AppSettings> {
   try {
     const { error } = await supabase
       .from("settings")
-      .upsert([defaultSettings])
+      .upsert([{
+        theme: defaultSettings.theme,
+        enable_animations: defaultSettings.enableAnimations,
+        enable_sounds: defaultSettings.enableSounds,
+        study_settings: defaultSettings.studySettings
+      }])
       .select()
 
     if (error) {
