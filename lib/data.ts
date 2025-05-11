@@ -3,23 +3,11 @@ import { supabase } from "./supabase"
 import type { Deck } from "./supabase"
 import type { CardProgress } from "./spaced-repetition"
 import { generateFlashcards } from "./groq"
-import fs from "fs"
-import path from "path"
 
-// Define the data directory path
-const DATA_DIR = path.join(process.cwd(), "data")
-
-// Initialize data storage
+// Initialize data storage - no-op since we're using Supabase
 export function initializeDataStorage() {
-  try {
-    // Create data directory if it doesn't exist
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    }
-  } catch (error) {
-    console.error("Error initializing data storage:", error)
-    throw new Error("Failed to initialize data storage")
-  }
+  // No initialization needed as we're using Supabase
+  return
 }
 
 // Get all decks with their cards
