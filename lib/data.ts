@@ -1,43 +1,7 @@
-import fs from "fs"
-import path from "path"
+// data-storage.ts
 import { supabase } from "./supabase"
 import type { Deck } from "./supabase"
 import type { CardProgress } from "./spaced-repetition"
-
-// Define the data directory path
-const DATA_DIR = path.join(process.cwd(), "data")
-const DECKS_FILE = path.join(DATA_DIR, "decks.json")
-
-// Initialize data storage
-export function initializeDataStorage() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR)
-  }
-
-  if (!fs.existsSync(DECKS_FILE)) {
-    fs.writeFileSync(DECKS_FILE, "[]")
-  }
-}
-
-// Get new deck ID
-export function getNewDeckId(): number {
-  initializeDataStorage()
-
-  try {
-    const data = fs.readFileSync(DECKS_FILE, "utf8")
-    const decks = JSON.parse(data) as any[]
-
-    if (decks.length === 0) {
-      return 1
-    }
-
-    const maxId = decks.reduce((max, deck) => (deck.id > max ? deck.id : max), 0)
-    return maxId + 1
-  } catch (error) {
-    console.error("Error getting new deck ID:", error)
-    return 1
-  }
-}
 
 // Get all decks with their cards
 export async function getDecks(): Promise<Deck[]> {
@@ -523,7 +487,7 @@ export async function getDueCards(deckId: number): Promise<Card[]> {
   }
 }
 
-// Import cards from markdown
+// Import cards from markdown - this now directly adds to the database
 export async function importCardsFromMarkdown(parsedDeck: any): Promise<Deck | undefined> {
   try {
     // Create a new deck
