@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import type { Card } from "@/lib/data"
 import type { ExamDifficulty } from "@/lib/exam-cache"
+import { makeGroqRequest } from "@/lib/groq"
 
 export type QuestionType =
   | "multiple-choice"
@@ -26,6 +27,7 @@ export interface ExamQuestion {
   matchingPairs?: Array<{ left: string; right: string }>
   sequence?: string[]
   difficulty: ExamDifficulty
+  hint?: string
 }
 
 export async function generateQuestionsFromCards(
@@ -40,47 +42,56 @@ export async function generateQuestionsFromCards(
     // Transform cards into different question types
     const questions: ExamQuestion[] = []
 
-    // Use simpler question types to avoid API errors
-    const questionTypes: QuestionType[] = ["multiple-choice", "true-false", "fill-in-blank", "short-answer"]
-
-    // Generate questions directly without relying too much on the API
+    // Use Groq to generate questions
     for (let i = 0; i < selectedCards.length; i++) {
       const card = selectedCards[i]
+      
+      // Generate question using Groq
+      const prompt = `Generate an educational question based on this flashcard:
+Front: ${card.front}
+Back: ${card.back}
 
-      // Select question type based on index
-      const typeIndex = i % questionTypes.length
-      const questionType = questionTypes[typeIndex]
+Generate a question that:
+1. Tests understanding of the concept
+2. Is appropriate for ${difficulty} difficulty level
+3. Includes a helpful hint that guides without giving away the answer
+4. Has a clear, unambiguous correct answer
 
-      // Create question based on type - use fallback methods that don't rely on API
+Format the response as a JSON object with these fields:
+{
+  "type": "multiple-choice" | "true-false" | "fill-in-blank" | "short-answer",
+  "question": "The question text",
+  "options": ["Option 1", "Option 2", ...] (only for multiple-choice),
+  "correctAnswer": "The correct answer",
+  "hint": "A helpful hint that guides without giving away the answer",
+  "explanation": "Explanation of why the answer is correct"
+}`
+
       try {
-        let question: ExamQuestion
+        const response = await makeGroqRequest(prompt, true)
+        const questionData = JSON.parse(response)
 
-        switch (questionType) {
-          case "multiple-choice":
-            question = fallbackMultipleChoiceQuestion(card, selectedCards, difficulty)
-            break
-          case "true-false":
-            question = fallbackTrueFalseQuestion(card, difficulty)
-            break
-          case "fill-in-blank":
-            question = fallbackFillInBlankQuestion(card, difficulty)
-            break
-          default:
-            question = {
-              id: card.id,
-              type: "short-answer",
-              question: card.front,
-              correctAnswer: card.back,
-              originalCard: card,
-              difficulty,
-              explanation: `The correct answer is: ${card.back}`,
-            }
+        // Create the question object
+        const question: ExamQuestion = {
+          id: card.id,
+          type: questionData.type,
+          question: questionData.question,
+          correctAnswer: questionData.correctAnswer,
+          originalCard: card,
+          difficulty,
+          hint: questionData.hint,
+          explanation: questionData.explanation,
+        }
+
+        // Add options for multiple choice questions
+        if (questionData.type === "multiple-choice" && questionData.options) {
+          question.options = questionData.options
         }
 
         questions.push(question)
       } catch (error) {
-        console.error(`Error creating question for card ${card.id}:`, error)
-        // Add a simple fallback question
+        console.error(`Error generating question for card ${card.id}:`, error)
+        // Fallback to a simple question if Groq fails
         questions.push({
           id: card.id,
           type: "short-answer",
@@ -88,6 +99,7 @@ export async function generateQuestionsFromCards(
           correctAnswer: card.back,
           originalCard: card,
           difficulty,
+          hint: `Think about the relationship between "${card.front}" and its answer.`,
           explanation: `The correct answer is: ${card.back}`,
         })
       }
@@ -106,6 +118,7 @@ export async function generateQuestionsFromCards(
       correctAnswer: card.back,
       originalCard: card,
       difficulty,
+      hint: `Think about the relationship between "${card.front}" and its answer.`,
       explanation: `The correct answer is: ${card.back}`,
     }))
   }

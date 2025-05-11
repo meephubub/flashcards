@@ -89,7 +89,7 @@ Return ONLY valid JSON in this format:
 }
 
 // Helper function to make a request to the Groq API
-async function makeGroqRequest(promptContent: string): Promise<string> {
+export async function makeGroqRequest(promptContent: string, isQuestionGeneration = false): Promise<string> {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -101,8 +101,9 @@ async function makeGroqRequest(promptContent: string): Promise<string> {
       messages: [
         {
           role: "system",
-          content:
-            "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Always return your output as a valid JSON object containing a cards array. Each element in the array should be an object with front (the question as a string) and back (the answer as a string). Keep the language accessible, avoid overly technical jargon unless the topic requires it, and ensure all output is in valid JSON syntax. Do not include any extra commentary, explanations, or markdown outside of the JSON.",
+          content: isQuestionGeneration
+            ? "You are an expert educational question generator. Your goal is to create clear, accurate, and well-structured questions that test understanding of concepts. Each question should be challenging but fair, with a clear correct answer. For multiple-choice questions, provide plausible distractors that test common misconceptions. Always include a helpful hint that guides without giving away the answer. Keep the language accessible and ensure all output is in valid JSON syntax."
+            : "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Always return your output as a valid JSON object containing a cards array. Each element in the array should be an object with front (the question as a string) and back (the answer as a string). Keep the language accessible, avoid overly technical jargon unless the topic requires it, and ensure all output is in valid JSON syntax. Do not include any extra commentary, explanations, or markdown outside of the JSON.",
         },
         {
           role: "user",
@@ -117,7 +118,7 @@ async function makeGroqRequest(promptContent: string): Promise<string> {
 
   if (!response.ok) {
     const errorData = await response.json()
-    throw new Error(errorData.error?.message || "Failed to generate flashcards")
+    throw new Error(errorData.error?.message || "Failed to generate content")
   }
 
   const data = await response.json()
