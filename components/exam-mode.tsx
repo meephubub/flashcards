@@ -694,7 +694,8 @@ export function ExamMode({ deckId }: ExamModeProps) {
           if (currentQuestionIndex < questions.length - 1) {
             handleNextQuestion()
           } else {
-            handleFinish()
+            calculateFinalScore()
+            setExamCompleted(true)
           }
           break
         case "h":
