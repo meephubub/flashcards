@@ -2,13 +2,13 @@ import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/supabase"
 
 // For client-side only
-export const supabaseClient = createClient<Database>(
+export const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_PUB_API!
 )
 
 // Alternative initialization with error handling
-export const getSupabaseClient = () => {
+export const createClient_component = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUB_API
   
