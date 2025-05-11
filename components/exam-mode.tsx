@@ -681,6 +681,9 @@ export function ExamMode({ deckId }: ExamModeProps) {
     touchStartRef.current = null
   }
 
+  // Get current question
+  const currentQuestion = questions[currentQuestionIndex]
+
   // Add keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -750,7 +753,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [currentQuestion, currentQuestionIndex, questions.length, showHint, difficulty])
+  }, [currentQuestionIndex, questions, showHint, difficulty])
 
   if (loading || isGeneratingQuestions) {
     return (
@@ -923,7 +926,6 @@ export function ExamMode({ deckId }: ExamModeProps) {
     )
   }
 
-  const currentQuestion = questions[currentQuestionIndex]
   const currentResult = results[currentQuestion?.id]
   const hasAnswered = !!currentResult
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100
