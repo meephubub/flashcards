@@ -2,6 +2,7 @@
 import { supabase } from "./supabase"
 import type { Deck } from "./supabase"
 import type { CardProgress } from "./spaced-repetition"
+import { generateFlashcards } from "./groq"
 
 // Get all decks with their cards
 export async function getDecks(): Promise<Deck[]> {
@@ -512,27 +513,17 @@ export async function importCardsFromMarkdown(parsedDeck: any): Promise<Deck | u
 // Generate AI flashcards
 export async function generateAIFlashcards(topic: string, numberOfCards: number, deckId?: number): Promise<any> {
   try {
-    // This function would call your AI service to generate flashcards
-    // For now, we'll just return a placeholder
-    const generatedCards = [
-      {
-        front: `What is ${topic}?`,
-        back: "This is a placeholder answer. AI generation would go here.",
-      },
-      {
-        front: `Explain the importance of ${topic}.`,
-        back: "This is a placeholder answer. AI generation would go here.",
-      },
-    ]
+    // Generate flashcards using Groq
+    const result = await generateFlashcards(topic, numberOfCards)
 
     if (deckId) {
       // Add cards to existing deck
-      for (const card of generatedCards) {
+      for (const card of result.cards) {
         await addCard(deckId, card.front, card.back)
       }
       return {
         success: true,
-        message: `Added ${generatedCards.length} cards to existing deck`,
+        message: `Added ${result.cards.length} cards to existing deck`,
         deckId,
       }
     } else {
@@ -543,13 +534,13 @@ export async function generateAIFlashcards(topic: string, numberOfCards: number,
       }
 
       // Add cards to the new deck
-      for (const card of generatedCards) {
+      for (const card of result.cards) {
         await addCard(newDeck.id, card.front, card.back)
       }
 
       return {
         success: true,
-        message: `Created new deck with ${generatedCards.length} cards`,
+        message: `Created new deck with ${result.cards.length} cards`,
         deckId: newDeck.id,
       }
     }
