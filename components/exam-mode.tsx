@@ -58,6 +58,17 @@ interface ExamModeProps {
   deckId: number
 }
 
+interface QuestionState {
+  answer: string;
+  matchingPairs: Array<{ left: string; right: string }>;
+  sequence: string[];
+  isAnswered: boolean;
+  isGrading: boolean;
+  showHint: boolean;
+  hintLevel: number;
+  showFeedback: boolean;
+}
+
 export function ExamMode({ deckId }: ExamModeProps) {
   const { getDeck, loading } = useDecks()
   const { settings } = useSettings()
@@ -70,16 +81,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({})
   const [results, setResults] = useState<Record<number, GradingResult>>({})
-  const [currentAnswer, setCurrentAnswer] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isGrading, setIsGrading] = useState(false)
+  const [questionStates, setQuestionStates] = useState<Record<number, QuestionState>>({})
   const [examCompleted, setExamCompleted] = useState(false)
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false)
   const [examScore, setExamScore] = useState(0)
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [examStarted, setExamStarted] = useState(false)
   const [streakCount, setStreakCount] = useState(0)
-  const [showHint, setShowHint] = useState(false)
   const [difficulty, setDifficulty] = useState<ExamDifficulty>("medium")
   const [hasCachedExam, setHasCachedExam] = useState(false)
   const [showResumeDialog, setShowResumeDialog] = useState(false)
@@ -111,50 +119,209 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<number>>(new Set())
 
-  // Get current question
+  // Get current question and its state
   const currentQuestion = questions[currentQuestionIndex]
-  const currentResult = results[currentQuestion?.id]
-  const hasAnswered = answeredQuestions.has(currentQuestion?.id)
+  const currentQuestionState = currentQuestion ? questionStates[currentQuestion.id] : null
+  const currentResult = currentQuestion ? results[currentQuestion.id] : null
 
-  const getHint = async (question: ExamQuestion): Promise<string> => {
-    if (isGeneratingHint) return currentHint
+  // Initialize question state when a new question is loaded
+  useEffect(() => {
+    if (!currentQuestion) return
 
-    setIsGeneratingHint(true)
+    setQuestionStates(prev => {
+      // If state already exists for this question, keep it
+      if (prev[currentQuestion.id]) {
+        return prev
+      }
+
+      // Initialize new state for this question
+      const newState: QuestionState = {
+        answer: userAnswers[currentQuestion.id] || "",
+        matchingPairs: currentQuestion.type === "matching" && currentQuestion.matchingPairs 
+          ? [...currentQuestion.matchingPairs].sort(() => 0.5 - Math.random())
+          : [],
+        sequence: currentQuestion.type === "sequence" && currentQuestion.sequence
+          ? [...currentQuestion.sequence].sort(() => 0.5 - Math.random())
+          : [],
+        isAnswered: !!results[currentQuestion.id],
+        isGrading: false,
+        showHint: false,
+        hintLevel: 0,
+        showFeedback: false
+      }
+
+      return {
+        ...prev,
+        [currentQuestion.id]: newState
+      }
+    })
+  }, [currentQuestion, userAnswers, results])
+
+  // Update question state
+  const updateQuestionState = (questionId: number, updates: Partial<QuestionState>) => {
+    setQuestionStates(prev => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        ...updates
+      }
+    }))
+  }
+
+  // Handle answer input changes
+  const handleAnswerChange = (value: string) => {
+    if (!currentQuestion || currentQuestionState?.isAnswered) return
+
+    updateQuestionState(currentQuestion.id, {
+      answer: value
+    })
+  }
+
+  // Handle matching pairs changes
+  const handleMatchingChange = (leftIndex: number, rightValue: string) => {
+    if (!currentQuestion || currentQuestionState?.isAnswered) return
+
+    const updatedPairs = [...(currentQuestionState?.matchingPairs || [])]
+    updatedPairs[leftIndex] = { ...updatedPairs[leftIndex], right: rightValue }
+
+    updateQuestionState(currentQuestion.id, {
+      matchingPairs: updatedPairs
+    })
+  }
+
+  // Handle sequence changes
+  const handleDragEnd = (result: any) => {
+    if (!currentQuestion || currentQuestionState?.isAnswered || !result.destination) return
+
+    const items = Array.from(currentQuestionState?.sequence || [])
+    const [reorderedItem] = items.splice(result.source.index, 1)
+    items.splice(result.destination.index, 0, reorderedItem)
+
+    updateQuestionState(currentQuestion.id, {
+      sequence: items
+    })
+  }
+
+  // Enhanced answer submission
+  const handleSubmitAnswer = async () => {
+    if (!currentQuestion || !currentQuestionState) return
+
+    // Validate answer based on question type
+    if (currentQuestion.type === "matching") {
+      if (currentQuestionState.matchingPairs.length === 0) {
+        toast({
+          title: "Answer required",
+          description: "Please match all pairs before submitting.",
+          variant: "destructive"
+        })
+        return
+      }
+    } else if (currentQuestion.type === "sequence") {
+      if (currentQuestionState.sequence.length === 0) {
+        toast({
+          title: "Answer required",
+          description: "Please arrange the sequence before submitting.",
+          variant: "destructive"
+        })
+        return
+      }
+    } else if (!currentQuestionState.answer.trim()) {
+      toast({
+        title: "Answer required",
+        description: "Please provide an answer before submitting.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Save the user's answer
+    const answerToSave = currentQuestion.type === "matching"
+      ? JSON.stringify(currentQuestionState.matchingPairs)
+      : currentQuestion.type === "sequence"
+        ? JSON.stringify(currentQuestionState.sequence)
+        : currentQuestionState.answer
+
+    updateQuestionState(currentQuestion.id, {
+      isGrading: true
+    })
+
     try {
-      const hintResult = await generateHint(question.question, question.correctAnswer, question.type, hintLevel)
-      setCurrentHint(hintResult.hint)
-      return hintResult.hint
+      const gradingResult = await gradeAnswer(
+        currentQuestion.type,
+        currentQuestion.question,
+        currentQuestion.type === "matching"
+          ? JSON.stringify(currentQuestion.matchingPairs)
+          : currentQuestion.type === "sequence"
+            ? JSON.stringify(currentQuestion.sequence)
+            : currentQuestion.correctAnswer,
+        answerToSave,
+        {
+          adaptiveScoring,
+          timePressure,
+          previousAnswers: Object.values(results),
+          questionType: currentQuestion.type
+        }
+      )
+
+      // Update user answers and results
+      setUserAnswers(prev => ({
+        ...prev,
+        [currentQuestion.id]: answerToSave
+      }))
+
+      setResults(prev => ({
+        ...prev,
+        [currentQuestion.id]: gradingResult
+      }))
+
+      // Update question state
+      updateQuestionState(currentQuestion.id, {
+        isAnswered: true,
+        isGrading: false,
+        showFeedback: true
+      })
+
+      // Update streak count
+      if (gradingResult.isCorrect) {
+        setStreakCount(prev => prev + 1)
+      } else {
+        setStreakCount(0)
+      }
+
+      toast({
+        title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
+        description: gradingResult.feedback,
+        variant: gradingResult.isCorrect ? "default" : "destructive"
+      })
     } catch (error) {
-      console.error("Error getting hint:", error)
-      return "Think carefully about the question and consider all aspects of the content."
+      console.error("Error grading answer:", error)
+      toast({
+        title: "Error",
+        description: "Failed to grade your answer. Please try again.",
+        variant: "destructive"
+      })
     } finally {
-      setIsGeneratingHint(false)
+      updateQuestionState(currentQuestion.id, {
+        isGrading: false
+      })
     }
   }
 
-  const toggleHint = async () => {
-    if (hintCooldown || isGeneratingHint) return
-
-    setHintCooldown(true)
-    setHintLevel((prev) => prev + 1)
-    setShowHint(true)
-
-    // Get new hint
-    const hint = await getHint(questions[currentQuestionIndex])
-    setCurrentHint(hint)
-
-    // Reset cooldown after 2 seconds
-    setTimeout(() => {
-      setHintCooldown(false)
-    }, 2000)
+  // Reset state when moving to a new question
+  const handleNextQuestion = () => {
+    if (currentQuestionIndex < totalQuestions - 1) {
+      setCurrentQuestionIndex((prev) => prev + 1)
+    } else {
+      calculateFinalScore()
+      setExamCompleted(true)
+    }
   }
 
-  // Reset hint level when moving to next question
-  useEffect(() => {
-    setHintLevel(0)
-    setShowHint(false)
-    setCurrentHint("")
-  }, [currentQuestionIndex])
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex((prev) => prev - 1)
+    }
+  }
 
   // Generate a single question
   const generateQuestion = async (index: number, type: string) => {
@@ -211,14 +378,10 @@ export function ExamMode({ deckId }: ExamModeProps) {
       setQuestions([])
       setUserAnswers({})
       setResults({})
-      setCurrentAnswer("")
-      setMatchingPairs([])
-      setSequence([])
       setCurrentQuestionIndex(0)
       setExamCompleted(false)
       setTimeRemaining(Math.round(60 * 15 * settings.timeMultiplier))
       setStreakCount(0)
-      setShowHint(false)
       setDifficulty(selectedDifficulty)
       setHasCachedExam(false)
       setShowFeedback(false)
@@ -577,193 +740,6 @@ export function ExamMode({ deckId }: ExamModeProps) {
     }
   }
 
-  // Enhanced answer submission
-  const handleSubmitAnswer = async () => {
-    if (!currentQuestion) return
-
-    // Validate answer based on question type
-    if (currentQuestion.type === "matching") {
-      if (matchingPairs.length === 0) {
-        setTimeout(() => {
-          toast({
-            title: "Answer required",
-            description: "Please match all pairs before submitting.",
-            variant: "destructive",
-          })
-        }, 0)
-        return
-      }
-      // Convert matching pairs to string for grading
-      setCurrentAnswer(JSON.stringify(matchingPairs))
-    } else if (currentQuestion.type === "sequence") {
-      if (sequence.length === 0) {
-        setTimeout(() => {
-          toast({
-            title: "Answer required",
-            description: "Please arrange the sequence before submitting.",
-            variant: "destructive",
-          })
-        }, 0)
-        return
-      }
-      // Convert sequence to string for grading
-      setCurrentAnswer(JSON.stringify(sequence))
-    } else if (!currentAnswer.trim()) {
-      setTimeout(() => {
-        toast({
-          title: "Answer required",
-          description: "Please provide an answer before submitting.",
-          variant: "destructive",
-        })
-      }, 0)
-      return
-    }
-
-    // Save the user's answer
-    const answerToSave = currentQuestion.type === "matching"
-      ? JSON.stringify(matchingPairs)
-      : currentQuestion.type === "sequence"
-        ? JSON.stringify(sequence)
-        : currentAnswer
-
-    setIsGrading(true)
-
-    try {
-      const gradingResult = await gradeAnswer(
-        currentQuestion.type,
-        currentQuestion.question,
-        currentQuestion.type === "matching"
-          ? JSON.stringify(currentQuestion.matchingPairs)
-          : currentQuestion.type === "sequence"
-            ? JSON.stringify(currentQuestion.sequence)
-            : currentQuestion.correctAnswer,
-        answerToSave,
-        {
-          adaptiveScoring,
-          timePressure,
-          previousAnswers: Object.values(results),
-          questionType: currentQuestion.type,
-        },
-      )
-
-      // Only update userAnswers after successful grading
-      setUserAnswers((prev) => ({
-        ...prev,
-        [currentQuestion.id]: answerToSave,
-      }))
-
-      // Update answered questions set
-      setAnsweredQuestions((prev) => new Set([...prev, currentQuestion.id]))
-
-      // Update question type distribution
-      setQuestionTypeDistribution((prev) => ({
-        ...prev,
-        [currentQuestion.type]: (prev[currentQuestion.type] || 0) + 1,
-      }))
-
-      // Show detailed feedback
-      setDetailedFeedback(getDetailedFeedback(gradingResult))
-      setShowFeedback(true)
-
-      // Save the result
-      setResults((prev) => {
-        const newResults = {
-          ...prev,
-          [currentQuestion.id]: gradingResult,
-        }
-
-        // Save progress after grading
-        setTimeout(() => {
-          saveExamDataToCache(deckId, {
-            deckId,
-            questions,
-            userAnswers: {
-              ...userAnswers,
-              [currentQuestion.id]: answerToSave,
-            },
-            results: newResults,
-            currentQuestionIndex,
-            timeRemaining,
-            streakCount: gradingResult.isCorrect ? streakCount + 1 : 0,
-            difficulty,
-            startedAt: new Date().toISOString(),
-          })
-        }, 500)
-
-        return newResults
-      })
-
-      // Update streak count
-      if (gradingResult.isCorrect) {
-        setStreakCount((prev) => prev + 1)
-
-        // Show confetti for correct answers
-        if (confettiRef.current && streakCount >= 2) {
-          const rect = confettiRef.current.getBoundingClientRect()
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: {
-              x: (rect.left + rect.width / 2) / window.innerWidth,
-              y: (rect.top + rect.height / 2) / window.innerHeight,
-            },
-          })
-        }
-      } else {
-        setStreakCount(0)
-      }
-
-      // Move toast to effect
-      setTimeout(() => {
-        toast({
-          title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
-          description: gradingResult.feedback,
-          variant: gradingResult.isCorrect ? "default" : "destructive",
-        })
-      }, 0)
-    } catch (error) {
-      console.error("Error grading answer:", error)
-      setTimeout(() => {
-        toast({
-          title: "Error",
-          description: "Failed to grade your answer. Please try again.",
-          variant: "destructive",
-        })
-      }, 0)
-    } finally {
-      setIsGrading(false)
-    }
-  }
-
-  const handlePreviousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1)
-      // Restore previous answer if it exists
-      const prevQuestionId = questions[currentQuestionIndex - 1]?.id
-      const prevAnswer = userAnswers[prevQuestionId] || ""
-
-      const prevQuestion = questions[currentQuestionIndex - 1]
-      if (prevQuestion?.type === "matching") {
-        try {
-          setMatchingPairs(JSON.parse(prevAnswer))
-        } catch {
-          setMatchingPairs(prevQuestion.matchingPairs || [])
-        }
-      } else if (prevQuestion?.type === "sequence") {
-        try {
-          setSequence(JSON.parse(prevAnswer))
-        } catch {
-          setSequence(prevQuestion.sequence || [])
-        }
-      } else {
-        setCurrentAnswer(prevAnswer)
-      }
-
-      // Save progress after moving to previous question
-      setTimeout(() => saveExamProgress(), 500)
-    }
-  }
-
   const calculateFinalScore = () => {
     if (questions.length === 0) return 0
 
@@ -802,24 +778,6 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
     // Generate new questions
     initializeExam()
-  }
-
-  // Handle drag and drop for sequence questions
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return
-
-    const items = Array.from(sequence)
-    const [reorderedItem] = items.splice(result.source.index, 1)
-    items.splice(result.destination.index, 0, reorderedItem)
-
-    setSequence(items)
-  }
-
-  // Handle matching pairs
-  const handleMatchingChange = (leftIndex: number, rightValue: string) => {
-    const updatedPairs = [...matchingPairs]
-    updatedPairs[leftIndex].right = rightValue
-    setMatchingPairs(updatedPairs)
   }
 
   // Handle touch swipe for mobile navigation between questions
@@ -1371,23 +1329,16 @@ export function ExamMode({ deckId }: ExamModeProps) {
               {currentQuestion.type === "image-based" && "Image-Based Question"}
               {currentQuestion.type === "analogy" && "Analogy"}
             </span>
-            {!hasAnswered && diffSettings.hintAllowed && (
+            {!currentQuestionState?.isAnswered && diffSettings.hintAllowed && (
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={toggleHint}
-                  disabled={hintCooldown || isGeneratingHint}
+                  onClick={() => updateQuestionState(currentQuestion.id, { showHint: true })}
+                  disabled={currentQuestionState?.isGrading}
                   className="relative"
                 >
-                  {isGeneratingHint ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                      <span>Generating...</span>
-                    </div>
-                  ) : (
-                    "Show Hint"
-                  )}
+                  Show Hint
                 </Button>
               </div>
             )}
@@ -1410,13 +1361,9 @@ export function ExamMode({ deckId }: ExamModeProps) {
           {/* Different input types based on question type */}
           {currentQuestion.type === "multiple-choice" && (
             <RadioGroup
-              value={currentAnswer}
-              onValueChange={(value) => {
-                if (!hasAnswered) {
-                  setCurrentAnswer(value)
-                }
-              }}
-              disabled={hasAnswered}
+              value={currentQuestionState?.answer || ""}
+              onValueChange={handleAnswerChange}
+              disabled={currentQuestionState?.isAnswered}
               className="space-y-3"
             >
               {currentQuestion.options?.map((option: string, i: number) => (
@@ -1424,35 +1371,35 @@ export function ExamMode({ deckId }: ExamModeProps) {
                   key={i}
                   className={`flex items-center space-x-3 p-4 rounded-lg border transition-all duration-200
                     ${
-                      currentAnswer === option
+                      currentQuestionState?.answer === option
                         ? "border-primary bg-primary/5"
                         : "border-border hover:border-primary/50 hover:bg-muted/50"
                     }
                     ${
-                      hasAnswered
+                      currentQuestionState?.isAnswered
                         ? option === currentQuestion.correctAnswer
                           ? "border-success bg-success/5"
-                          : currentAnswer === option
+                          : currentQuestionState?.answer === option
                             ? "border-destructive bg-destructive/5"
                             : ""
                         : "cursor-pointer"
                     }`}
-                  onClick={() => !hasAnswered && setCurrentAnswer(option)}
+                  onClick={() => !currentQuestionState?.isAnswered && handleAnswerChange(option)}
                 >
                   <RadioGroupItem value={option} id={`option-${i}`} className="h-5 w-5" />
                   <Label
                     htmlFor={`option-${i}`}
                     className={`flex-1 cursor-pointer text-base
-                      ${hasAnswered && option === currentQuestion.correctAnswer ? "text-success" : ""}
-                      ${hasAnswered && currentAnswer === option && option !== currentQuestion.correctAnswer ? "text-destructive" : ""}
+                      ${currentQuestionState?.isAnswered && option === currentQuestion.correctAnswer ? "text-success" : ""}
+                      ${currentQuestionState?.isAnswered && currentQuestionState?.answer === option && option !== currentQuestion.correctAnswer ? "text-destructive" : ""}
                     `}
                   >
                     {option}
                   </Label>
-                  {hasAnswered && option === currentQuestion.correctAnswer && (
+                  {currentQuestionState?.isAnswered && option === currentQuestion.correctAnswer && (
                     <Check className="h-5 w-5 text-success" />
                   )}
-                  {hasAnswered && currentAnswer === option && option !== currentQuestion.correctAnswer && (
+                  {currentQuestionState?.isAnswered && currentQuestionState?.answer === option && option !== currentQuestion.correctAnswer && (
                     <X className="h-5 w-5 text-destructive" />
                   )}
                 </div>
@@ -1462,18 +1409,14 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
           {currentQuestion.type === "true-false" && (
             <RadioGroup
-              value={currentAnswer}
-              onValueChange={(value) => {
-                if (!hasAnswered) {
-                  setCurrentAnswer(value)
-                }
-              }}
-              disabled={hasAnswered}
+              value={currentQuestionState?.answer || ""}
+              onValueChange={handleAnswerChange}
+              disabled={currentQuestionState?.isAnswered}
               className="space-y-2"
             >
               <div
                 className="flex items-center space-x-2 p-3 rounded-md hover:bg-secondary/50 cursor-pointer transition-colors"
-                onClick={() => !hasAnswered && setCurrentAnswer("True")}
+                onClick={() => !currentQuestionState?.isAnswered && handleAnswerChange("True")}
               >
                 <RadioGroupItem value="True" id="true" />
                 <Label htmlFor="true" className="flex-1 cursor-pointer">
@@ -1482,7 +1425,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
               </div>
               <div
                 className="flex items-center space-x-2 p-3 rounded-md hover:bg-secondary/50 cursor-pointer transition-colors"
-                onClick={() => !hasAnswered && setCurrentAnswer("False")}
+                onClick={() => !currentQuestionState?.isAnswered && handleAnswerChange("False")}
               >
                 <RadioGroupItem value="False" id="false" />
                 <Label htmlFor="false" className="flex-1 cursor-pointer">
@@ -1495,26 +1438,26 @@ export function ExamMode({ deckId }: ExamModeProps) {
           {currentQuestion.type === "fill-in-blank" && (
             <Input
               type="text"
-              value={currentAnswer}
+              value={currentQuestionState?.answer || ""}
               onChange={(e) => {
-                if (!hasAnswered) {
-                  setCurrentAnswer(e.target.value)
+                if (!currentQuestionState?.isAnswered) {
+                  handleAnswerChange(e.target.value)
                 }
               }}
-              disabled={hasAnswered}
+              disabled={currentQuestionState?.isAnswered}
               placeholder="Your answer"
             />
           )}
 
           {currentQuestion.type === "short-answer" && (
             <Textarea
-              value={currentAnswer}
+              value={currentQuestionState?.answer || ""}
               onChange={(e) => {
-                if (!hasAnswered) {
-                  setCurrentAnswer(e.target.value)
+                if (!currentQuestionState?.isAnswered) {
+                  handleAnswerChange(e.target.value)
                 }
               }}
-              disabled={hasAnswered}
+              disabled={currentQuestionState?.isAnswered}
               placeholder="Your answer"
             />
           )}
@@ -1535,9 +1478,9 @@ export function ExamMode({ deckId }: ExamModeProps) {
                 {currentQuestion.matchingPairs.map((pair, index) => (
                   <select
                     key={`select-${index}`}
-                    value={matchingPairs[index]?.right || ""}
+                    value={currentQuestionState?.matchingPairs[index]?.right || ""}
                     onChange={(e) => handleMatchingChange(index, e.target.value)}
-                    disabled={hasAnswered}
+                    disabled={currentQuestionState?.isAnswered}
                     className="w-full p-2 rounded-md border border-input bg-background"
                   >
                     <option value="">Select a match</option>
@@ -1558,8 +1501,8 @@ export function ExamMode({ deckId }: ExamModeProps) {
               <Droppable droppableId="sequence">
                 {(provided) => (
                   <ul {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                    {sequence.map((item, index) => (
-                      <Draggable key={item} draggableId={item} index={index} isDragDisabled={hasAnswered}>
+                    {currentQuestionState?.sequence.map((item, index) => (
+                      <Draggable key={item} draggableId={item} index={index} isDragDisabled={currentQuestionState?.isAnswered}>
                         {(provided) => (
                           <li
                             ref={provided.innerRef}
@@ -1580,37 +1523,35 @@ export function ExamMode({ deckId }: ExamModeProps) {
           )}
 
           {/* Enhanced hint display */}
-          {showHint && (
+          {currentQuestionState?.showHint && (
             <div className="p-4 rounded-lg bg-muted/50 space-y-3 border border-border">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="text-sm font-medium">Hint {hintLevel + 1}</div>
-                  {hintLevel > 0 && (
+                  <div className="text-sm font-medium">Hint {currentQuestionState.hintLevel + 1}</div>
+                  {currentQuestionState.hintLevel > 0 && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setHintLevel((prev) => Math.max(0, prev - 1))}
-                      disabled={hintCooldown || isGeneratingHint}
+                      onClick={() => updateQuestionState(currentQuestion.id, { hintLevel: currentQuestionState.hintLevel - 1 })}
                       className="h-6 px-2"
                     >
                       Previous Hint
                     </Button>
                   )}
                 </div>
-                {hintLevel < 2 && !hintCooldown && (
+                {currentQuestionState.hintLevel < 2 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={toggleHint}
-                    disabled={isGeneratingHint}
+                    onClick={() => updateQuestionState(currentQuestion.id, { hintLevel: currentQuestionState.hintLevel + 1 })}
                     className="h-6 px-2"
                   >
-                    {isGeneratingHint ? "Generating..." : "Next Hint"}
+                    Next Hint
                   </Button>
                 )}
               </div>
               <div className="text-sm leading-relaxed">
-                {isGeneratingHint ? (
+                {currentQuestionState.isGrading ? (
                   <div className="flex items-center gap-2">
                     <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
                     <span>Generating hint...</span>
@@ -1619,7 +1560,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
                   currentHint
                 )}
               </div>
-              {hintLevel === 0 && (
+              {currentQuestionState.hintLevel === 0 && (
                 <div className="text-xs text-muted-foreground mt-2">Click "Next Hint" for more detailed hints</div>
               )}
             </div>
@@ -1638,9 +1579,9 @@ export function ExamMode({ deckId }: ExamModeProps) {
           </div>
 
           <div>
-            {!hasAnswered ? (
-              <Button onClick={handleSubmitAnswer} disabled={isGrading} className="w-full sm:w-auto">
-                {isGrading ? "Grading..." : "Submit Answer"}
+            {!currentQuestionState?.isAnswered ? (
+              <Button onClick={handleSubmitAnswer} disabled={currentQuestionState?.isGrading} className="w-full sm:w-auto">
+                {currentQuestionState?.isGrading ? "Grading..." : "Submit Answer"}
               </Button>
             ) : (
               <Button onClick={handleNextQuestion} className="w-full sm:w-auto">
