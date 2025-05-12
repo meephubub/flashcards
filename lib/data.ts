@@ -559,61 +559,6 @@ export async function generateAIFlashcards(topic: string, numberOfCards: number,
   }
 }
 
-export async function importCardsFromTabDelimited(parsedDeck: { name: string; cards: Array<{ question: string; answer: string }> }): Promise<Deck | undefined> {
-  try {
-    // Create the deck
-    const { data: deck, error: deckError } = await supabase
-      .from("decks")
-      .insert([
-        {
-          name: parsedDeck.name,
-          description: "Imported from tab-delimited text",
-          card_count: parsedDeck.cards.length,
-          last_studied: "Never",
-        },
-      ])
-      .select()
-      .single()
-
-    if (deckError) {
-      console.error("Error creating deck:", deckError)
-      return undefined
-    }
-
-    // Insert all cards
-    const cardsToInsert = parsedDeck.cards.map((card) => ({
-      deck_id: deck.id,
-      front: card.question,
-      back: card.answer,
-    }))
-
-    const { error: cardsError } = await supabase.from("cards").insert(cardsToInsert)
-
-    if (cardsError) {
-      console.error("Error inserting cards:", cardsError)
-      // Delete the deck if card insertion fails
-      await supabase.from("decks").delete().eq("id", deck.id)
-      return undefined
-    }
-
-    return {
-      id: deck.id,
-      name: deck.name,
-      description: deck.description || "",
-      cardCount: parsedDeck.cards.length,
-      lastStudied: "Never",
-      cards: parsedDeck.cards.map((card) => ({
-        id: 0, // This will be updated when we fetch the deck
-        front: card.question,
-        back: card.answer,
-      })),
-    }
-  } catch (error) {
-    console.error("Error in importCardsFromTabDelimited:", error)
-    return undefined
-  }
-}
-
 export type Card = {
   id: number
   front: string

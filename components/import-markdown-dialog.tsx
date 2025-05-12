@@ -10,6 +10,7 @@ import { useDecks } from "@/context/deck-context"
 import { AlertCircle, FileText, Upload } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { MarkdownTemplate } from "@/components/markdown-template"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface ImportMarkdownDialogProps {
   open: boolean
@@ -20,6 +21,7 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [previewText, setPreviewText] = useState<string>("")
+  const [importFormat, setImportFormat] = useState<"markdown" | "tab">("markdown")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { refreshDecks } = useDecks()
@@ -43,7 +45,7 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
     if (!file) {
       toast({
         title: "No file selected",
-        description: "Please select a markdown file to import.",
+        description: "Please select a file to import.",
         variant: "destructive",
       })
       return
@@ -54,6 +56,7 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
     try {
       const formData = new FormData()
       formData.append("file", file)
+      formData.append("format", importFormat)
 
       const response = await fetch("/api/import", {
         method: "POST",
@@ -101,59 +104,109 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
-          <DialogTitle>Import Flashcards from Markdown</DialogTitle>
+          <DialogTitle>Import Flashcards</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="flex flex-col gap-2">
-              <div>
-                Your markdown file should use <code className="text-xs bg-muted px-1 py-0.5 rounded"># Title</code> for
-                deck name, and <code className="text-xs bg-muted px-1 py-0.5 rounded">## Question</code> followed by the
-                answer for each card.
-              </div>
-              <div className="flex justify-end">
-                <MarkdownTemplate />
-              </div>
-            </AlertDescription>
-          </Alert>
+        <Tabs defaultValue="markdown" onValueChange={(value) => setImportFormat(value as "markdown" | "tab")}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="markdown">Markdown</TabsTrigger>
+            <TabsTrigger value="tab">Tab-Delimited</TabsTrigger>
+          </TabsList>
 
-          <div className="grid w-full items-center gap-1.5">
-            <label htmlFor="markdown-file" className="text-sm font-medium">
-              Select Markdown File
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="markdown-file"
-                type="file"
-                accept=".md,.markdown,text/markdown"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
-                <FileText className="mr-2 h-4 w-4" />
-                {file ? file.name : "Choose file"}
-              </Button>
-              {file && (
-                <Button type="button" variant="ghost" size="sm" onClick={resetFileInput}>
-                  Clear
+          <TabsContent value="markdown" className="space-y-4 py-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex flex-col gap-2">
+                <div>
+                  Your markdown file should use <code className="text-xs bg-muted px-1 py-0.5 rounded"># Title</code> for
+                  deck name, and <code className="text-xs bg-muted px-1 py-0.5 rounded">## Question</code> followed by the
+                  answer for each card.
+                </div>
+                <div className="flex justify-end">
+                  <MarkdownTemplate />
+                </div>
+              </AlertDescription>
+            </Alert>
+
+            <div className="grid w-full items-center gap-1.5">
+              <label htmlFor="markdown-file" className="text-sm font-medium">
+                Select Markdown File
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="markdown-file"
+                  type="file"
+                  accept=".md,.markdown,text/markdown"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
+                  <FileText className="mr-2 h-4 w-4" />
+                  {file ? file.name : "Choose file"}
                 </Button>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">Accepted file types: .md, .markdown</p>
-          </div>
-
-          {previewText && (
-            <div className="mt-4">
-              <h3 className="text-sm font-medium mb-2">Preview:</h3>
-              <div className="bg-muted p-3 rounded-md text-xs font-mono overflow-auto max-h-[200px] whitespace-pre-wrap">
-                {previewText}
+                {file && (
+                  <Button type="button" variant="ghost" size="sm" onClick={resetFileInput}>
+                    Clear
+                  </Button>
+                )}
               </div>
+              <p className="text-xs text-muted-foreground">Accepted file types: .md, .markdown</p>
             </div>
-          )}
-        </div>
+          </TabsContent>
+
+          <TabsContent value="tab" className="space-y-4 py-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex flex-col gap-2">
+                <div>
+                  Your tab-delimited file should have two columns: question and answer, separated by tabs. The first line
+                  can be used for the deck name and description.
+                </div>
+                <div className="text-xs font-mono bg-muted p-2 rounded">
+                  Deck Name{"\t"}Description{"\n"}
+                  Question 1{"\t"}Answer 1{"\n"}
+                  Question 2{"\t"}Answer 2
+                </div>
+              </AlertDescription>
+            </Alert>
+
+            <div className="grid w-full items-center gap-1.5">
+              <label htmlFor="tab-file" className="text-sm font-medium">
+                Select Tab-Delimited File
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="tab-file"
+                  type="file"
+                  accept=".txt,text/plain"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
+                  <FileText className="mr-2 h-4 w-4" />
+                  {file ? file.name : "Choose file"}
+                </Button>
+                {file && (
+                  <Button type="button" variant="ghost" size="sm" onClick={resetFileInput}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Accepted file types: .txt</p>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {previewText && (
+          <div className="mt-4">
+            <h3 className="text-sm font-medium mb-2">Preview:</h3>
+            <div className="bg-muted p-3 rounded-md text-xs font-mono overflow-auto max-h-[200px] whitespace-pre-wrap">
+              {previewText}
+            </div>
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
