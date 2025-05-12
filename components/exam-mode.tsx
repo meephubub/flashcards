@@ -124,7 +124,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
   const currentQuestionState = currentQuestion ? questionStates[currentQuestion.id] : null
   const currentResult = currentQuestion ? results[currentQuestion.id] : null
 
-  // Initialize question state when a new question is loaded
+  // Update the useEffect for question state initialization
   useEffect(() => {
     if (!currentQuestion) return
 
@@ -157,24 +157,55 @@ export function ExamMode({ deckId }: ExamModeProps) {
     })
   }, [currentQuestion, userAnswers, results])
 
-  // Update question state
-  const updateQuestionState = (questionId: number, updates: Partial<QuestionState>) => {
-    setQuestionStates(prev => ({
-      ...prev,
-      [questionId]: {
-        ...prev[questionId],
-        ...updates
-      }
-    }))
+  // Remove any remaining references to old state management
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1)
+    }
+  }
+
+  // Update the saveExamProgress function
+  const saveExamProgress = () => {
+    if (!examStarted || examCompleted) return
+
+    setIsSaving(true)
+    try {
+      saveExamDataToCache(deckId, {
+        deckId,
+        questions,
+        userAnswers,
+        results,
+        currentQuestionIndex,
+        timeRemaining,
+        streakCount,
+        difficulty,
+        startedAt: new Date().toISOString()
+      })
+
+      setIsSaving(false)
+      setTimeout(() => {
+        toast({
+          title: "Progress saved",
+          description: "Your exam progress has been saved automatically."
+        })
+      }, 0)
+    } catch (error) {
+      console.error("Error saving exam progress:", error)
+      setIsSaving(false)
+    }
   }
 
   // Handle answer input changes
   const handleAnswerChange = (value: string) => {
     if (!currentQuestion || currentQuestionState?.isAnswered) return
 
-    updateQuestionState(currentQuestion.id, {
-      answer: value
-    })
+    setQuestionStates(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        ...prev[currentQuestion.id],
+        answer: value
+      }
+    }))
   }
 
   // Handle matching pairs changes
@@ -184,9 +215,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
     const updatedPairs = [...(currentQuestionState?.matchingPairs || [])]
     updatedPairs[leftIndex] = { ...updatedPairs[leftIndex], right: rightValue }
 
-    updateQuestionState(currentQuestion.id, {
-      matchingPairs: updatedPairs
-    })
+    setQuestionStates(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        ...prev[currentQuestion.id],
+        matchingPairs: updatedPairs
+      }
+    }))
   }
 
   // Handle sequence changes
@@ -197,9 +232,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
     const [reorderedItem] = items.splice(result.source.index, 1)
     items.splice(result.destination.index, 0, reorderedItem)
 
-    updateQuestionState(currentQuestion.id, {
-      sequence: items
-    })
+    setQuestionStates(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        ...prev[currentQuestion.id],
+        sequence: items
+      }
+    }))
   }
 
   // Enhanced answer submission
@@ -241,9 +280,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
         ? JSON.stringify(currentQuestionState.sequence)
         : currentQuestionState.answer
 
-    updateQuestionState(currentQuestion.id, {
-      isGrading: true
-    })
+    setQuestionStates(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        ...prev[currentQuestion.id],
+        isGrading: true
+      }
+    }))
 
     try {
       const gradingResult = await gradeAnswer(
@@ -275,11 +318,15 @@ export function ExamMode({ deckId }: ExamModeProps) {
       }))
 
       // Update question state
-      updateQuestionState(currentQuestion.id, {
-        isAnswered: true,
-        isGrading: false,
-        showFeedback: true
-      })
+      setQuestionStates(prev => ({
+        ...prev,
+        [currentQuestion.id]: {
+          ...prev[currentQuestion.id],
+          isAnswered: true,
+          isGrading: false,
+          showFeedback: true
+        }
+      }))
 
       // Update streak count
       if (gradingResult.isCorrect) {
@@ -301,25 +348,50 @@ export function ExamMode({ deckId }: ExamModeProps) {
         variant: "destructive"
       })
     } finally {
-      updateQuestionState(currentQuestion.id, {
-        isGrading: false
-      })
+      setQuestionStates(prev => ({
+        ...prev,
+        [currentQuestion.id]: {
+          ...prev[currentQuestion.id],
+          isGrading: false
+        }
+      }))
     }
   }
 
-  // Reset state when moving to a new question
-  const handleNextQuestion = () => {
+  // Enhanced next question logic
+  const handleNextQuestion = async () => {
+    if (!currentQuestion) return
+
     if (currentQuestionIndex < totalQuestions - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1)
+      const nextIndex = currentQuestionIndex + 1
+
+      // Generate next question if it doesn't exist
+      if (!questions[nextIndex]) {
+        const settings = getDifficultySettings(difficulty, userPerformance)
+        const availableTypes = settings.questionTypes
+
+        // Balance question types based on distribution
+        const typeCounts = Object.entries(questionTypeDistribution)
+        const leastUsedType =
+          typeCounts.length > 0
+            ? typeCounts.sort((a, b) => a[1] - b[1])[0][0]
+            : availableTypes[Math.floor(Math.random() * availableTypes.length)]
+
+        await generateQuestion(nextIndex, leastUsedType)
+      }
+
+      // Update current question index
+      setCurrentQuestionIndex(nextIndex)
+
+      // Save progress every 5 questions
+      if (nextIndex % 5 === 0) {
+        setTimeout(() => saveExamProgress(), 500)
+      }
     } else {
       calculateFinalScore()
       setExamCompleted(true)
-    }
-  }
-
-  const handlePreviousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1)
+      // Clear cached exam data when completed
+      clearCachedExamData(deckId)
     }
   }
 
@@ -378,22 +450,18 @@ export function ExamMode({ deckId }: ExamModeProps) {
       setQuestions([])
       setUserAnswers({})
       setResults({})
+      setQuestionStates({})
       setCurrentQuestionIndex(0)
       setExamCompleted(false)
       setTimeRemaining(Math.round(60 * 15 * settings.timeMultiplier))
       setStreakCount(0)
       setDifficulty(selectedDifficulty)
       setHasCachedExam(false)
-      setShowFeedback(false)
-      setHintLevel(0)
-      setIsGrading(false)
-      setQuestionTypeDistribution({})
-      setAnsweredQuestions(new Set())
 
       // Generate first question
       const firstQuestion = await generateQuestion(
         0,
-        settings.questionTypes[Math.floor(Math.random() * settings.questionTypes.length)],
+        settings.questionTypes[Math.floor(Math.random() * settings.questionTypes.length)]
       )
       if (!firstQuestion) {
         throw new Error("Failed to generate first question")
@@ -409,7 +477,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
         timeRemaining: Math.round(60 * 15 * settings.timeMultiplier),
         streakCount: 0,
         difficulty: selectedDifficulty,
-        startedAt: new Date().toISOString(),
+        startedAt: new Date().toISOString()
       })
     } catch (error) {
       console.error("Error initializing exam:", error)
@@ -417,7 +485,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
         toast({
           title: "Error",
           description: "Failed to initialize exam. Please try again.",
-          variant: "destructive",
+          variant: "destructive"
         })
       }, 0)
     } finally {
@@ -478,38 +546,6 @@ export function ExamMode({ deckId }: ExamModeProps) {
     return () => clearInterval(timer)
   }, [examStarted, examCompleted])
 
-  // Save exam progress
-  const saveExamProgress = () => {
-    if (!examStarted || examCompleted) return
-
-    setIsSaving(true)
-    try {
-      saveExamDataToCache(deckId, {
-        deckId,
-        questions,
-        userAnswers,
-        results,
-        currentQuestionIndex,
-        timeRemaining,
-        streakCount,
-        difficulty,
-        startedAt: new Date().toISOString(),
-      })
-
-      setIsSaving(false)
-      // Move toast to effect
-      setTimeout(() => {
-        toast({
-          title: "Progress saved",
-          description: "Your exam progress has been saved automatically.",
-        })
-      }, 0)
-    } catch (error) {
-      console.error("Error saving exam progress:", error)
-      setIsSaving(false)
-    }
-  }
-
   // Resume cached exam
   const resumeCachedExam = () => {
     const cachedData = getCachedExamData(deckId)
@@ -544,7 +580,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
           setSequence(currentQuestion.sequence)
         }
       } else {
-        setCurrentAnswer(savedAnswer)
+        setQuestionStates(prev => ({
+          ...prev,
+          [currentQuestion.id]: {
+            ...prev[currentQuestion.id],
+            answer: savedAnswer
+          }
+        }))
       }
     }
 
@@ -653,92 +695,21 @@ export function ExamMode({ deckId }: ExamModeProps) {
     if (!currentQuestion) return
 
     // Reset all answer-related state
-    setCurrentAnswer("")
-    setMatchingPairs([])
-    setSequence([])
-    setShowHint(false)
-    setShowFeedback(false)
-    setHintLevel(0)
-    setIsGrading(false)
-
-    // Only restore previous answer if the question has been answered AND graded
-    const savedAnswer = userAnswers[currentQuestion.id]
-    const hasResult = results[currentQuestion.id]
-
-    if (savedAnswer && hasResult) {
-      // Only restore if the answer has been properly submitted and graded
-      if (currentQuestion.type === "matching") {
-        try {
-          setMatchingPairs(JSON.parse(savedAnswer))
-        } catch {
-          setMatchingPairs(currentQuestion.matchingPairs || [])
-        }
-      } else if (currentQuestion.type === "sequence") {
-        try {
-          setSequence(JSON.parse(savedAnswer))
-        } catch {
-          setSequence(currentQuestion.sequence || [])
-        }
-      } else {
-        setCurrentAnswer(savedAnswer)
+    setQuestionStates(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        ...prev[currentQuestion.id],
+        answer: "",
+        matchingPairs: [],
+        sequence: [],
+        isAnswered: false,
+        isGrading: false,
+        showHint: false,
+        hintLevel: 0,
+        showFeedback: false
       }
-    } else {
-      // If not answered or not graded, prepare fresh state for the question
-      if (currentQuestion.type === "matching" && currentQuestion.matchingPairs) {
-        const shuffledPairs = [...currentQuestion.matchingPairs].sort(() => 0.5 - Math.random())
-        setMatchingPairs(shuffledPairs)
-      } else if (currentQuestion.type === "sequence" && currentQuestion.sequence) {
-        const shuffledSequence = [...currentQuestion.sequence].sort(() => 0.5 - Math.random())
-        setSequence(shuffledSequence)
-      }
-    }
-  }, [currentQuestionIndex, currentQuestion, userAnswers, results])
-
-  // Enhanced next question logic
-  const handleNextQuestion = async () => {
-    if (!currentQuestion) return
-
-    if (currentQuestionIndex < totalQuestions - 1) {
-      const nextIndex = currentQuestionIndex + 1
-
-      // Generate next question if it doesn't exist
-      if (!questions[nextIndex]) {
-        const settings = getDifficultySettings(difficulty, userPerformance)
-        const availableTypes = settings.questionTypes
-
-        // Balance question types based on distribution
-        const typeCounts = Object.entries(questionTypeDistribution)
-        const leastUsedType =
-          typeCounts.length > 0
-            ? typeCounts.sort((a, b) => a[1] - b[1])[0][0]
-            : availableTypes[Math.floor(Math.random() * availableTypes.length)]
-
-        await generateQuestion(nextIndex, leastUsedType)
-      }
-
-      // Reset all answer-related state before moving to next question
-      setCurrentAnswer("")
-      setMatchingPairs([])
-      setSequence([])
-      setShowHint(false)
-      setShowFeedback(false)
-      setHintLevel(0)
-      setIsGrading(false)
-
-      // Update current question index
-      setCurrentQuestionIndex(nextIndex)
-
-      // Save progress every 5 questions
-      if (nextIndex % 5 === 0) {
-        setTimeout(() => saveExamProgress(), 500)
-      }
-    } else {
-      calculateFinalScore()
-      setExamCompleted(true)
-      // Clear cached exam data when completed
-      clearCachedExamData(deckId)
-    }
-  }
+    }))
+  }, [currentQuestionIndex, currentQuestion])
 
   const calculateFinalScore = () => {
     if (questions.length === 0) return 0
@@ -770,11 +741,8 @@ export function ExamMode({ deckId }: ExamModeProps) {
     setCurrentQuestionIndex(0)
     setUserAnswers({})
     setResults({})
-    setCurrentAnswer("")
-    setMatchingPairs([])
-    setSequence([])
+    setQuestionStates({})
     setStreakCount(0)
-    setShowHint(false)
 
     // Generate new questions
     initializeExam()
@@ -817,7 +785,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
     touchStartRef.current = null
   }
 
-  // Add keyboard shortcuts
+  // Update the keyboard shortcuts handler to use questionStates
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // Don't handle keyboard shortcuts if user is typing in an input
@@ -835,10 +803,22 @@ export function ExamMode({ deckId }: ExamModeProps) {
           }
           break
         case "h":
-          if (showHint) {
-            setShowHint(false)
+          if (currentQuestionState?.showHint) {
+            setQuestionStates(prev => ({
+              ...prev,
+              [currentQuestion.id]: {
+                ...prev[currentQuestion.id],
+                showHint: false
+              }
+            }))
           } else if (difficulty !== "hard") {
-            setShowHint(true)
+            setQuestionStates(prev => ({
+              ...prev,
+              [currentQuestion.id]: {
+                ...prev[currentQuestion.id],
+                showHint: true
+              }
+            }))
           }
           break
         case " ":
@@ -858,26 +838,35 @@ export function ExamMode({ deckId }: ExamModeProps) {
           if (currentQuestion?.type === "multiple-choice" && currentQuestion.options) {
             const index = Number.parseInt(e.key) - 1
             if (index >= 0 && index < currentQuestion.options.length) {
-              setUserAnswers((prev) => ({
+              setQuestionStates(prev => ({
                 ...prev,
-                [currentQuestion.id]: currentQuestion.options![index],
+                [currentQuestion.id]: {
+                  ...prev[currentQuestion.id],
+                  answer: currentQuestion.options[index]
+                }
               }))
             }
           }
           break
         case "t":
           if (currentQuestion?.type === "true-false") {
-            setUserAnswers((prev) => ({
+            setQuestionStates(prev => ({
               ...prev,
-              [currentQuestion.id]: "True",
+              [currentQuestion.id]: {
+                ...prev[currentQuestion.id],
+                answer: "True"
+              }
             }))
           }
           break
         case "f":
           if (currentQuestion?.type === "true-false") {
-            setUserAnswers((prev) => ({
+            setQuestionStates(prev => ({
               ...prev,
-              [currentQuestion.id]: "False",
+              [currentQuestion.id]: {
+                ...prev[currentQuestion.id],
+                answer: "False"
+              }
             }))
           }
           break
@@ -886,9 +875,9 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [currentQuestionIndex, questions, showHint, difficulty, totalQuestions])
+  }, [currentQuestionIndex, questions, currentQuestionState?.showHint, difficulty, totalQuestions])
 
-  // Load cached exam
+  // Update the loadCachedExam function to use questionStates
   const loadCachedExam = () => {
     const cachedData = getCachedExamData(deckId)
     if (!cachedData) return
@@ -902,11 +891,25 @@ export function ExamMode({ deckId }: ExamModeProps) {
     setDifficulty(cachedData.difficulty)
     setTotalQuestions(cachedData.questions.length)
 
-    // Set current answer for the current question
-    const currentQuestionId = cachedData.questions[cachedData.currentQuestionIndex]?.id
-    if (currentQuestionId && cachedData.userAnswers[currentQuestionId]) {
-      setCurrentAnswer(cachedData.userAnswers[currentQuestionId])
-    }
+    // Initialize question states from cached data
+    const initialQuestionStates: Record<number, QuestionState> = {}
+    cachedData.questions.forEach(question => {
+      initialQuestionStates[question.id] = {
+        answer: cachedData.userAnswers[question.id] || "",
+        matchingPairs: question.type === "matching" && question.matchingPairs
+          ? [...question.matchingPairs].sort(() => 0.5 - Math.random())
+          : [],
+        sequence: question.type === "sequence" && question.sequence
+          ? [...question.sequence].sort(() => 0.5 - Math.random())
+          : [],
+        isAnswered: !!cachedData.results[question.id],
+        isGrading: false,
+        showHint: false,
+        hintLevel: 0,
+        showFeedback: false
+      }
+    })
+    setQuestionStates(initialQuestionStates)
 
     setHasCachedExam(false)
     setExamStarted(true)
@@ -973,7 +976,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold mb-2">Failed to generate exam questions</h2>
         <p className="text-gray-500 mb-6">There was an error creating exam questions from your flashcards.</p>
-        <Button onClick={initializeExam}>Try Again</Button>
+        <Button onClick={() => initializeExam()}>Try Again</Button>
       </div>
     )
   }
@@ -1334,7 +1337,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => updateQuestionState(currentQuestion.id, { showHint: true })}
+                  onClick={() => setQuestionStates(prev => ({
+                    ...prev,
+                    [currentQuestion.id]: {
+                      ...prev[currentQuestion.id],
+                      showHint: true
+                    }
+                  }))}
                   disabled={currentQuestionState?.isGrading}
                   className="relative"
                 >
@@ -1467,7 +1476,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
             <div className={`grid ${isMobile ? "grid-cols-1 gap-6" : "grid-cols-2 gap-4"}`}>
               <div className="space-y-2">
                 <h3 className="font-medium">Terms</h3>
-                {currentQuestion.matchingPairs.map((pair, index) => (
+                {currentQuestion.matchingPairs.map((pair: { left: string; right: string }, index: number) => (
                   <div key={`term-${index}`} className="p-2 bg-secondary rounded-md">
                     {pair.left}
                   </div>
@@ -1475,7 +1484,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
               </div>
               <div className="space-y-2">
                 <h3 className="font-medium">Definitions</h3>
-                {currentQuestion.matchingPairs.map((pair, index) => (
+                {currentQuestion.matchingPairs.map((pair: { left: string; right: string }, index: number) => (
                   <select
                     key={`select-${index}`}
                     value={currentQuestionState?.matchingPairs[index]?.right || ""}
@@ -1484,7 +1493,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
                     className="w-full p-2 rounded-md border border-input bg-background"
                   >
                     <option value="">Select a match</option>
-                    {currentQuestion.matchingPairs.map((p, i) => (
+                    {currentQuestion.matchingPairs.map((p: { left: string; right: string }, i: number) => (
                       <option key={`option-${index}-${i}`} value={p.right}>
                         {p.right}
                       </option>
@@ -1532,7 +1541,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => updateQuestionState(currentQuestion.id, { hintLevel: currentQuestionState.hintLevel - 1 })}
+                      onClick={() => setQuestionStates(prev => ({
+                        ...prev,
+                        [currentQuestion.id]: {
+                          ...prev[currentQuestion.id],
+                          hintLevel: currentQuestionState.hintLevel - 1
+                        }
+                      }))}
                       className="h-6 px-2"
                     >
                       Previous Hint
@@ -1543,7 +1558,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => updateQuestionState(currentQuestion.id, { hintLevel: currentQuestionState.hintLevel + 1 })}
+                    onClick={() => setQuestionStates(prev => ({
+                      ...prev,
+                      [currentQuestion.id]: {
+                        ...prev[currentQuestion.id],
+                        hintLevel: currentQuestionState.hintLevel + 1
+                      }
+                    }))}
                     className="h-6 px-2"
                   >
                     Next Hint
