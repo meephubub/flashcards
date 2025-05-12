@@ -13,6 +13,15 @@ export interface HintResult {
   level: number
 }
 
+export interface GradingResult {
+  isCorrect: boolean
+  score: number
+  feedback: string
+  explanation?: string
+  suggestions?: string
+  relatedConcepts?: string[]
+}
+
 export async function generateFlashcards(topic: string, numberOfCards = 5): Promise<GenerationResult> {
   // Create a simpler, more direct prompt that's less likely to cause JSON parsing issues
   const prompt = `Generate ${numberOfCards} educational flashcards on the topic: "${topic}".
@@ -127,6 +136,78 @@ Return the response as a JSON object with a "hint" string property.`
     return {
       hint: "Think carefully about the question and consider all aspects of the content.",
       level: hintLevel
+    }
+  }
+}
+
+export async function gradeAnswerWithGroq(
+  questionType: string,
+  question: string,
+  correctAnswer: string,
+  userAnswer: string,
+  options?: {
+    adaptiveScoring?: boolean
+    timePressure?: "low" | "medium" | "high"
+    previousAnswers?: GradingResult[]
+  }
+): Promise<GradingResult> {
+  const prompt = `Grade the following exam answer. Provide detailed feedback and suggestions for improvement.
+
+Question Type: ${questionType}
+Question: ${question}
+Correct Answer: ${correctAnswer}
+User's Answer: ${userAnswer}
+${options?.adaptiveScoring ? "Adaptive Scoring: Enabled" : ""}
+${options?.timePressure ? `Time Pressure: ${options.timePressure}` : ""}
+${options?.previousAnswers ? `Previous Performance: ${JSON.stringify(options.previousAnswers)}` : ""}
+
+Grade the answer based on:
+1. Accuracy and completeness
+2. Understanding of concepts
+3. Clarity and coherence
+4. Question type specific criteria
+
+Return the response as a JSON object with the following properties:
+{
+  "isCorrect": boolean,
+  "score": number (0-100),
+  "feedback": string,
+  "explanation": string (optional),
+  "suggestions": string (optional),
+  "relatedConcepts": string[] (optional)
+}`
+
+  try {
+    const response = await makeGroqRequest(prompt, true)
+    const parsedContent = JSON.parse(response)
+
+    // Validate the response format
+    if (typeof parsedContent.isCorrect !== 'boolean' || 
+        typeof parsedContent.score !== 'number' || 
+        typeof parsedContent.feedback !== 'string') {
+      throw new Error('Invalid response format from Groq')
+    }
+
+    // Ensure score is between 0 and 100
+    parsedContent.score = Math.max(0, Math.min(100, parsedContent.score))
+
+    return {
+      isCorrect: parsedContent.isCorrect,
+      score: parsedContent.score,
+      feedback: parsedContent.feedback,
+      explanation: parsedContent.explanation,
+      suggestions: parsedContent.suggestions,
+      relatedConcepts: parsedContent.relatedConcepts
+    }
+  } catch (error) {
+    console.error("Error grading answer with Groq:", error)
+    // Fallback to basic grading if Groq fails
+    return {
+      isCorrect: userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim(),
+      score: userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim() ? 100 : 0,
+      feedback: "An error occurred while grading. Please try again.",
+      explanation: "The grading service is temporarily unavailable.",
+      suggestions: "Try submitting your answer again."
     }
   }
 }
