@@ -90,45 +90,67 @@ Return ONLY valid JSON in this format:
 
 // Helper function to make a request to the Groq API
 export async function makeGroqRequest(promptContent: string, isQuestionGeneration = false): Promise<string> {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "llama3-70b-8192",
-      messages: [
-        {
-          role: "system",
-          content: isQuestionGeneration
-            ? "You are an expert educational question generator. Your goal is to create clear, accurate, and well-structured questions that test understanding of concepts. Each question should be challenging but fair, with a clear correct answer. For multiple-choice questions, provide plausible distractors that test common misconceptions. Always include a helpful hint that guides without giving away the answer. Keep the language accessible and ensure all output is in valid JSON syntax."
-            : "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Always return your output as a valid JSON object containing a cards array. Each element in the array should be an object with front (the question as a string) and back (the answer as a string). Keep the language accessible, avoid overly technical jargon unless the topic requires it, and ensure all output is in valid JSON syntax. Do not include any extra commentary, explanations, or markdown outside of the JSON.",
-        },
-        {
-          role: "user",
-          content: promptContent,
-        },
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-      response_format: { type: "json_object" },
-    }),
-  })
+  const models = ["llama3-70b-8192", "compound-beta", "llama-3.1-8b-instant"]
+  let lastError: Error | null = null
 
-  if (!response.ok) {
-    const errorData = await response.json()
-    throw new Error(errorData.error?.message || "Failed to generate content")
+  for (const model of models) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "system",
+              content: isQuestionGeneration
+                ? "You are an expert educational question generator. Your goal is to create clear, accurate, and well-structured questions that test understanding of concepts. Each question should be challenging but fair, with a clear correct answer. For multiple-choice questions, provide plausible distractors that test common misconceptions. Always include a helpful hint that guides without giving away the answer. Keep the language accessible and ensure all output is in valid JSON syntax."
+                : "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Always return your output as a valid JSON object containing a cards array. Each element in the array should be an object with front (the question as a string) and back (the answer as a string). Keep the language accessible, avoid overly technical jargon unless the topic requires it, and ensure all output is in valid JSON syntax. Do not include any extra commentary, explanations, or markdown outside of the JSON.",
+            },
+            {
+              role: "user",
+              content: promptContent,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 2000,
+          response_format: { type: "json_object" },
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        // If we get a rate limit error, continue to the next model
+        if (errorData.error?.message?.toLowerCase().includes("rate limit")) {
+          lastError = new Error(errorData.error?.message || "Rate limit exceeded")
+          continue
+        }
+        throw new Error(errorData.error?.message || "Failed to generate content")
+      }
+
+      const data = await response.json()
+      const content = data.choices[0]?.message?.content
+
+      if (!content) {
+        throw new Error("No content returned from Groq")
+      }
+
+      return content
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      // If it's not a rate limit error, throw immediately
+      if (!lastError.message.toLowerCase().includes("rate limit")) {
+        throw lastError
+      }
+      // Otherwise continue to the next model
+    }
   }
 
-  const data = await response.json()
-  const content = data.choices[0]?.message?.content
-
-  if (!content) {
-    throw new Error("No content returned from Groq")
-  }
-
-  return content
+  // If we've tried all models and still failed, throw the last error
+  throw lastError || new Error("All models failed to generate content")
 }
 
 // Helper function to process a valid JSON response
