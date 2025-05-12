@@ -72,7 +72,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGrading, setIsGrading] = useState(false)
   const [examCompleted, setExamCompleted] = useState(false)
-  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(true)
+  const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false)
   const [examScore, setExamScore] = useState(0)
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [examStarted, setExamStarted] = useState(false)
@@ -83,6 +83,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
   const [showResumeDialog, setShowResumeDialog] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isMobile] = useMediaQuery("(max-width: 768px)")
+  const [totalQuestions, setTotalQuestions] = useState(0)
 
   // For matching questions
   const [matchingPairs, setMatchingPairs] = useState<Array<{ left: string; right: string }>>([])
@@ -93,16 +94,107 @@ export function ExamMode({ deckId }: ExamModeProps) {
   const confettiRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
+  // Generate a single question
+  const generateQuestion = async (index: number) => {
+    if (!deck) return null
+
+    setIsGeneratingQuestion(true)
+    try {
+      const settings = getDifficultySettings(difficulty)
+      const generatedQuestions = await generateQuestionsFromCards(
+        deck.cards,
+        1 // Generate only one question
+      )
+
+      if (generatedQuestions.length > 0) {
+        const question = generatedQuestions[0]
+        setQuestions(prev => {
+          const newQuestions = [...prev]
+          newQuestions[index] = question
+          return newQuestions
+        })
+        return question
+      }
+      return null
+    } catch (error) {
+      console.error("Error generating question:", error)
+      toast({
+        title: "Error",
+        description: "Failed to generate question. Please try again.",
+        variant: "destructive",
+      })
+      return null
+    } finally {
+      setIsGeneratingQuestion(false)
+    }
+  }
+
+  // Initialize exam
+  const initializeExam = async (selectedDifficulty: ExamDifficulty = difficulty) => {
+    if (!deck) return
+
+    setIsGeneratingQuestion(true)
+    try {
+      // Clear any existing cached exam
+      clearCachedExamData(deckId)
+
+      // Get difficulty settings
+      const settings = getDifficultySettings(selectedDifficulty)
+      setTotalQuestions(Math.min(settings.questionCount, deck.cards.length))
+
+      // Generate first question
+      await generateQuestion(0)
+
+      // Reset state
+      setCurrentQuestionIndex(0)
+      setUserAnswers({})
+      setResults({})
+      setCurrentAnswer("")
+      setExamCompleted(false)
+      setTimeRemaining(Math.round(60 * 15 * settings.timeMultiplier))
+      setStreakCount(0)
+      setShowHint(false)
+      setDifficulty(selectedDifficulty)
+      setHasCachedExam(false)
+
+      // Save initial exam state to cache
+      saveExamDataToCache(deckId, {
+        deckId,
+        questions: [],
+        userAnswers: {},
+        results: {},
+        currentQuestionIndex: 0,
+        timeRemaining: Math.round(60 * 15 * settings.timeMultiplier),
+        streakCount: 0,
+        difficulty: selectedDifficulty,
+        startedAt: new Date().toISOString(),
+      })
+    } catch (error) {
+      console.error("Error initializing exam:", error)
+      toast({
+        title: "Error",
+        description: "Failed to initialize exam. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingQuestion(false)
+    }
+  }
+
   // Check for cached exam data when component mounts
   useEffect(() => {
-    if (deck && !loading) {
-      const cachedData = getCachedExamData(deckId)
-      if (cachedData) {
-        setHasCachedExam(true)
-      } else {
-        generateExamQuestions()
+    const initializeExamState = async () => {
+      if (deck && !loading) {
+        const cachedData = getCachedExamData(deckId)
+        if (cachedData) {
+          setHasCachedExam(true)
+        } else {
+          await initializeExam()
+        }
       }
     }
+
+    initializeExamState()
   }, [deck, loading, deckId])
 
   // Timer for exam
@@ -180,7 +272,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
     setStreakCount(cachedData.streakCount)
     setDifficulty(cachedData.difficulty)
     setExamStarted(true)
-    setIsGeneratingQuestions(false)
+    setIsGeneratingQuestion(false)
     setShowResumeDialog(false)
 
     // Restore current question state
@@ -216,83 +308,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
     clearCachedExamData(deckId)
     setHasCachedExam(false)
     setShowResumeDialog(false)
-    generateExamQuestions()
-  }
-
-  const generateExamQuestions = async (selectedDifficulty: ExamDifficulty = difficulty) => {
-    if (!deck) return
-
-    setIsGeneratingQuestions(true)
-    try {
-      // Clear any existing cached exam
-      clearCachedExamData(deckId)
-
-      // Get difficulty settings
-      const settings = getDifficultySettings(selectedDifficulty)
-
-      const generatedQuestions = await generateQuestionsFromCards(
-        deck.cards,
-        Math.min(settings.questionCount, deck.cards.length),
-      )
-
-      setQuestions(generatedQuestions)
-      // Reset state
-      setCurrentQuestionIndex(0)
-      setUserAnswers({})
-      setResults({})
-      setCurrentAnswer("")
-      setExamCompleted(false)
-      setTimeRemaining(Math.round(60 * 15 * settings.timeMultiplier)) // Adjust time based on difficulty
-      setStreakCount(0)
-      setShowHint(false)
-      setDifficulty(selectedDifficulty)
-      setHasCachedExam(false)
-
-      // Save initial exam state to cache
-      saveExamDataToCache(deckId, {
-        deckId,
-        questions: generatedQuestions,
-        userAnswers: {},
-        results: {},
-        currentQuestionIndex: 0,
-        timeRemaining: Math.round(60 * 15 * settings.timeMultiplier),
-        streakCount: 0,
-        difficulty: selectedDifficulty,
-        startedAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-      })
-    } catch (error) {
-      console.error("Error generating questions:", error)
-      toast({
-        title: "Error",
-        description: "Failed to generate exam questions. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsGeneratingQuestions(false)
-    }
-  }
-
-  const loadCachedExam = () => {
-    const cachedData = getCachedExamData(deckId)
-    if (!cachedData) return
-
-    setQuestions(cachedData.questions)
-    setUserAnswers(cachedData.userAnswers)
-    setResults(cachedData.results)
-    setCurrentQuestionIndex(cachedData.currentQuestionIndex)
-    setTimeRemaining(cachedData.timeRemaining)
-    setStreakCount(cachedData.streakCount)
-    setDifficulty(cachedData.difficulty)
-
-    // Set current answer for the current question
-    const currentQuestionId = cachedData.questions[cachedData.currentQuestionIndex]?.id
-    if (currentQuestionId && cachedData.userAnswers[currentQuestionId]) {
-      setCurrentAnswer(cachedData.userAnswers[currentQuestionId])
-    }
-
-    setHasCachedExam(false)
-    setExamStarted(true)
+    initializeExam()
   }
 
   const startExam = () => {
@@ -499,9 +515,9 @@ export function ExamMode({ deckId }: ExamModeProps) {
     }
   }
 
-  const handleNextQuestion = () => {
+  const handleNextQuestion = async () => {
     // Only allow proceeding if the current question has been answered and graded
-    if (!results[questions[currentQuestionIndex].id]) {
+    if (!results[questions[currentQuestionIndex]?.id]) {
       toast({
         title: "Answer required",
         description: "Please submit your answer before proceeding.",
@@ -510,20 +526,26 @@ export function ExamMode({ deckId }: ExamModeProps) {
       return
     }
 
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1)
+    if (currentQuestionIndex < totalQuestions - 1) {
+      const nextIndex = currentQuestionIndex + 1
+      setCurrentQuestionIndex(nextIndex)
       setCurrentAnswer("")
       setMatchingPairs([])
       setSequence([])
       setShowHint(false)
 
+      // Generate next question if it doesn't exist
+      if (!questions[nextIndex]) {
+        await generateQuestion(nextIndex)
+      }
+
       // Prepare the next question if it's a matching or sequence type
-      const nextQuestion = questions[currentQuestionIndex + 1]
-      if (nextQuestion.type === "matching" && nextQuestion.matchingPairs) {
+      const nextQuestion = questions[nextIndex]
+      if (nextQuestion?.type === "matching" && nextQuestion.matchingPairs) {
         // Shuffle the pairs for matching questions
         const shuffledPairs = [...nextQuestion.matchingPairs].sort(() => 0.5 - Math.random())
         setMatchingPairs(shuffledPairs)
-      } else if (nextQuestion.type === "sequence" && nextQuestion.sequence) {
+      } else if (nextQuestion?.type === "sequence" && nextQuestion.sequence) {
         // Shuffle the sequence
         const shuffledSequence = [...nextQuestion.sequence].sort(() => 0.5 - Math.random())
         setSequence(shuffledSequence)
@@ -538,36 +560,23 @@ export function ExamMode({ deckId }: ExamModeProps) {
       // Clear cached exam data when completed
       clearCachedExamData(deckId)
     }
-    // Save progress to cache
-    saveExamDataToCache(deckId, {
-      deckId,
-      questions,
-      userAnswers,
-      results,
-      currentQuestionIndex: currentQuestionIndex + 1,
-      timeRemaining,
-      streakCount,
-      difficulty,
-      startedAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
-    })
   }
 
   const handlePreviousQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex((prev) => prev - 1)
       // Restore previous answer if it exists
-      const prevQuestionId = questions[currentQuestionIndex - 1].id
+      const prevQuestionId = questions[currentQuestionIndex - 1]?.id
       const prevAnswer = userAnswers[prevQuestionId] || ""
 
       const prevQuestion = questions[currentQuestionIndex - 1]
-      if (prevQuestion.type === "matching") {
+      if (prevQuestion?.type === "matching") {
         try {
           setMatchingPairs(JSON.parse(prevAnswer))
         } catch {
           setMatchingPairs(prevQuestion.matchingPairs || [])
         }
-      } else if (prevQuestion.type === "sequence") {
+      } else if (prevQuestion?.type === "sequence") {
         try {
           setSequence(JSON.parse(prevAnswer))
         } catch {
@@ -619,7 +628,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
     setShowHint(false)
 
     // Generate new questions
-    generateExamQuestions()
+    initializeExam()
   }
 
   const toggleHint = () => {
@@ -694,7 +703,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
       switch (e.key.toLowerCase()) {
         case "enter":
-          if (currentQuestionIndex < questions.length - 1) {
+          if (currentQuestionIndex < totalQuestions - 1) {
             handleNextQuestion()
           } else {
             calculateFinalScore()
@@ -709,7 +718,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
           }
           break
         case " ":
-          if (currentQuestionIndex < questions.length - 1) {
+          if (currentQuestionIndex < totalQuestions - 1) {
             handleNextQuestion()
           }
           break
@@ -753,9 +762,33 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [currentQuestionIndex, questions, showHint, difficulty])
+  }, [currentQuestionIndex, questions, showHint, difficulty, totalQuestions])
 
-  if (loading || isGeneratingQuestions) {
+  // Load cached exam
+  const loadCachedExam = () => {
+    const cachedData = getCachedExamData(deckId)
+    if (!cachedData) return
+
+    setQuestions(cachedData.questions)
+    setUserAnswers(cachedData.userAnswers)
+    setResults(cachedData.results)
+    setCurrentQuestionIndex(cachedData.currentQuestionIndex)
+    setTimeRemaining(cachedData.timeRemaining)
+    setStreakCount(cachedData.streakCount)
+    setDifficulty(cachedData.difficulty)
+    setTotalQuestions(cachedData.questions.length)
+
+    // Set current answer for the current question
+    const currentQuestionId = cachedData.questions[cachedData.currentQuestionIndex]?.id
+    if (currentQuestionId && cachedData.userAnswers[currentQuestionId]) {
+      setCurrentAnswer(cachedData.userAnswers[currentQuestionId])
+    }
+
+    setHasCachedExam(false)
+    setExamStarted(true)
+  }
+
+  if (loading || isGeneratingQuestion) {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -816,7 +849,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold mb-2">Failed to generate exam questions</h2>
         <p className="text-gray-500 mb-6">There was an error creating exam questions from your flashcards.</p>
-        <Button onClick={generateExamQuestions}>Try Again</Button>
+        <Button onClick={initializeExam}>Try Again</Button>
       </div>
     )
   }
@@ -871,7 +904,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
               <div className="mt-4">
                 <h2 className="text-2xl font-bold">Ready to Test Your Knowledge?</h2>
                 <p className="text-muted-foreground mt-2">
-                  This exam contains questions of various types to test your understanding.
+                  This exam contains dynamic questions generated on the fly to test your understanding.
                 </p>
               </div>
             </div>
@@ -902,7 +935,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
               <DifficultySelector
                 onSelect={(selectedDifficulty) => {
                   setDifficulty(selectedDifficulty)
-                  generateExamQuestions(selectedDifficulty)
+                  initializeExam(selectedDifficulty)
                 }}
                 defaultDifficulty={difficulty}
               />
@@ -916,7 +949,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
                 </Button>
 
                 <div className="text-sm text-muted-foreground mt-4">
-                  <p>Tip: You can save your progress at any time and continue later.</p>
+                  <p>Tip: Questions are generated dynamically as you progress through the exam.</p>
                 </div>
               </div>
             )}
@@ -928,7 +961,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
   const currentResult = results[currentQuestion?.id]
   const hasAnswered = !!currentResult
-  const progress = ((currentQuestionIndex + 1) / questions.length) * 100
+  const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100
 
   // Format time remaining
   const minutes = Math.floor(timeRemaining / 60)
@@ -1075,7 +1108,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
             </div>
           )}
           <div className="text-muted-foreground">
-            {currentQuestionIndex + 1}/{questions.length}
+            {currentQuestionIndex + 1}/{totalQuestions}
           </div>
           {isSaving && (
             <div className="flex items-center gap-1 text-muted-foreground">
@@ -1259,7 +1292,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
               </Button>
             ) : (
               <Button onClick={handleNextQuestion} className="w-full sm:w-auto">
-                {currentQuestionIndex < questions.length - 1 ? (
+                {currentQuestionIndex < totalQuestions - 1 ? (
                   <>
                     Next
                     <ArrowRight className="h-4 w-4 ml-2" />

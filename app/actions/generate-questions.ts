@@ -56,6 +56,9 @@ Generate a question that:
 2. Is appropriate for ${difficulty} difficulty level
 3. Includes a helpful hint that guides without giving away the answer
 4. Has a clear, unambiguous correct answer
+5. Is on a GCSE level
+6. If no difficulty is provided, use medium
+7. Make sure to properly format the response as a JSON object with the correct fields otherwise the app will crash
 
 Format the response as a JSON object with these fields:
 {
