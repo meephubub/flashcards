@@ -70,6 +70,20 @@ export function getCachedExamData(deckId: number): CachedExamData | null {
       return null
     }
 
+    // Validate the cached data
+    if (!parsedData.questions || !Array.isArray(parsedData.questions)) {
+      localStorage.removeItem(`exam_cache_${deckId}`)
+      return null
+    }
+
+    if (!parsedData.userAnswers || typeof parsedData.userAnswers !== 'object') {
+      parsedData.userAnswers = {}
+    }
+
+    if (!parsedData.results || typeof parsedData.results !== 'object') {
+      parsedData.results = {}
+    }
+
     return parsedData
   } catch (error) {
     console.error("Error retrieving cached exam data:", error)
@@ -82,6 +96,20 @@ export function saveExamDataToCache(deckId: number, data: Omit<CachedExamData, "
   if (typeof window === "undefined") return
 
   try {
+    // Validate the data before saving
+    if (!data.questions || !Array.isArray(data.questions)) {
+      console.error("Invalid exam data: questions must be an array")
+      return
+    }
+
+    if (!data.userAnswers || typeof data.userAnswers !== 'object') {
+      data.userAnswers = {}
+    }
+
+    if (!data.results || typeof data.results !== 'object') {
+      data.results = {}
+    }
+
     const dataToSave: CachedExamData = {
       ...data,
       lastUpdated: new Date().toISOString(),
@@ -116,7 +144,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         passingScore: 85,
         questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching", "sequence", "analogy"],
         adaptiveScoring: true,
-        timePressure: "high",
+        timePressure: "high" as const,
         feedbackDetail: "detailed"
       }
     } else if (userPerformance >= 75) {
@@ -127,7 +155,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         passingScore: 75,
         questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching"],
         adaptiveScoring: true,
-        timePressure: "medium",
+        timePressure: "medium" as const,
         feedbackDetail: "detailed"
       }
     } else {
@@ -138,7 +166,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         passingScore: 65,
         questionTypes: ["multiple-choice", "true-false", "fill-in-blank"],
         adaptiveScoring: true,
-        timePressure: "low",
+        timePressure: "low" as const,
         feedbackDetail: "basic"
       }
     }
@@ -154,7 +182,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         passingScore: 60,
         questionTypes: ["multiple-choice", "true-false", "fill-in-blank"],
         adaptiveScoring: false,
-        timePressure: "low",
+        timePressure: "low" as const,
         feedbackDetail: "basic"
       }
     case "medium":
@@ -165,7 +193,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         passingScore: 70,
         questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching"],
         adaptiveScoring: false,
-        timePressure: "medium",
+        timePressure: "medium" as const,
         feedbackDetail: "detailed"
       }
     case "hard":
@@ -176,7 +204,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         passingScore: 80,
         questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching", "sequence", "analogy"],
         adaptiveScoring: false,
-        timePressure: "high",
+        timePressure: "high" as const,
         feedbackDetail: "detailed"
       }
     default:
@@ -187,7 +215,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         passingScore: 70,
         questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer"],
         adaptiveScoring: false,
-        timePressure: "medium",
+        timePressure: "medium" as const,
         feedbackDetail: "detailed"
       }
   }

@@ -189,7 +189,7 @@ export async function generateQuestionsFromCards(
     questions.push(question)
   }
 
-  revalidatePath("/deck/[id]/exam")
+  revalidatePath("/deck/[id]/exam", "page")
   return questions
 }
 

@@ -8,6 +8,11 @@ export interface GenerationResult {
   topic: string
 }
 
+export interface HintResult {
+  hint: string
+  level: number
+}
+
 export async function generateFlashcards(topic: string, numberOfCards = 5): Promise<GenerationResult> {
   // Create a simpler, more direct prompt that's less likely to cause JSON parsing issues
   const prompt = `Generate ${numberOfCards} educational flashcards on the topic: "${topic}".
@@ -85,6 +90,44 @@ Return ONLY valid JSON in this format:
     console.error("Error generating flashcards:", error)
     // Return a fallback result
     return createFallbackCards(topic)
+  }
+}
+
+export async function generateHint(
+  question: string,
+  correctAnswer: string,
+  questionType: string,
+  hintLevel: number
+): Promise<HintResult> {
+  const prompt = `Generate a helpful hint for the following exam question. The hint should guide the student without giving away the answer directly.
+
+Question: ${question}
+Correct Answer: ${correctAnswer}
+Question Type: ${questionType}
+Hint Level: ${hintLevel + 1} (1 = subtle hint, 2 = more specific hint, 3 = detailed hint)
+
+Generate a hint that:
+- Is appropriate for the hint level (more specific as level increases)
+- Helps guide the student's thinking
+- Doesn't directly reveal the answer
+- Is clear and concise
+- Is relevant to the question type
+
+Return the response as a JSON object with a "hint" string property.`
+
+  try {
+    const response = await makeGroqRequest(prompt, true)
+    const parsedContent = JSON.parse(response)
+    return {
+      hint: parsedContent.hint || "Think carefully about the question and consider all aspects of the content.",
+      level: hintLevel
+    }
+  } catch (error) {
+    console.error("Error generating hint:", error)
+    return {
+      hint: "Think carefully about the question and consider all aspects of the content.",
+      level: hintLevel
+    }
   }
 }
 
