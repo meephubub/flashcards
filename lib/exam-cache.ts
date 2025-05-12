@@ -1,9 +1,24 @@
 // Types for cached exam data
+export interface ExamQuestion {
+  id: number
+  type: string
+  question: string
+  correctAnswer: string
+  options?: string[]
+  matchingPairs?: Array<{ left: string; right: string }>
+  sequence?: string[]
+  imageUrl?: string
+  difficulty: ExamDifficulty
+  originalCard?: Card
+  hint?: string
+  explanation?: string
+}
+
 export interface CachedExamData {
   deckId: number
-  questions: any[]
+  questions: ExamQuestion[]
   userAnswers: Record<number, string>
-  results: Record<number, any>
+  results: Record<number, GradingResult>
   currentQuestionIndex: number
   timeRemaining: number
   streakCount: number
@@ -12,7 +27,27 @@ export interface CachedExamData {
   lastUpdated: string
 }
 
-export type ExamDifficulty = "easy" | "medium" | "hard"
+export interface GradingResult {
+  isCorrect: boolean
+  score: number
+  feedback: string
+  explanation?: string
+  suggestions?: string
+  relatedConcepts?: string[]
+}
+
+export interface DifficultySettings {
+  timeMultiplier: number
+  questionCount: number
+  hintAllowed: boolean
+  passingScore: number
+  questionTypes: string[]
+  adaptiveScoring: boolean
+  timePressure: "low" | "medium" | "high"
+  feedbackDetail: "basic" | "detailed"
+}
+
+export type ExamDifficulty = "easy" | "medium" | "hard" | "adaptive"
 
 // Get cached exam data for a specific deck
 export function getCachedExamData(deckId: number): CachedExamData | null {
@@ -70,28 +105,79 @@ export function clearCachedExamData(deckId: number): void {
 }
 
 // Get difficulty settings
-export function getDifficultySettings(difficulty: ExamDifficulty) {
+export function getDifficultySettings(difficulty: ExamDifficulty, userPerformance?: number) {
+  // Adaptive difficulty based on user performance
+  if (difficulty === "adaptive" && userPerformance !== undefined) {
+    if (userPerformance >= 90) {
+      return {
+        timeMultiplier: 0.7,
+        questionCount: 15,
+        hintAllowed: false,
+        passingScore: 85,
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching", "sequence", "analogy"],
+        adaptiveScoring: true,
+        timePressure: "high",
+        feedbackDetail: "detailed"
+      }
+    } else if (userPerformance >= 75) {
+      return {
+        timeMultiplier: 0.85,
+        questionCount: 12,
+        hintAllowed: true,
+        passingScore: 75,
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching"],
+        adaptiveScoring: true,
+        timePressure: "medium",
+        feedbackDetail: "detailed"
+      }
+    } else {
+      return {
+        timeMultiplier: 1.2,
+        questionCount: 8,
+        hintAllowed: true,
+        passingScore: 65,
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank"],
+        adaptiveScoring: true,
+        timePressure: "low",
+        feedbackDetail: "basic"
+      }
+    }
+  }
+
+  // Fixed difficulty levels
   switch (difficulty) {
     case "easy":
       return {
-        timeMultiplier: 1.5, // More time
-        questionCount: 5,
+        timeMultiplier: 1.5,
+        questionCount: 8,
         hintAllowed: true,
         passingScore: 60,
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank"],
+        adaptiveScoring: false,
+        timePressure: "low",
+        feedbackDetail: "basic"
       }
     case "medium":
       return {
-        timeMultiplier: 1.0, // Standard time
-        questionCount: 10,
+        timeMultiplier: 1.0,
+        questionCount: 12,
         hintAllowed: true,
         passingScore: 70,
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching"],
+        adaptiveScoring: false,
+        timePressure: "medium",
+        feedbackDetail: "detailed"
       }
     case "hard":
       return {
-        timeMultiplier: 0.7, // Less time
+        timeMultiplier: 0.7,
         questionCount: 15,
-        hintAllowed: false, // No hints in hard mode
+        hintAllowed: false,
         passingScore: 80,
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching", "sequence", "analogy"],
+        adaptiveScoring: false,
+        timePressure: "high",
+        feedbackDetail: "detailed"
       }
     default:
       return {
@@ -99,6 +185,10 @@ export function getDifficultySettings(difficulty: ExamDifficulty) {
         questionCount: 10,
         hintAllowed: true,
         passingScore: 70,
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer"],
+        adaptiveScoring: false,
+        timePressure: "medium",
+        feedbackDetail: "detailed"
       }
   }
 }

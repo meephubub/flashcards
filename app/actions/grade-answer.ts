@@ -2,244 +2,199 @@
 
 import { revalidatePath } from "next/cache"
 import type { QuestionType } from "./generate-questions"
+import { GradingResult } from "@/lib/exam-cache"
 
-export interface GradingResult {
-  isCorrect: boolean
-  score: number // 0-100
-  feedback: string
-  explanation: string
+interface GradingOptions {
+  adaptiveScoring?: boolean
+  timePressure?: "low" | "medium" | "high"
+  previousAnswers?: GradingResult[]
+  questionType?: string
 }
 
 export async function gradeAnswer(
-  questionType: QuestionType,
+  questionType: string,
   question: string,
   correctAnswer: string,
   userAnswer: string,
+  options?: GradingOptions
 ): Promise<GradingResult> {
   try {
-    // For matching and sequence questions, we need to parse the JSON
-    if (questionType === "matching" || questionType === "sequence") {
-      return gradeStructuredAnswer(questionType, correctAnswer, userAnswer)
+    // Basic answer validation
+    if (!userAnswer.trim()) {
+      return {
+        isCorrect: false,
+        score: 0,
+        feedback: "Please provide an answer.",
+        explanation: "No answer was provided.",
+        suggestions: "Try to provide a complete answer next time.",
+      }
     }
 
-    // Try to use the API for grading
-    try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "llama3-70b-8192",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an educational AI that grades student answers with a fun, encouraging tone. Provide accurate, fair assessments with helpful feedback. Return JSON only.",
-            },
-            {
-              role: "user",
-              content: `Grade this ${questionType} question answer:
-              
-Question: ${question}
-Correct answer: ${correctAnswer}
-Student answer: ${userAnswer}
+    // Normalize answers for comparison
+    const normalizedUserAnswer = userAnswer.toLowerCase().trim()
+    const normalizedCorrectAnswer = correctAnswer.toLowerCase().trim()
 
-Evaluate if the student's answer is correct, considering minor variations, typos, or alternative phrasings that still demonstrate understanding.
-Assign a score from 0-100.
-Provide brief, constructive feedback in a fun, encouraging tone. Use emojis and casual language to make it engaging.
-Provide a short explanation of the correct answer.
+    // Handle different question types
+    let isCorrect = false
+    let score = 0
+    let feedback = ""
+    let explanation = ""
+    let suggestions = ""
+    let relatedConcepts: string[] = []
 
-Return your assessment as a JSON object with these properties:
-{
-  "isCorrect": boolean,
-  "score": number,
-  "feedback": string,
-  "explanation": string
-}`,
-            },
-          ],
-          temperature: 0.5,
-          max_tokens: 1000,
-          response_format: { type: "json_object" },
-        }),
-      })
+    switch (questionType) {
+      case "multiple-choice":
+      case "true-false":
+        isCorrect = normalizedUserAnswer === normalizedCorrectAnswer
+        score = isCorrect ? 100 : 0
+        feedback = isCorrect ? "Correct!" : "Incorrect. The correct answer is: " + correctAnswer
+        break
 
-      if (!response.ok) {
-        throw new Error("API request failed")
+      case "fill-in-blank":
+        // Allow for partial matches and common variations
+        const userWords = normalizedUserAnswer.split(/\s+/)
+        const correctWords = normalizedCorrectAnswer.split(/\s+/)
+        const matchingWords = userWords.filter(word => correctWords.includes(word))
+        const accuracy = matchingWords.length / correctWords.length
+        isCorrect = accuracy >= 0.8
+        score = Math.round(accuracy * 100)
+        feedback = isCorrect
+          ? "Correct!"
+          : `Partially correct. You got ${matchingWords.length} out of ${correctWords.length} words right.`
+        break
+
+      case "short-answer":
+        // Use semantic similarity for short answers
+        const similarity = calculateSemanticSimilarity(normalizedUserAnswer, normalizedCorrectAnswer)
+        isCorrect = similarity >= 0.8
+        score = Math.round(similarity * 100)
+        feedback = isCorrect
+          ? "Correct!"
+          : "Your answer is close but not quite right. Consider reviewing the material."
+        break
+
+      case "matching":
+        try {
+          const userPairs = JSON.parse(userAnswer)
+          const correctPairs = JSON.parse(correctAnswer)
+          const correctMatches = userPairs.filter((pair: any) =>
+            correctPairs.some(
+              (correct: any) =>
+                pair.left.toLowerCase() === correct.left.toLowerCase() &&
+                pair.right.toLowerCase() === correct.right.toLowerCase()
+            )
+          )
+          const accuracy = correctMatches.length / correctPairs.length
+          isCorrect = accuracy >= 0.8
+          score = Math.round(accuracy * 100)
+          feedback = isCorrect
+            ? "Correct!"
+            : `You matched ${correctMatches.length} out of ${correctPairs.length} pairs correctly.`
+        } catch (error) {
+          return {
+            isCorrect: false,
+            score: 0,
+            feedback: "Invalid answer format.",
+            explanation: "The answer could not be parsed as matching pairs.",
+            suggestions: "Please ensure your answer is in the correct format.",
+          }
+        }
+        break
+
+      case "sequence":
+        try {
+          const userSequence = JSON.parse(userAnswer)
+          const correctSequence = JSON.parse(correctAnswer)
+          const correctPositions = userSequence.filter((item: string, index: number) =>
+            item.toLowerCase() === correctSequence[index].toLowerCase()
+          )
+          const accuracy = correctPositions.length / correctSequence.length
+          isCorrect = accuracy >= 0.8
+          score = Math.round(accuracy * 100)
+          feedback = isCorrect
+            ? "Correct!"
+            : `You got ${correctPositions.length} out of ${correctSequence.length} items in the correct order.`
+        } catch (error) {
+          return {
+            isCorrect: false,
+            score: 0,
+            feedback: "Invalid answer format.",
+            explanation: "The answer could not be parsed as a sequence.",
+            suggestions: "Please ensure your answer is in the correct format.",
+          }
+        }
+        break
+
+      default:
+        isCorrect = normalizedUserAnswer === normalizedCorrectAnswer
+        score = isCorrect ? 100 : 0
+        feedback = isCorrect ? "Correct!" : "Incorrect. The correct answer is: " + correctAnswer
+    }
+
+    // Apply adaptive scoring if enabled
+    if (options?.adaptiveScoring && options.previousAnswers) {
+      const recentPerformance = options.previousAnswers
+        .slice(-3)
+        .reduce((acc, curr) => acc + curr.score, 0) / 3
+
+      if (recentPerformance > 80) {
+        // Make scoring stricter for high performers
+        score = Math.round(score * 0.9)
+        isCorrect = score >= 80
+      } else if (recentPerformance < 50) {
+        // Make scoring more lenient for struggling students
+        score = Math.round(score * 1.1)
+        isCorrect = score >= 60
       }
+    }
 
-      const data = await response.json()
-      const content = data.choices[0]?.message?.content
+    // Apply time pressure adjustments
+    if (options?.timePressure === "high") {
+      score = Math.round(score * 1.1) // Bonus for quick answers
+    } else if (options?.timePressure === "low") {
+      score = Math.round(score * 0.9) // Slightly reduced score for unlimited time
+    }
 
-      if (!content) {
-        throw new Error("No content returned from Groq")
-      }
+    // Generate detailed feedback
+    if (!isCorrect) {
+      explanation = `The correct answer was: ${correctAnswer}`
+      suggestions = "Consider reviewing the material and trying again."
+      relatedConcepts = extractRelatedConcepts(question, correctAnswer)
+    }
 
-      // Parse the JSON response
-      const result = JSON.parse(content) as GradingResult
-
-      revalidatePath("/deck/[id]/exam")
-      return result
-    } catch (error) {
-      console.error("Error using API for grading, falling back to simple grading:", error)
-      return fallbackGrading(questionType, correctAnswer, userAnswer)
+    return {
+      isCorrect,
+      score: Math.min(100, score), // Ensure score doesn't exceed 100
+      feedback,
+      explanation,
+      suggestions,
+      relatedConcepts,
     }
   } catch (error) {
     console.error("Error grading answer:", error)
-    return fallbackGrading(questionType, correctAnswer, userAnswer)
-  }
-}
-
-// Helper function to grade structured answers (matching, sequence)
-function gradeStructuredAnswer(
-  questionType: "matching" | "sequence",
-  correctAnswer: string,
-  userAnswer: string,
-): GradingResult {
-  try {
-    const correctData = JSON.parse(correctAnswer)
-    const userData = JSON.parse(userAnswer)
-
-    if (questionType === "matching") {
-      // For matching questions, compare each pair
-      const correctPairs = correctData
-      const userPairs = userData
-
-      let correctCount = 0
-      for (let i = 0; i < correctPairs.length; i++) {
-        if (
-          i < userPairs.length &&
-          correctPairs[i].left === userPairs[i].left &&
-          correctPairs[i].right === userPairs[i].right
-        ) {
-          correctCount++
-        }
-      }
-
-      const score = Math.round((correctCount / correctPairs.length) * 100)
-      const isCorrect = score >= 80
-
-      return {
-        isCorrect,
-        score,
-        feedback: isCorrect
-          ? "Great job matching these terms! 🎉"
-          : "Nice try! Some matches weren't quite right. Let's review them together.",
-        explanation: "Matching these terms correctly helps understand how they relate to each other.",
-      }
-    } else if (questionType === "sequence") {
-      // For sequence questions, compare the order
-      const correctSequence = correctData
-      const userSequence = userData
-
-      let correctCount = 0
-      for (let i = 0; i < correctSequence.length; i++) {
-        if (i < userSequence.length && correctSequence[i] === userSequence[i]) {
-          correctCount++
-        }
-      }
-
-      const score = Math.round((correctCount / correctSequence.length) * 100)
-      const isCorrect = score >= 80
-
-      return {
-        isCorrect,
-        score,
-        feedback: isCorrect
-          ? "You got the sequence right! 🌟 Great understanding of the order."
-          : "The sequence isn't quite right. Check the order again!",
-        explanation: "Understanding the correct sequence is important for this concept.",
-      }
-    }
-
-    // Fallback
     return {
       isCorrect: false,
       score: 0,
-      feedback: "Unable to grade this answer format.",
-      explanation: "There was an issue comparing your answer with the correct one.",
-    }
-  } catch (error) {
-    console.error("Error grading structured answer:", error)
-    return {
-      isCorrect: false,
-      score: 0,
-      feedback: "Error grading your answer. Please check your format.",
-      explanation: "There was an issue with the answer format.",
+      feedback: "An error occurred while grading your answer.",
+      explanation: "Please try again or contact support if the problem persists.",
     }
   }
 }
 
-// Fallback grading function that doesn't rely on API
-function fallbackGrading(questionType: QuestionType, correctAnswer: string, userAnswer: string): GradingResult {
-  // Simple string comparison for basic grading
-  let isCorrect = false
-  let score = 0
-  let feedback = ""
-  let explanation = ""
+// Helper function to calculate semantic similarity between two strings
+function calculateSemanticSimilarity(str1: string, str2: string): number {
+  // Simple implementation using word overlap
+  const words1 = new Set(str1.split(/\s+/))
+  const words2 = new Set(str2.split(/\s+/))
+  const intersection = new Set([...words1].filter(x => words2.has(x)))
+  const union = new Set([...words1, ...words2])
+  return intersection.size / union.size
+}
 
-  // Normalize answers for comparison
-  const normalizedCorrect = correctAnswer.trim().toLowerCase()
-  const normalizedUser = userAnswer.trim().toLowerCase()
-
-  switch (questionType) {
-    case "multiple-choice":
-    case "true-false":
-      // Exact match required for multiple choice and true/false
-      isCorrect = normalizedCorrect === normalizedUser
-      score = isCorrect ? 100 : 0
-      feedback = isCorrect ? "Correct! Great job! 🎉" : "Not quite right. The correct answer was different. 🤔"
-      explanation = `The correct answer is: ${correctAnswer}`
-      break
-
-    case "fill-in-blank":
-      // Check if user answer contains the correct answer or vice versa
-      isCorrect = normalizedUser.includes(normalizedCorrect) || normalizedCorrect.includes(normalizedUser)
-      score = isCorrect ? 100 : 0
-      feedback = isCorrect
-        ? "You got it! Nice work filling in the blank! 🎉"
-        : "Not quite right. Try again with a different word. 🤔"
-      explanation = `The correct answer is: ${correctAnswer}`
-      break
-
-    case "short-answer":
-      // For short answer, check if there's significant overlap
-      const correctWords = new Set(normalizedCorrect.split(/\s+/).filter((w) => w.length > 3))
-      const userWords = new Set(normalizedUser.split(/\s+/).filter((w) => w.length > 3))
-
-      // Count matching significant words
-      let matchCount = 0
-      for (const word of userWords) {
-        if (correctWords.has(word)) {
-          matchCount++
-        }
-      }
-
-      // Calculate score based on overlap
-      const overlapScore = correctWords.size > 0 ? Math.min(100, Math.round((matchCount / correctWords.size) * 100)) : 0
-
-      isCorrect = overlapScore >= 70
-      score = overlapScore
-      feedback = isCorrect
-        ? "Great answer! You've captured the key points. 🌟"
-        : "Your answer has some good elements, but could be more complete. 📚"
-      explanation = `A complete answer would include: ${correctAnswer}`
-      break
-
-    default:
-      // Default fallback
-      isCorrect = normalizedCorrect === normalizedUser
-      score = isCorrect ? 100 : 0
-      feedback = isCorrect ? "Correct! Well done! 🎉" : "Not quite right. Let's review the answer. 🤔"
-      explanation = `The correct answer is: ${correctAnswer}`
-  }
-
-  return {
-    isCorrect,
-    score,
-    feedback,
-    explanation,
-  }
+// Helper function to extract related concepts from the question and answer
+function extractRelatedConcepts(question: string, answer: string): string[] {
+  // Simple implementation - split into words and remove common words
+  const commonWords = new Set(["the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"])
+  const words = [...question.split(/\s+/), ...answer.split(/\s+/)]
+  return [...new Set(words.filter(word => !commonWords.has(word.toLowerCase())))]
 }

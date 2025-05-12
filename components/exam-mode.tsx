@@ -94,16 +94,55 @@ export function ExamMode({ deckId }: ExamModeProps) {
   const confettiRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
+  const [userPerformance, setUserPerformance] = useState<number>(0)
+  const [questionTypeDistribution, setQuestionTypeDistribution] = useState<Record<string, number>>({})
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [detailedFeedback, setDetailedFeedback] = useState<string>("")
+  const [timePressure, setTimePressure] = useState<"low" | "medium" | "high">("medium")
+  const [adaptiveScoring, setAdaptiveScoring] = useState(false)
+
+  // Enhanced hint system
+  const [hintLevel, setHintLevel] = useState<number>(0)
+  const [hintCooldown, setHintCooldown] = useState<boolean>(false)
+
+  const getHint = (question: ExamQuestion): string => {
+    if (!question.hint) return ""
+
+    // Split hint into levels if it contains multiple parts
+    const hintParts = question.hint.split("|")
+    return hintParts[Math.min(hintLevel, hintParts.length - 1)]
+  }
+
+  const toggleHint = () => {
+    if (hintCooldown) return
+
+    setHintCooldown(true)
+    setHintLevel(prev => prev + 1)
+    setShowHint(true)
+
+    // Reset cooldown after 2 seconds
+    setTimeout(() => {
+      setHintCooldown(false)
+    }, 2000)
+  }
+
+  // Reset hint level when moving to next question
+  useEffect(() => {
+    setHintLevel(0)
+    setShowHint(false)
+  }, [currentQuestionIndex])
+
   // Generate a single question
-  const generateQuestion = async (index: number) => {
+  const generateQuestion = async (index: number, type: string) => {
     if (!deck) return null
 
     setIsGeneratingQuestion(true)
     try {
-      const settings = getDifficultySettings(difficulty)
+      const settings = getDifficultySettings(difficulty, userPerformance)
       const generatedQuestions = await generateQuestionsFromCards(
         deck.cards,
-        1 // Generate only one question
+        1, // Generate only one question
+        type
       )
 
       if (generatedQuestions.length > 0) {
@@ -118,11 +157,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
       return null
     } catch (error) {
       console.error("Error generating question:", error)
-      toast({
-        title: "Error",
-        description: "Failed to generate question. Please try again.",
-        variant: "destructive",
-      })
+      setTimeout(() => {
+        toast({
+          title: "Error",
+          description: "Failed to generate question. Please try again.",
+          variant: "destructive",
+        })
+      }, 0)
       return null
     } finally {
       setIsGeneratingQuestion(false)
@@ -143,7 +184,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
       setTotalQuestions(Math.min(settings.questionCount, deck.cards.length))
 
       // Generate first question
-      await generateQuestion(0)
+      await generateQuestion(0, settings.questionTypes[Math.floor(Math.random() * settings.questionTypes.length)])
 
       // Reset state
       setCurrentQuestionIndex(0)
@@ -171,11 +212,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
       })
     } catch (error) {
       console.error("Error initializing exam:", error)
-      toast({
-        title: "Error",
-        description: "Failed to initialize exam. Please try again.",
-        variant: "destructive",
-      })
+      setTimeout(() => {
+        toast({
+          title: "Error",
+          description: "Failed to initialize exam. Please try again.",
+          variant: "destructive",
+        })
+      }, 0)
     } finally {
       setIsGeneratingQuestion(false)
     }
@@ -207,11 +250,14 @@ export function ExamMode({ deckId }: ExamModeProps) {
           clearInterval(timer)
           // Auto-submit when time runs out
           if (!examCompleted) {
-            toast({
-              title: "Time's up!",
-              description: "Your exam has been automatically submitted.",
-              variant: "destructive",
-            })
+            // Move toast to effect
+            setTimeout(() => {
+              toast({
+                title: "Time's up!",
+                description: "Your exam has been automatically submitted.",
+                variant: "destructive",
+              })
+            }, 0)
             calculateFinalScore()
             setExamCompleted(true)
           }
@@ -249,10 +295,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
       })
 
       setIsSaving(false)
-      toast({
-        title: "Progress saved",
-        description: "Your exam progress has been saved automatically.",
-      })
+      // Move toast to effect
+      setTimeout(() => {
+        toast({
+          title: "Progress saved",
+          description: "Your exam progress has been saved automatically.",
+        })
+      }, 0)
     } catch (error) {
       console.error("Error saving exam progress:", error)
       setIsSaving(false)
@@ -297,10 +346,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
       }
     }
 
-    toast({
-      title: "Exam resumed",
-      description: "Your previous exam progress has been loaded.",
-    })
+    // Move toast to effect
+    setTimeout(() => {
+      toast({
+        title: "Exam resumed",
+        description: "Your previous exam progress has been loaded.",
+      })
+    }, 0)
   }
 
   // Discard cached exam
@@ -349,38 +401,90 @@ export function ExamMode({ deckId }: ExamModeProps) {
     })
   }
 
+  // Calculate user performance based on recent answers
+  const calculateUserPerformance = () => {
+    const recentAnswers = Object.values(results).slice(-5)
+    if (recentAnswers.length === 0) return 0
+
+    const correctAnswers = recentAnswers.filter(r => r.isCorrect).length
+    return (correctAnswers / recentAnswers.length) * 100
+  }
+
+  // Update difficulty settings based on performance
+  useEffect(() => {
+    if (difficulty === "adaptive") {
+      const performance = calculateUserPerformance()
+      setUserPerformance(performance)
+      const settings = getDifficultySettings(difficulty, performance)
+      setTimePressure(settings.timePressure)
+      setAdaptiveScoring(settings.adaptiveScoring)
+    }
+  }, [results, difficulty])
+
+  // Enhanced feedback system
+  const getDetailedFeedback = (result: GradingResult) => {
+    if (!result.isCorrect) {
+      const feedback = []
+      
+      if (result.explanation) {
+        feedback.push(result.explanation)
+      }
+      
+      if (result.suggestions) {
+        feedback.push("\nSuggestions for improvement:")
+        feedback.push(result.suggestions)
+      }
+      
+      if (result.relatedConcepts) {
+        feedback.push("\nRelated concepts to review:")
+        feedback.push(result.relatedConcepts.join(", "))
+      }
+      
+      return feedback.join("\n")
+    }
+    
+    return result.feedback
+  }
+
+  // Enhanced answer submission
   const handleSubmitAnswer = async () => {
     const currentQuestion = questions[currentQuestionIndex]
 
     // Validate answer based on question type
     if (currentQuestion.type === "matching") {
       if (matchingPairs.length === 0) {
-        toast({
-          title: "Answer required",
-          description: "Please match all pairs before submitting.",
-          variant: "destructive",
-        })
+        setTimeout(() => {
+          toast({
+            title: "Answer required",
+            description: "Please match all pairs before submitting.",
+            variant: "destructive",
+          })
+        }, 0)
         return
       }
       // Convert matching pairs to string for grading
       setCurrentAnswer(JSON.stringify(matchingPairs))
     } else if (currentQuestion.type === "sequence") {
       if (sequence.length === 0) {
-        toast({
-          title: "Answer required",
-          description: "Please arrange the sequence before submitting.",
-          variant: "destructive",
-        })
+        setTimeout(() => {
+          toast({
+            title: "Answer required",
+            description: "Please arrange the sequence before submitting.",
+            variant: "destructive",
+          })
+        }, 0)
         return
       }
       // Convert sequence to string for grading
       setCurrentAnswer(JSON.stringify(sequence))
     } else if (!currentAnswer.trim()) {
-      toast({
-        title: "Answer required",
-        description: "Please provide an answer before submitting.",
-        variant: "destructive",
-      })
+      setTimeout(() => {
+        toast({
+          title: "Answer required",
+          description: "Please provide an answer before submitting.",
+          variant: "destructive",
+        })
+      }, 0)
       return
     }
 
@@ -400,7 +504,6 @@ export function ExamMode({ deckId }: ExamModeProps) {
     setIsGrading(true)
 
     try {
-      // Grade the answer using AI
       const gradingResult = await gradeAnswer(
         currentQuestion.type,
         currentQuestion.question,
@@ -410,7 +513,23 @@ export function ExamMode({ deckId }: ExamModeProps) {
             ? JSON.stringify(currentQuestion.sequence)
             : currentQuestion.correctAnswer,
         answerToSave,
+        {
+          adaptiveScoring,
+          timePressure,
+          previousAnswers: Object.values(results),
+          questionType: currentQuestion.type
+        }
       )
+
+      // Update question type distribution
+      setQuestionTypeDistribution(prev => ({
+        ...prev,
+        [currentQuestion.type]: (prev[currentQuestion.type] || 0) + 1
+      }))
+
+      // Show detailed feedback
+      setDetailedFeedback(getDetailedFeedback(gradingResult))
+      setShowFeedback(true)
 
       // Save the result
       setResults((prev) => {
@@ -460,12 +579,14 @@ export function ExamMode({ deckId }: ExamModeProps) {
         setStreakCount(0)
       }
 
-      // Show feedback toast
-      toast({
-        title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
-        description: gradingResult.feedback,
-        variant: gradingResult.isCorrect ? "default" : "destructive",
-      })
+      // Move toast to effect
+      setTimeout(() => {
+        toast({
+          title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
+          description: gradingResult.feedback,
+          variant: gradingResult.isCorrect ? "default" : "destructive",
+        })
+      }, 0)
 
       // Save progress to cache with the grading result
       saveExamDataToCache(deckId, {
@@ -488,11 +609,13 @@ export function ExamMode({ deckId }: ExamModeProps) {
       })
     } catch (error) {
       console.error("Error grading answer:", error)
-      toast({
-        title: "Error",
-        description: "Failed to grade your answer. Please try again.",
-        variant: "destructive",
-      })
+      setTimeout(() => {
+        toast({
+          title: "Error",
+          description: "Failed to grade your answer. Please try again.",
+          variant: "destructive",
+        })
+      }, 0)
 
       // Even if grading fails, save the user's answer
       saveExamDataToCache(deckId, {
@@ -515,14 +638,17 @@ export function ExamMode({ deckId }: ExamModeProps) {
     }
   }
 
+  // Enhanced next question logic
   const handleNextQuestion = async () => {
     // Only allow proceeding if the current question has been answered and graded
     if (!results[questions[currentQuestionIndex]?.id]) {
-      toast({
-        title: "Answer required",
-        description: "Please submit your answer before proceeding.",
-        variant: "destructive",
-      })
+      setTimeout(() => {
+        toast({
+          title: "Answer required",
+          description: "Please submit your answer before proceeding.",
+          variant: "destructive",
+        })
+      }, 0)
       return
     }
 
@@ -533,10 +659,20 @@ export function ExamMode({ deckId }: ExamModeProps) {
       setMatchingPairs([])
       setSequence([])
       setShowHint(false)
+      setShowFeedback(false)
 
       // Generate next question if it doesn't exist
       if (!questions[nextIndex]) {
-        await generateQuestion(nextIndex)
+        const settings = getDifficultySettings(difficulty, userPerformance)
+        const availableTypes = settings.questionTypes
+        
+        // Balance question types based on distribution
+        const typeCounts = Object.entries(questionTypeDistribution)
+        const leastUsedType = typeCounts.length > 0 
+          ? typeCounts.sort((a, b) => a[1] - b[1])[0][0]
+          : availableTypes[Math.floor(Math.random() * availableTypes.length)]
+        
+        await generateQuestion(nextIndex, leastUsedType)
       }
 
       // Prepare the next question if it's a matching or sequence type
@@ -629,10 +765,6 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
     // Generate new questions
     initializeExam()
-  }
-
-  const toggleHint = () => {
-    setShowHint(!showHint)
   }
 
   // Handle drag and drop for sequence questions
@@ -971,11 +1103,12 @@ export function ExamMode({ deckId }: ExamModeProps) {
   // Get difficulty settings
   const diffSettings = getDifficultySettings(difficulty)
 
-  // Render the exam completion screen
+  // Enhanced exam completion screen
   if (examCompleted) {
     const answeredCount = Object.keys(results).length
     const correctCount = Object.values(results).filter((r) => r.isCorrect).length
-    const isPassing = examScore >= diffSettings.passingScore
+    const settings = getDifficultySettings(difficulty, userPerformance)
+    const isPassing = examScore >= settings.passingScore
 
     return (
       <div className="max-w-3xl mx-auto space-y-6">
@@ -999,7 +1132,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
               <p className="text-muted-foreground mt-1">
                 Your final score - {isPassing ? "Passed! 🎉" : "Not passed yet 🤔"}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Passing score: {diffSettings.passingScore}%</p>
+              <p className="text-xs text-muted-foreground mt-1">Passing score: {settings.passingScore}%</p>
             </div>
 
             <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
@@ -1072,6 +1205,59 @@ export function ExamMode({ deckId }: ExamModeProps) {
             )
           })}
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Exam Results</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Score</p>
+                <p className="text-2xl font-bold">{examScore}%</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Status</p>
+                <p className={`text-2xl font-bold ${isPassing ? "text-green-500" : "text-red-500"}`}>
+                  {isPassing ? "Passed" : "Failed"}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-medium">Question Type Distribution</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(questionTypeDistribution).map(([type, count]) => (
+                  <div key={type} className="flex justify-between items-center p-2 bg-secondary/50 rounded">
+                    <span className="capitalize">{type.replace(/-/g, " ")}</span>
+                    <span className="font-medium">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-medium">Performance Analysis</h3>
+              <div className="space-y-2">
+                <p>Total Questions: {totalQuestions}</p>
+                <p>Correct Answers: {correctCount}</p>
+                <p>Accuracy: {Math.round((correctCount / answeredCount) * 100)}%</p>
+                {difficulty === "adaptive" && (
+                  <p>Final Difficulty Level: {timePressure}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <Button onClick={restartExam} className="mr-2">
+                Take Another Exam
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href={`/deck/${deckId}`}>Back to Deck</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -1135,9 +1321,22 @@ export function ExamMode({ deckId }: ExamModeProps) {
               {currentQuestion.type === "analogy" && "Analogy"}
             </span>
             {!hasAnswered && diffSettings.hintAllowed && (
-              <Button variant="outline" size="sm" onClick={toggleHint}>
-                {showHint ? "Hide Hint" : "Show Hint"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={toggleHint}
+                  disabled={hintCooldown}
+                  className="relative"
+                >
+                  {showHint ? "Next Hint" : "Show Hint"}
+                  {hintLevel > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {hintLevel}
+                    </span>
+                  )}
+                </Button>
+              </div>
             )}
           </CardTitle>
         </CardHeader>
@@ -1157,9 +1356,18 @@ export function ExamMode({ deckId }: ExamModeProps) {
 
           {/* Different input types based on question type */}
           {currentQuestion.type === "multiple-choice" && (
-            <RadioGroup value={currentAnswer} onValueChange={setCurrentAnswer} disabled={hasAnswered}>
-              {currentQuestion.options?.map((option, i) => (
-                <div key={i} className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary/50">
+            <RadioGroup 
+              value={currentAnswer} 
+              onValueChange={setCurrentAnswer} 
+              disabled={hasAnswered}
+              className="space-y-2"
+            >
+              {currentQuestion.options?.map((option: string, i: number) => (
+                <div 
+                  key={i} 
+                  className="flex items-center space-x-2 p-3 rounded-md hover:bg-secondary/50 cursor-pointer transition-colors"
+                  onClick={() => !hasAnswered && setCurrentAnswer(option)}
+                >
                   <RadioGroupItem value={option} id={`option-${i}`} />
                   <Label htmlFor={`option-${i}`} className="flex-1 cursor-pointer">
                     {option}
@@ -1170,14 +1378,25 @@ export function ExamMode({ deckId }: ExamModeProps) {
           )}
 
           {currentQuestion.type === "true-false" && (
-            <RadioGroup value={currentAnswer} onValueChange={setCurrentAnswer} disabled={hasAnswered}>
-              <div className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary/50">
+            <RadioGroup 
+              value={currentAnswer} 
+              onValueChange={setCurrentAnswer} 
+              disabled={hasAnswered}
+              className="space-y-2"
+            >
+              <div 
+                className="flex items-center space-x-2 p-3 rounded-md hover:bg-secondary/50 cursor-pointer transition-colors"
+                onClick={() => !hasAnswered && setCurrentAnswer("True")}
+              >
                 <RadioGroupItem value="True" id="true" />
                 <Label htmlFor="true" className="flex-1 cursor-pointer">
                   True
                 </Label>
               </div>
-              <div className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary/50">
+              <div 
+                className="flex items-center space-x-2 p-3 rounded-md hover:bg-secondary/50 cursor-pointer transition-colors"
+                onClick={() => !hasAnswered && setCurrentAnswer("False")}
+              >
                 <RadioGroupItem value="False" id="false" />
                 <Label htmlFor="false" className="flex-1 cursor-pointer">
                   False
@@ -1265,11 +1484,28 @@ export function ExamMode({ deckId }: ExamModeProps) {
             </DragDropContext>
           )}
 
-          {/* Show hint if available and toggled */}
+          {/* Enhanced hint display */}
           {showHint && currentQuestion.hint && (
-            <div className="p-3 rounded-md bg-muted">
-              <div className="text-sm text-muted-foreground">Hint:</div>
-              <div>{currentQuestion.hint}</div>
+            <div className="p-4 rounded-md bg-muted space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium text-muted-foreground">Hint {hintLevel}</div>
+                {hintLevel > 0 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setHintLevel(prev => Math.max(0, prev - 1))}
+                    disabled={hintCooldown}
+                  >
+                    Previous Hint
+                  </Button>
+                )}
+              </div>
+              <div className="text-sm">{getHint(currentQuestion)}</div>
+              {hintLevel === 0 && (
+                <div className="text-xs text-muted-foreground mt-2">
+                  Click "Next Hint" for more detailed hints
+                </div>
+              )}
             </div>
           )}
         </CardContent>

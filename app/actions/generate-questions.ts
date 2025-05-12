@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import type { Card } from "@/lib/data"
 import type { ExamDifficulty } from "@/lib/exam-cache"
 import { makeGroqRequest } from "@/lib/groq"
+import { ExamQuestion } from "@/lib/exam-cache"
 
 export type QuestionType =
   | "multiple-choice"
@@ -12,119 +13,184 @@ export type QuestionType =
   | "short-answer"
   | "matching"
   | "sequence"
-  | "image-based"
   | "analogy"
 
-export interface ExamQuestion {
-  id: number
-  type: QuestionType
-  question: string
-  options?: string[]
-  correctAnswer: string
-  originalCard: Card
-  explanation?: string
-  imageUrl?: string
-  matchingPairs?: Array<{ left: string; right: string }>
-  sequence?: string[]
-  difficulty: ExamDifficulty
-  hint?: string
+interface GenerateOptions {
+  type?: QuestionType
+  difficulty?: "easy" | "medium" | "hard"
+  previousQuestions?: ExamQuestion[]
 }
 
 export async function generateQuestionsFromCards(
   cards: Card[],
-  count = 10,
-  difficulty: ExamDifficulty = "medium",
+  count: number,
+  options?: GenerateOptions
 ): Promise<ExamQuestion[]> {
-  try {
-    // If we have fewer cards than requested count, use all cards
-    const selectedCards = cards.length <= count ? [...cards] : selectRandomCards(cards, count)
+  if (cards.length < 3) {
+    throw new Error("Need at least 3 cards to generate questions")
+  }
 
-    // Transform cards into different question types
-    const questions: ExamQuestion[] = []
+  const questions: ExamQuestion[] = []
+  const usedCards = new Set<number>()
 
-    // Use Groq to generate questions
-    for (let i = 0; i < selectedCards.length; i++) {
-      const card = selectedCards[i]
-      
-      // Generate question using Groq
-      const prompt = `Generate an educational question based on this flashcard:
-Front: ${card.front}
-Back: ${card.back}
+  // Helper function to get a random unused card
+  const getRandomCard = () => {
+    const availableCards = cards.filter((_, index) => !usedCards.has(index))
+    if (availableCards.length === 0) return null
+    const randomIndex = Math.floor(Math.random() * availableCards.length)
+    const card = availableCards[randomIndex]
+    usedCards.add(cards.indexOf(card))
+    return card
+  }
 
-Generate a question that:
-1. Tests understanding of the concept
-2. Is appropriate for ${difficulty} difficulty level
-3. Includes a helpful hint that guides without giving away the answer
-4. Has a clear, unambiguous correct answer
-5. Is on a GCSE level
-6. If no difficulty is provided, use medium
-7. Make sure to properly format the response as a JSON object with the correct fields otherwise the app will crash
-
-Format the response as a JSON object with these fields:
-{
-  "type": "multiple-choice" | "true-false" | "fill-in-blank" | "short-answer",
-  "question": "The question text",
-  "options": ["Option 1", "Option 2", ...] (only for multiple-choice),
-  "correctAnswer": "The correct answer",
-  "hint": "A helpful hint that guides without giving away the answer",
-  "explanation": "Explanation of why the answer is correct"
-}`
-
-      try {
-        const response = await makeGroqRequest(prompt, true)
-        const questionData = JSON.parse(response)
-
-        // Create the question object
-        const question: ExamQuestion = {
-          id: card.id,
-          type: questionData.type,
-          question: questionData.question,
-          correctAnswer: questionData.correctAnswer,
-          originalCard: card,
-          difficulty,
-          hint: questionData.hint,
-          explanation: questionData.explanation,
-        }
-
-        // Add options for multiple choice questions
-        if (questionData.type === "multiple-choice" && questionData.options) {
-          question.options = questionData.options
-        }
-
-        questions.push(question)
-      } catch (error) {
-        console.error(`Error generating question for card ${card.id}:`, error)
-        // Fallback to a simple question if Groq fails
-        questions.push({
-          id: card.id,
-          type: "short-answer",
-          question: card.front,
-          correctAnswer: card.back,
-          originalCard: card,
-          difficulty,
-          hint: `Think about the relationship between "${card.front}" and its answer.`,
-          explanation: `The correct answer is: ${card.back}`,
-        })
+  // Helper function to generate options for multiple choice
+  const generateOptions = (correctAnswer: string, card: Card) => {
+    const options = [correctAnswer]
+    const otherCards = cards.filter(c => c !== card)
+    
+    while (options.length < 4) {
+      const randomCard = otherCards[Math.floor(Math.random() * otherCards.length)]
+      const option = randomCard.back
+      if (!options.includes(option)) {
+        options.push(option)
       }
     }
-
-    revalidatePath("/deck/[id]/exam")
-    return questions
-  } catch (error) {
-    console.error("Error generating questions:", error)
-
-    // Return simple questions as fallback
-    return cards.slice(0, Math.min(count, cards.length)).map((card) => ({
-      id: card.id,
-      type: "short-answer" as QuestionType,
-      question: card.front,
-      correctAnswer: card.back,
-      originalCard: card,
-      difficulty,
-      hint: `Think about the relationship between "${card.front}" and its answer.`,
-      explanation: `The correct answer is: ${card.back}`,
-    }))
+    
+    return options.sort(() => Math.random() - 0.5)
   }
+
+  // Helper function to generate matching pairs
+  const generateMatchingPairs = (card: Card) => {
+    const pairs = [{ left: card.front, right: card.back }]
+    const otherCards = cards.filter(c => c !== card)
+    
+    while (pairs.length < 4) {
+      const randomCard = otherCards[Math.floor(Math.random() * otherCards.length)]
+      const pair = { left: randomCard.front, right: randomCard.back }
+      if (!pairs.some(p => p.left === pair.left || p.right === pair.right)) {
+        pairs.push(pair)
+      }
+    }
+    
+    return pairs.sort(() => Math.random() - 0.5)
+  }
+
+  // Helper function to generate sequence
+  const generateSequence = (card: Card) => {
+    const sequence = [card.back]
+    const otherCards = cards.filter(c => c !== card)
+    
+    while (sequence.length < 4) {
+      const randomCard = otherCards[Math.floor(Math.random() * otherCards.length)]
+      if (!sequence.includes(randomCard.back)) {
+        sequence.push(randomCard.back)
+      }
+    }
+    
+    return sequence.sort(() => Math.random() - 0.5)
+  }
+
+  // Helper function to generate analogy
+  const generateAnalogy = (card: Card) => {
+    const otherCards = cards.filter(c => c !== card)
+    const randomCard = otherCards[Math.floor(Math.random() * otherCards.length)]
+    return `${card.front} is to ${card.back} as ${randomCard.front} is to ${randomCard.back}`
+  }
+
+  // Generate questions based on type distribution
+  const generateQuestion = (type: QuestionType, card: Card): ExamQuestion => {
+    const question: ExamQuestion = {
+      id: questions.length + 1,
+      type,
+      question: "",
+      correctAnswer: card.back,
+      difficulty: options?.difficulty || "medium"
+    }
+
+    switch (type) {
+      case "multiple-choice":
+        question.question = `What is the correct answer for: ${card.front}?`
+        question.options = generateOptions(card.back, card)
+        break
+
+      case "true-false":
+        const isTrue = Math.random() > 0.5
+        question.question = `${card.front} is ${card.back}. True or False?`
+        question.correctAnswer = isTrue ? "True" : "False"
+        break
+
+      case "fill-in-blank":
+        const words = card.back.split(/\s+/)
+        const blankIndex = Math.floor(Math.random() * words.length)
+        const blankedWords = [...words]
+        blankedWords[blankIndex] = "_____"
+        question.question = `${card.front}: ${blankedWords.join(" ")}`
+        question.correctAnswer = words[blankIndex]
+        break
+
+      case "short-answer":
+        question.question = `Explain the relationship between: ${card.front}`
+        break
+
+      case "matching":
+        question.question = "Match the following terms with their correct definitions:"
+        question.matchingPairs = generateMatchingPairs(card)
+        question.correctAnswer = JSON.stringify(question.matchingPairs)
+        break
+
+      case "sequence":
+        question.question = "Arrange the following items in the correct order:"
+        question.sequence = generateSequence(card)
+        question.correctAnswer = JSON.stringify(question.sequence)
+        break
+
+      case "analogy":
+        question.question = generateAnalogy(card)
+        break
+    }
+
+    return question
+  }
+
+  // Determine question types based on difficulty and previous questions
+  const getQuestionTypes = (): QuestionType[] => {
+    if (options?.type) {
+      return [options.type]
+    }
+
+    const types: QuestionType[] = ["multiple-choice", "true-false", "fill-in-blank"]
+    
+    if (options?.difficulty === "medium" || options?.difficulty === "hard") {
+      types.push("short-answer", "matching")
+    }
+    
+    if (options?.difficulty === "hard") {
+      types.push("sequence", "analogy")
+    }
+
+    // Avoid repeating the same question type too often
+    if (options?.previousQuestions) {
+      const recentTypes = options.previousQuestions.slice(-3).map(q => q.type)
+      return types.filter(type => !recentTypes.includes(type))
+    }
+
+    return types
+  }
+
+  // Generate the requested number of questions
+  for (let i = 0; i < count; i++) {
+    const card = getRandomCard()
+    if (!card) break
+
+    const availableTypes = getQuestionTypes()
+    const type = availableTypes[Math.floor(Math.random() * availableTypes.length)]
+    
+    const question = generateQuestion(type, card)
+    questions.push(question)
+  }
+
+  revalidatePath("/deck/[id]/exam")
+  return questions
 }
 
 function getQuestionTypesByDifficulty(difficulty: ExamDifficulty): QuestionType[] {
