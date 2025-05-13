@@ -18,6 +18,7 @@ import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText } from "@
 import { useToast } from "@/hooks/use-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import { useSound } from "@/hooks/use-sound"
+import confetti from "canvas-confetti"
 
 interface StudyModeProps {
   deckId: number
@@ -44,11 +45,8 @@ export function StudyMode({ deckId }: StudyModeProps) {
   const [isMuted, setIsMuted] = useState(false)
 
   // Sound effects
-  const { play: playFlip } = useSound("/sounds/flip.mp3")
   const { play: playCorrect } = useSound("/sounds/correct.mp3")
   const { play: playIncorrect } = useSound("/sounds/incorrect.mp3")
-  const { play: playStreak } = useSound("/sounds/streak.mp3")
-  const { play: playComplete } = useSound("/sounds/complete.mp3")
 
   // Initialize cards based on spaced repetition setting
   useEffect(() => {
@@ -183,7 +181,12 @@ export function StudyMode({ deckId }: StudyModeProps) {
       setShowRating(false)
     } else {
       setStudyComplete(true)
-      if (!isMuted) playComplete()
+      // Trigger confetti for completion
+      confetti({
+        particleCount: 150,
+        spread: 100,
+        origin: { y: 0.6 }
+      })
     }
   }
 
@@ -196,7 +199,6 @@ export function StudyMode({ deckId }: StudyModeProps) {
 
   const handleFlip = () => {
     setIsFlipped((prev) => !prev)
-    if (!isMuted) playFlip()
   }
 
   const resetStudySession = () => {
@@ -220,7 +222,12 @@ export function StudyMode({ deckId }: StudyModeProps) {
         setStreak(newStreak)
         if (newStreak % 5 === 0) {
           setShowStreak(true)
-          if (!isMuted) playStreak()
+          // Trigger confetti for streak
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          })
           setTimeout(() => setShowStreak(false), 2000)
         }
         if (!isMuted) playCorrect()
