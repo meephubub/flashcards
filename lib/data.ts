@@ -254,6 +254,7 @@ export async function updateDeck(updatedDeck: Deck): Promise<Deck | undefined> {
         .update({
           front: card.front,
           back: card.back,
+          img_url: card.img_url,
           updated_at: new Date().toISOString(),
         })
         .eq("id", card.id)

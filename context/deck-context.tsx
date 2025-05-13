@@ -28,8 +28,8 @@ interface DeckContextType {
   addDeck: (name: string, description: string, tag?: string | null) => Promise<Deck>
   updateDeck: (deck: Deck) => Promise<Deck>
   deleteDeck: (id: number) => Promise<boolean>
-  addCard: (deckId: number, front: string, back: string) => Promise<Card>
-  updateCard: (deckId: number, cardId: number, front: string, back: string) => Promise<Card>
+  addCard: (deckId: number, front: string, back: string, img_url?: string | null) => Promise<Card>
+  updateCard: (deckId: number, cardId: number, front: string, back: string, img_url?: string | null) => Promise<Card>
   deleteCard: (deckId: number, cardId: number) => Promise<boolean>
   getDeck: (id: number) => Deck | undefined
   refreshDecks: () => Promise<void>
@@ -97,8 +97,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     return true
   }
 
-  const addCard = async (deckId: number, front: string, back: string): Promise<Card> => {
-    const newCard = await dataService.addCard(deckId, front, back)
+  const addCard = async (deckId: number, front: string, back: string, img_url?: string | null): Promise<Card> => {
+    const newCard = await dataService.addCard(deckId, front, back, img_url)
 
     if (!newCard) {
       throw new Error("Failed to add card")
@@ -128,8 +128,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     return newCard
   }
 
-  const updateCard = async (deckId: number, cardId: number, front: string, back: string): Promise<Card> => {
-    const updatedCard = await dataService.updateCard(deckId, cardId, front, back)
+  const updateCard = async (deckId: number, cardId: number, front: string, back: string, img_url?: string | null): Promise<Card> => {
+    const updatedCard = await dataService.updateCard(deckId, cardId, front, back, img_url)
 
     if (!updatedCard) {
       throw new Error("Failed to update card")
