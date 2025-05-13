@@ -14,6 +14,7 @@ import { useDecks } from "@/context/deck-context"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ImageUpload } from "@/components/ui/image-upload"
 
 interface DeckEditorProps {
   deckId: number
@@ -100,7 +101,7 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
     setDeck({ ...deck, description: e.target.value })
   }
 
-  const handleCardChange = (id: number, field: "front" | "back", value: string) => {
+  const handleCardChange = (id: number, field: "front" | "back" | "img_url", value: string) => {
     setDeck({
       ...deck,
       cards: deck.cards.map((card) => (card.id === id ? { ...card, [field]: value } : card)),
@@ -178,6 +179,19 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
             className="max-w-md"
           />
         </div>
+
+        <div>
+          <label htmlFor="deckTag" className="block text-sm font-medium mb-1">
+            Tag (Optional)
+          </label>
+          <Input
+            id="deckTag"
+            value={deck.tag || ""}
+            onChange={(e) => setDeck({ ...deck, tag: e.target.value || null })}
+            placeholder="e.g., programming, math, language"
+            className="max-w-md"
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-between">
@@ -218,6 +232,15 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
                     rows={3}
                   />
                 </div>
+              </div>
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">
+                  Image (Optional)
+                </label>
+                <ImageUpload
+                  value={card.img_url}
+                  onChange={(url) => handleCardChange(card.id, "img_url", url)}
+                />
               </div>
               <div className="mt-3 flex justify-end">
                 <Button

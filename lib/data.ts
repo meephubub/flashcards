@@ -40,6 +40,7 @@ export async function getDecks(): Promise<Deck[]> {
             id: deck.id,
             name: deck.name,
             description: deck.description || "",
+            tag: deck.tag,
             cardCount: deck.card_count || 0,
             lastStudied: deck.last_studied || "Never",
             cards: [],
@@ -87,6 +88,7 @@ export async function getDecks(): Promise<Deck[]> {
           id: deck.id,
           name: deck.name,
           description: deck.description || "",
+          tag: deck.tag,
           cardCount: cards.length,
           lastStudied: deck.last_studied || "Never",
           cards,
@@ -125,6 +127,7 @@ export async function getDeck(id: number): Promise<Deck | undefined> {
         id: deck.id,
         name: deck.name,
         description: deck.description || "",
+        tag: deck.tag,
         cardCount: deck.card_count || 0,
         lastStudied: deck.last_studied || "Never",
         cards: [],
@@ -172,6 +175,7 @@ export async function getDeck(id: number): Promise<Deck | undefined> {
       id: deck.id,
       name: deck.name,
       description: deck.description || "",
+      tag: deck.tag,
       cardCount: cards.length,
       lastStudied: deck.last_studied || "Never",
       cards,
@@ -183,7 +187,7 @@ export async function getDeck(id: number): Promise<Deck | undefined> {
 }
 
 // Create a new deck
-export async function createDeck(name: string, description: string): Promise<Deck | undefined> {
+export async function createDeck(name: string, description: string, tag: string | null = null): Promise<Deck | undefined> {
   try {
     const { data: deck, error } = await supabase
       .from("decks")
@@ -191,6 +195,7 @@ export async function createDeck(name: string, description: string): Promise<Dec
         {
           name,
           description,
+          tag,
           card_count: 0,
           last_studied: "Never",
         },
@@ -207,6 +212,7 @@ export async function createDeck(name: string, description: string): Promise<Dec
       id: deck.id,
       name: deck.name,
       description: deck.description || "",
+      tag: deck.tag,
       cardCount: 0,
       lastStudied: "Never",
       cards: [],
@@ -225,6 +231,7 @@ export async function updateDeck(updatedDeck: Deck): Promise<Deck | undefined> {
       .update({
         name: updatedDeck.name,
         description: updatedDeck.description,
+        tag: updatedDeck.tag,
         card_count: updatedDeck.cardCount,
         last_studied: updatedDeck.lastStudied,
         updated_at: new Date().toISOString(),
@@ -255,6 +262,7 @@ export async function updateDeck(updatedDeck: Deck): Promise<Deck | undefined> {
       id: deck.id,
       name: deck.name,
       description: deck.description || "",
+      tag: deck.tag,
       cardCount: deck.card_count,
       lastStudied: deck.last_studied,
     }
@@ -282,7 +290,7 @@ export async function deleteDeck(id: number): Promise<boolean> {
 }
 
 // Add a card to a deck
-export async function addCard(deckId: number, front: string, back: string): Promise<Card | undefined> {
+export async function addCard(deckId: number, front: string, back: string, img_url?: string | null): Promise<Card | undefined> {
   try {
     // Insert the new card
     const { data: card, error: cardError } = await supabase
@@ -292,6 +300,7 @@ export async function addCard(deckId: number, front: string, back: string): Prom
           deck_id: deckId,
           front,
           back,
+          img_url,
         },
       ])
       .select()
@@ -320,6 +329,7 @@ export async function addCard(deckId: number, front: string, back: string): Prom
       id: card.id,
       front: card.front,
       back: card.back,
+      img_url: card.img_url,
     }
   } catch (error) {
     console.error(`Error in addCard(${deckId}):`, error)
@@ -333,6 +343,7 @@ export async function updateCard(
   cardId: number,
   front: string,
   back: string,
+  img_url?: string | null,
 ): Promise<Card | undefined> {
   try {
     const { data: card, error } = await supabase
@@ -340,6 +351,7 @@ export async function updateCard(
       .update({
         front,
         back,
+        img_url,
         updated_at: new Date().toISOString(),
       })
       .eq("id", cardId)
@@ -356,6 +368,7 @@ export async function updateCard(
       id: card.id,
       front: card.front,
       back: card.back,
+      img_url: card.img_url,
     }
   } catch (error) {
     console.error(`Error in updateCard(${deckId}, ${cardId}):`, error)
@@ -563,5 +576,6 @@ export type Card = {
   id: number
   front: string
   back: string
+  img_url?: string | null
   progress?: CardProgress
 }

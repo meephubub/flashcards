@@ -15,6 +15,7 @@ export interface Deck {
   id: number
   name: string
   description: string
+  tag: string | null
   cardCount: number
   lastStudied: string
   cards: Card[]
@@ -23,7 +24,7 @@ export interface Deck {
 interface DeckContextType {
   decks: Deck[]
   loading: boolean
-  addDeck: (name: string, description: string) => Promise<Deck>
+  addDeck: (name: string, description: string, tag?: string | null) => Promise<Deck>
   updateDeck: (deck: Deck) => Promise<Deck>
   deleteDeck: (id: number) => Promise<boolean>
   addCard: (deckId: number, front: string, back: string) => Promise<Card>
@@ -62,8 +63,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const addDeck = async (name: string, description: string): Promise<Deck> => {
-    const newDeck = await dataService.createDeck(name, description)
+  const addDeck = async (name: string, description: string, tag: string | null = null): Promise<Deck> => {
+    const newDeck = await dataService.createDeck(name, description, tag)
 
     if (!newDeck) {
       throw new Error("Failed to create deck")

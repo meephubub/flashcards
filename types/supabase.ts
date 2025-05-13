@@ -8,6 +8,7 @@ export interface Database {
           id: number
           name: string
           description: string
+          tag: string | null
           card_count: number
           last_studied: string
           created_at: string
@@ -17,6 +18,7 @@ export interface Database {
           id?: number
           name: string
           description?: string
+          tag?: string | null
           card_count?: number
           last_studied?: string
           created_at?: string
@@ -26,6 +28,7 @@ export interface Database {
           id?: number
           name?: string
           description?: string
+          tag?: string | null
           card_count?: number
           last_studied?: string
           created_at?: string
@@ -38,6 +41,7 @@ export interface Database {
           deck_id: number
           front: string
           back: string
+          img_url: string | null
           created_at: string
           updated_at: string
         }
@@ -46,6 +50,7 @@ export interface Database {
           deck_id: number
           front: string
           back: string
+          img_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -54,6 +59,7 @@ export interface Database {
           deck_id?: number
           front?: string
           back?: string
+          img_url?: string | null
           created_at?: string
           updated_at?: string
         }

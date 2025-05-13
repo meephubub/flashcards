@@ -5,13 +5,13 @@ export async function PUT(request: Request, { params }: { params: { id: string; 
   try {
     const deckId = Number.parseInt(params.id)
     const cardId = Number.parseInt(params.cardId)
-    const { front, back } = await request.json()
+    const { front, back, img_url } = await request.json()
 
     if (!front || !back) {
       return NextResponse.json({ error: "Front and back content are required" }, { status: 400 })
     }
 
-    const updatedCard = await dataService.updateCard(deckId, cardId, front, back)
+    const updatedCard = await dataService.updateCard(deckId, cardId, front, back, img_url)
 
     if (!updatedCard) {
       return NextResponse.json({ error: "Failed to update card" }, { status: 500 })

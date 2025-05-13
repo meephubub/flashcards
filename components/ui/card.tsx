@@ -1,5 +1,5 @@
 import * as React from "react"
-
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
@@ -40,4 +40,19 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 )
 CardFooter.displayName = "CardFooter"
 
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+const CardImage = React.forwardRef<HTMLDivElement, { src: string; alt: string } & React.HTMLAttributes<HTMLDivElement>>(
+  ({ src, alt, className, ...props }, ref) => (
+    <div ref={ref} className={cn("relative w-full h-48", className)} {...props}>
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        className="object-contain rounded-t-lg"
+        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+      />
+    </div>
+  ),
+)
+CardImage.displayName = "CardImage"
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent, CardImage }

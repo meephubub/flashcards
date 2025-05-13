@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { ImageUpload } from "@/components/ui/image-upload"
 import { useDecks } from "@/context/deck-context"
 import { useToast } from "@/hooks/use-toast"
 
@@ -19,6 +20,7 @@ interface CreateCardDialogProps {
 export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialogProps) {
   const [front, setFront] = useState("")
   const [back, setBack] = useState("")
+  const [img_url, setImgUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { addCard } = useDecks()
   const { toast } = useToast()
@@ -29,7 +31,7 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
 
     try {
       // Add the new card to the deck
-      await addCard(deckId, front, back)
+      await addCard(deckId, front, back, img_url)
 
       // Show success toast
       toast({
@@ -40,6 +42,7 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
       // Reset form and close dialog
       setFront("")
       setBack("")
+      setImgUrl(null)
       onOpenChange(false)
     } catch (error) {
       toast({
@@ -81,6 +84,10 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
                 rows={4}
                 required
               />
+            </div>
+            <div className="grid gap-2">
+              <Label>Image (Optional)</Label>
+              <ImageUpload value={img_url} onChange={setImgUrl} />
             </div>
           </div>
           <DialogFooter>

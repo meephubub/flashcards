@@ -19,6 +19,7 @@ interface CreateDeckDialogProps {
 export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) {
   const [deckName, setDeckName] = useState("")
   const [deckDescription, setDeckDescription] = useState("")
+  const [deckTag, setDeckTag] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { addDeck } = useDecks()
   const { toast } = useToast()
@@ -29,7 +30,7 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
 
     try {
       // Add the new deck to our context
-      await addDeck(deckName, deckDescription)
+      await addDeck(deckName, deckDescription, deckTag || null)
 
       // Show success toast
       toast({
@@ -40,6 +41,7 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
       // Reset form and close dialog
       setDeckName("")
       setDeckDescription("")
+      setDeckTag("")
       onOpenChange(false)
     } catch (error) {
       toast({
@@ -78,6 +80,15 @@ export function CreateDeckDialog({ open, onOpenChange }: CreateDeckDialogProps) 
                 onChange={(e) => setDeckDescription(e.target.value)}
                 placeholder="Add a description for your deck"
                 rows={3}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="tag">Tag (Optional)</Label>
+              <Input
+                id="tag"
+                value={deckTag}
+                onChange={(e) => setDeckTag(e.target.value)}
+                placeholder="e.g., programming, math, language"
               />
             </div>
           </div>

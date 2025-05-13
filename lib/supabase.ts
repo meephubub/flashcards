@@ -24,6 +24,7 @@ export type Deck = {
   id: number
   name: string
   description: string
+  tag: string | null
   card_count: number
   last_studied: string
   created_at: string

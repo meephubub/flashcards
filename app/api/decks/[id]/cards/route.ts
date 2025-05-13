@@ -4,13 +4,13 @@ import * as dataService from "@/lib/data"
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const deckId = Number.parseInt(params.id)
-    const { front, back } = await request.json()
+    const { front, back, img_url } = await request.json()
 
     if (!front || !back) {
       return NextResponse.json({ error: "Front and back content are required" }, { status: 400 })
     }
 
-    const newCard = await dataService.addCard(deckId, front, back)
+    const newCard = await dataService.addCard(deckId, front, back, img_url)
 
     if (!newCard) {
       return NextResponse.json({ error: "Failed to add card" }, { status: 500 })
