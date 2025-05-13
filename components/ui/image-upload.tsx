@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Image, Upload, X } from "lucide-react"
+import { Image, Upload, X, Loader2 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 
@@ -20,6 +20,26 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload an image file (JPEG, PNG, GIF, etc.)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please upload an image smaller than 5MB",
+        variant: "destructive",
+      })
+      return
+    }
 
     try {
       setIsUploading(true)
@@ -45,24 +65,31 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
           const data = JSON.parse(xhr.responseText)
           onChange(data.url)
           toast({
-            title: "Success",
-            description: "Image uploaded successfully",
+            title: "Success! 🎉",
+            description: "Your image has been uploaded successfully",
           })
         } else {
-          throw new Error("Upload failed")
+          let errorMessage = "Upload failed"
+          try {
+            const error = JSON.parse(xhr.responseText)
+            errorMessage = error.error || errorMessage
+          } catch {
+            // If we can't parse the error, use the default message
+          }
+          throw new Error(errorMessage)
         }
       }
 
       xhr.onerror = () => {
-        throw new Error("Upload failed")
+        throw new Error("Network error occurred. Please check your connection and try again.")
       }
 
       xhr.send(formData)
     } catch (error) {
       console.error("Upload error:", error)
       toast({
-        title: "Error",
-        description: "Failed to upload image. Please try again.",
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload image. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -76,8 +103,8 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
     onChange(url)
     if (url) {
       toast({
-        title: "Image URL added",
-        description: "The image URL has been set",
+        title: "Image URL Added",
+        description: "The image URL has been set successfully",
       })
     }
   }
@@ -85,8 +112,8 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
   const handleRemove = () => {
     onChange(null)
     toast({
-      title: "Image removed",
-      description: "The image has been removed",
+      title: "Image Removed",
+      description: "The image has been removed from the card",
     })
   }
 
@@ -132,12 +159,15 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
               <Button
                 type="button"
                 variant="outline"
-                className="relative"
+                className="relative min-w-[100px]"
                 disabled={isUploading}
                 onClick={() => document.getElementById("image-upload")?.click()}
               >
                 {isUploading ? (
-                  "Uploading..."
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {Math.round(uploadProgress)}%
+                  </>
                 ) : (
                   <>
                     <Upload className="h-4 w-4 mr-2" />
