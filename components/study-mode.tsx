@@ -16,7 +16,6 @@ import { ConfidenceRatingComponent } from "@/components/confidence-rating"
 import type { ConfidenceRating } from "@/lib/spaced-repetition"
 import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText } from "@/lib/spaced-repetition"
 import { useToast } from "@/hooks/use-toast"
-import { CardDisplay } from "@/components/card-display"
 
 interface StudyModeProps {
   deckId: number
@@ -296,20 +295,26 @@ export function StudyMode({ deckId }: StudyModeProps) {
           }}
         />
       ) : (
-        <CardDisplay
-          front={currentCard.front}
-          back={currentCard.back}
-          img_url={currentCard.img_url}
-          progress={currentCard.progress}
-          onAnswer={(correct) => {
-            if (isSpacedRepetitionEnabled) {
-              handleRating(correct ? 5 : 0)
-            } else {
-              handleNext()
-            }
-          }}
-          className="h-[300px]"
-        />
+        <div className={`card-flip ${isFlipped ? "flipped" : ""}`} onClick={handleFlip}>
+          <div className="card-flip-inner relative h-[300px] w-full">
+            <Card className="card-front absolute w-full h-full flex items-center justify-center p-8 cursor-pointer">
+              <div className="text-center text-xl space-y-4">
+                {currentCard.img_url && (
+                  <img src={currentCard.img_url} alt="Card image" className="max-h-[200px] mx-auto mb-4" />
+                )}
+                <div>{currentCard.front}</div>
+              </div>
+            </Card>
+            <Card className="card-back absolute w-full h-full flex items-center justify-center p-8 cursor-pointer">
+              <div className="text-center space-y-4">
+                {currentCard.img_url && (
+                  <img src={currentCard.img_url} alt="Card image" className="max-h-[200px] mx-auto mb-4" />
+                )}
+                <div>{currentCard.back}</div>
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
 
       <div className="flex justify-between items-center">
