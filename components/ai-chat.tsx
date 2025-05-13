@@ -76,7 +76,7 @@ export function AIChat({ cardFront, cardBack, isOpen, onClose }: AIChatProps) {
   if (!isOpen) return null
 
   return (
-    <Card className="fixed bottom-4 right-4 w-96 h-[500px] shadow-lg flex flex-col overflow-hidden z-50 bg-background">
+    <Card className="w-full shadow-lg flex flex-col overflow-hidden bg-background border-t">
       <div className="p-3 border-b flex justify-between items-center bg-secondary">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4" />
@@ -87,7 +87,7 @@ export function AIChat({ cardFront, cardBack, isOpen, onClose }: AIChatProps) {
         </Button>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 space-y-4">
+      <div className="flex-1 overflow-auto p-4 space-y-4 min-h-[200px] max-h-[300px]">
         {messages.length === 0 ? (
           <div className="text-center text-muted-foreground mt-8">
             <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />

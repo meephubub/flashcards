@@ -30,8 +30,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { generateQuestionsFromCards, type ExamQuestion } from "@/app/actions/generate-questions"
-import { gradeAnswer, type GradingResult } from "@/app/actions/grade-answer"
+import { generateQuestionsFromCards, type ExamQuestion, type GradingResult } from "@/app/actions/generate-questions"
+import { gradeAnswer } from "@/app/actions/grade-answer"
 import { useToast } from "@/hooks/use-toast"
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd"
 import confetti from "canvas-confetti"
@@ -53,6 +53,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { generateHint } from "@/lib/groq"
+import { makeGroqRequest } from "@/lib/groq"
+import type { GenerateOptions } from "@/app/actions/generate-questions"
+import type { QuestionType } from "@/app/actions/generate-questions"
 
 interface ExamModeProps {
   deckId: number
@@ -67,6 +70,7 @@ interface QuestionState {
   showHint: boolean;
   hintLevel: number;
   showFeedback: boolean;
+  chatMessages: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export function ExamMode({ deckId }: ExamModeProps) {
@@ -147,7 +151,8 @@ export function ExamMode({ deckId }: ExamModeProps) {
         isGrading: false,
         showHint: false,
         hintLevel: 0,
-        showFeedback: false
+        showFeedback: false,
+        chatMessages: []
       }
 
       return {
@@ -377,7 +382,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
             ? typeCounts.sort((a, b) => a[1] - b[1])[0][0]
             : availableTypes[Math.floor(Math.random() * availableTypes.length)]
 
-        await generateQuestion(nextIndex, leastUsedType)
+        await generateQuestion(nextIndex, leastUsedType as QuestionType)
       }
 
       // Update current question index
@@ -396,7 +401,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
   }
 
   // Generate a single question
-  const generateQuestion = async (index: number, type: string) => {
+  const generateQuestion = async (index: number, type: QuestionType) => {
     if (!deck) return null
 
     setIsGeneratingQuestion(true)
@@ -405,7 +410,11 @@ export function ExamMode({ deckId }: ExamModeProps) {
       const generatedQuestions = await generateQuestionsFromCards(
         deck.cards,
         1, // Generate only one question
-        type,
+        {
+          type,
+          difficulty,
+          previousQuestions: questions
+        }
       )
 
       if (generatedQuestions.length > 0) {
@@ -461,7 +470,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
       // Generate first question
       const firstQuestion = await generateQuestion(
         0,
-        settings.questionTypes[Math.floor(Math.random() * settings.questionTypes.length)]
+        settings.questionTypes[Math.floor(Math.random() * settings.questionTypes.length)] as QuestionType
       )
       if (!firstQuestion) {
         throw new Error("Failed to generate first question")
@@ -477,7 +486,8 @@ export function ExamMode({ deckId }: ExamModeProps) {
         timeRemaining: Math.round(60 * 15 * settings.timeMultiplier),
         streakCount: 0,
         difficulty: selectedDifficulty,
-        startedAt: new Date().toISOString()
+        startedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString()
       })
     } catch (error) {
       console.error("Error initializing exam:", error)
@@ -636,7 +646,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
       streakCount,
       difficulty,
       startedAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
+      lastUpdated: new Date().toISOString()
     })
 
     toast({
@@ -906,13 +916,81 @@ export function ExamMode({ deckId }: ExamModeProps) {
         isGrading: false,
         showHint: false,
         hintLevel: 0,
-        showFeedback: false
+        showFeedback: false,
+        chatMessages: []
       }
     })
     setQuestionStates(initialQuestionStates)
 
     setHasCachedExam(false)
     setExamStarted(true)
+  }
+
+  // Add new function to handle chat messages
+  const handleChatMessage = async (message: string) => {
+    if (!currentQuestion || !currentQuestionState) return
+
+    // Add user message to chat
+    setQuestionStates(prev => ({
+      ...prev,
+      [currentQuestion.id]: {
+        ...prev[currentQuestion.id],
+        chatMessages: [
+          ...prev[currentQuestion.id].chatMessages,
+          { role: "user", content: message }
+        ]
+      }
+    }))
+
+    // Generate AI response
+    try {
+      const prompt = `You are a helpful tutor helping a student with an exam question. The question is:
+
+Question: ${currentQuestion.question}
+Type: ${currentQuestion.type}
+Correct Answer: ${currentQuestion.correctAnswer}
+
+Previous chat context:
+${currentQuestionState.chatMessages.map(msg => `${msg.role}: ${msg.content}`).join("\n")}
+
+Student's latest message: ${message}
+
+Provide a helpful response that:
+1. Guides the student without giving away the answer
+2. Helps them think through the problem
+3. Provides relevant hints based on the question type
+4. Maintains a supportive and encouraging tone
+5. Suggests specific approaches or strategies
+
+Keep your response concise and focused.`
+
+      const response = await makeGroqRequest(prompt, true)
+      
+      // Add AI response to chat
+      setQuestionStates(prev => ({
+        ...prev,
+        [currentQuestion.id]: {
+          ...prev[currentQuestion.id],
+          chatMessages: [
+            ...prev[currentQuestion.id].chatMessages,
+            { role: "assistant", content: response }
+          ]
+        }
+      }))
+    } catch (error) {
+      console.error("Error generating chat response:", error)
+      // Add error message to chat
+      setQuestionStates(prev => ({
+        ...prev,
+        [currentQuestion.id]: {
+          ...prev[currentQuestion.id],
+          chatMessages: [
+            ...prev[currentQuestion.id].chatMessages,
+            { role: "assistant", content: "I apologize, but I'm having trouble generating a response right now. Please try asking your question again." }
+          ]
+        }
+      }))
+    }
   }
 
   if (loading || isGeneratingQuestion) {
@@ -1536,54 +1614,65 @@ export function ExamMode({ deckId }: ExamModeProps) {
             <div className="p-4 rounded-lg bg-muted/50 space-y-3 border border-border">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="text-sm font-medium">Hint {currentQuestionState.hintLevel + 1}</div>
-                  {currentQuestionState.hintLevel > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setQuestionStates(prev => ({
-                        ...prev,
-                        [currentQuestion.id]: {
-                          ...prev[currentQuestion.id],
-                          hintLevel: currentQuestionState.hintLevel - 1
-                        }
-                      }))}
-                      className="h-6 px-2"
-                    >
-                      Previous Hint
-                    </Button>
-                  )}
+                  <div className="text-sm font-medium">AI Tutor Chat</div>
                 </div>
-                {currentQuestionState.hintLevel < 2 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setQuestionStates(prev => ({
-                      ...prev,
-                      [currentQuestion.id]: {
-                        ...prev[currentQuestion.id],
-                        hintLevel: currentQuestionState.hintLevel + 1
-                      }
-                    }))}
-                    className="h-6 px-2"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setQuestionStates(prev => ({
+                    ...prev,
+                    [currentQuestion.id]: {
+                      ...prev[currentQuestion.id],
+                      showHint: false
+                    }
+                  }))}
+                  className="h-6 px-2"
+                >
+                  Close
+                </Button>
+              </div>
+              
+              <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                {currentQuestionState.chatMessages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                   >
-                    Next Hint
-                  </Button>
-                )}
-              </div>
-              <div className="text-sm leading-relaxed">
-                {currentQuestionState.isGrading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                    <span>Generating hint...</span>
+                    <div
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        message.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary"
+                      }`}
+                    >
+                      {message.content}
+                    </div>
                   </div>
-                ) : (
-                  currentHint
-                )}
+                ))}
               </div>
-              {currentQuestionState.hintLevel === 0 && (
-                <div className="text-xs text-muted-foreground mt-2">Click "Next Hint" for more detailed hints</div>
-              )}
+
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Ask for help..."
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                      handleChatMessage(e.currentTarget.value.trim())
+                      e.currentTarget.value = ""
+                    }
+                  }}
+                />
+                <Button
+                  onClick={(e) => {
+                    const input = e.currentTarget.previousElementSibling as HTMLInputElement
+                    if (input.value.trim()) {
+                      handleChatMessage(input.value.trim())
+                      input.value = ""
+                    }
+                  }}
+                >
+                  Send
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

@@ -14,10 +14,15 @@ export type QuestionType =
   | "matching"
   | "sequence"
   | "analogy"
+  | "critical-thinking"
+  | "application"
+  | "scenario"
+  | "compare-contrast"
+  | "cause-effect"
 
-interface GenerateOptions {
+export interface GenerateOptions {
   type?: QuestionType
-  difficulty?: "easy" | "medium" | "hard"
+  difficulty?: ExamDifficulty
   previousQuestions?: ExamQuestion[]
 }
 
@@ -293,6 +298,32 @@ function fallbackFillInBlankQuestion(card: Card, difficulty: ExamDifficulty): Ex
   }
 }
 
+function fallbackQuestionGeneration(
+  card: Card,
+  type: QuestionType,
+  allCards: Card[],
+  difficulty: ExamDifficulty
+): ExamQuestion {
+  switch (type) {
+    case "multiple-choice":
+      return fallbackMultipleChoiceQuestion(card, allCards, difficulty)
+    case "true-false":
+      return fallbackTrueFalseQuestion(card, difficulty)
+    case "fill-in-blank":
+      return fallbackFillInBlankQuestion(card, difficulty)
+    default:
+      return {
+        id: card.id,
+        type: "short-answer",
+        question: card.front,
+        correctAnswer: card.back,
+        originalCard: card,
+        difficulty,
+        explanation: `The correct answer relates to: ${card.back}`
+      }
+  }
+}
+
 // Remove or simplify the API-dependent functions
 async function createQuestionFromCard(
   card: Card,
@@ -301,41 +332,56 @@ async function createQuestionFromCard(
   difficulty: ExamDifficulty,
 ): Promise<ExamQuestion> {
   try {
-    // For multiple choice, we need to generate distractors
-    if (type === "multiple-choice") {
-      return fallbackMultipleChoiceQuestion(card, allCards, difficulty)
-    }
+    const prompt = `Generate an engaging and challenging exam question based on the following flashcard:
 
-    // For true/false, we need to generate a statement that's either true or false
-    if (type === "true-false") {
-      return fallbackTrueFalseQuestion(card, difficulty)
-    }
+Front: ${card.front}
+Back: ${card.back}
+Type: ${type}
+Difficulty: ${difficulty}
 
-    // For fill-in-blank, we need to create a sentence with a blank
-    if (type === "fill-in-blank") {
-      return fallbackFillInBlankQuestion(card, difficulty)
-    }
+The question should:
+1. Test deep understanding rather than just memorization
+2. Be clear and unambiguous
+3. Include relevant context
+4. Challenge critical thinking
+5. Be appropriate for the specified difficulty level
+6. Include detailed explanations and hints
 
-    // For short answer, we can use the card front directly
+For ${type} questions specifically:
+${type === "critical-thinking" ? "- Present a scenario that requires analysis and evaluation" : ""}
+${type === "application" ? "- Ask how the concept would be applied in a real-world situation" : ""}
+${type === "scenario" ? "- Create a realistic scenario that tests understanding" : ""}
+${type === "compare-contrast" ? "- Ask to compare and contrast related concepts" : ""}
+${type === "cause-effect" ? "- Focus on understanding relationships and consequences" : ""}
+
+Return the response as a JSON object with the following structure:
+{
+  "question": "The question text",
+  "options": ["Option 1", "Option 2", ...] (for multiple choice),
+  "correctAnswer": "The correct answer",
+  "explanation": "Detailed explanation of the answer",
+  "hints": ["Hint 1", "Hint 2", "Hint 3"],
+  "relatedConcepts": ["Concept 1", "Concept 2", ...]
+}`
+
+    const response = await makeGroqRequest(prompt, true)
+    const parsedContent = JSON.parse(response)
+
     return {
       id: card.id,
-      type: "short-answer",
-      question: `${card.front} (Provide a concise explanation)`,
-      correctAnswer: card.back,
-      originalCard: card,
-      explanation: `The correct answer relates to: ${card.back}`,
+      type,
+      question: parsedContent.question,
+      options: parsedContent.options,
+      correctAnswer: parsedContent.correctAnswer,
+      explanation: parsedContent.explanation,
+      hints: parsedContent.hints,
+      relatedConcepts: parsedContent.relatedConcepts,
       difficulty,
+      originalCard: card
     }
   } catch (error) {
     console.error("Error creating question:", error)
-    // Fallback to a simple question if there's an error
-    return {
-      id: card.id,
-      type: "short-answer",
-      question: card.front,
-      correctAnswer: card.back,
-      originalCard: card,
-      difficulty,
-    }
+    // Fallback to basic question if AI generation fails
+    return fallbackQuestionGeneration(card, type, allCards, difficulty)
   }
 }

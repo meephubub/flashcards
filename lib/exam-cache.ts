@@ -1,3 +1,5 @@
+import type { Card } from "@/lib/data"
+
 // Types for cached exam data
 export interface ExamQuestion {
   id: number
@@ -11,7 +13,9 @@ export interface ExamQuestion {
   difficulty: ExamDifficulty
   originalCard?: Card
   hint?: string
+  hints?: string[]
   explanation?: string
+  relatedConcepts?: string[]
 }
 
 export interface CachedExamData {
@@ -26,6 +30,8 @@ export interface CachedExamData {
   startedAt: string
   lastUpdated: string
 }
+
+export type ExamDifficulty = "easy" | "medium" | "hard" | "adaptive"
 
 export interface GradingResult {
   isCorrect: boolean
@@ -46,8 +52,6 @@ export interface DifficultySettings {
   timePressure: "low" | "medium" | "high"
   feedbackDetail: "basic" | "detailed"
 }
-
-export type ExamDifficulty = "easy" | "medium" | "hard" | "adaptive"
 
 // Get cached exam data for a specific deck
 export function getCachedExamData(deckId: number): CachedExamData | null {
