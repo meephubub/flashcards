@@ -116,3 +116,50 @@ export function parseTabDelimitedToFlashcards(text: string): ParsedDeck {
     cards,
   }
 }
+
+export function parseCSVToFlashcards(text: string): ParsedDeck {
+  // Default deck info
+  let deckName = "Imported Deck"
+  let deckDescription = ""
+  const cards: Card[] = []
+
+  // Split the text by lines
+  const lines = text.split("\n")
+  let cardId = 1
+
+  // Process each line
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    // Split the line by commas, handling quoted values
+    const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || []
+    const [front, back] = parts.map(part => {
+      // Remove quotes if present and trim
+      return part.replace(/^"|"$/g, "").trim()
+    })
+
+    // Skip if we don't have both front and back
+    if (!front || !back) continue
+
+    // If this is the first line and it looks like a header, use it as the deck name
+    if (i === 0 && !front.includes("?") && !front.includes(":")) {
+      deckName = front
+      deckDescription = back
+      continue
+    }
+
+    // Add the card
+    cards.push({
+      id: cardId++,
+      front,
+      back,
+    })
+  }
+
+  return {
+    name: deckName,
+    description: deckDescription,
+    cards,
+  }
+}

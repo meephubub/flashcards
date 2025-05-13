@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { parseMarkdownToFlashcards, parseTabDelimitedToFlashcards } from "@/lib/markdown-parser"
+import { parseMarkdownToFlashcards, parseTabDelimitedToFlashcards, parseCSVToFlashcards } from "@/lib/markdown-parser"
 import { importCardsFromMarkdown } from "@/lib/data"
 
 export async function POST(request: Request) {
@@ -16,9 +16,17 @@ export async function POST(request: Request) {
     const fileContent = await file.text()
 
     // Parse the content based on format
-    const parsedDeck = format === "tab" 
-      ? parseTabDelimitedToFlashcards(fileContent)
-      : parseMarkdownToFlashcards(fileContent)
+    let parsedDeck
+    switch (format) {
+      case "tab":
+        parsedDeck = parseTabDelimitedToFlashcards(fileContent)
+        break
+      case "csv":
+        parsedDeck = parseCSVToFlashcards(fileContent)
+        break
+      default:
+        parsedDeck = parseMarkdownToFlashcards(fileContent)
+    }
 
     // Import the cards to Supabase
     const newDeck = await importCardsFromMarkdown(parsedDeck)

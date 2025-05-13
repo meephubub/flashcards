@@ -11,6 +11,7 @@ import { AlertCircle, FileText, Upload } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { MarkdownTemplate } from "@/components/markdown-template"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 
 interface ImportMarkdownDialogProps {
   open: boolean
@@ -21,7 +22,8 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [previewText, setPreviewText] = useState<string>("")
-  const [importFormat, setImportFormat] = useState<"markdown" | "tab">("markdown")
+  const [importFormat, setImportFormat] = useState<"markdown" | "tab" | "csv">("markdown")
+  const [directInput, setDirectInput] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { refreshDecks } = useDecks()
@@ -42,10 +44,10 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
   }
 
   const handleImport = async () => {
-    if (!file) {
+    if (!file && !directInput.trim()) {
       toast({
-        title: "No file selected",
-        description: "Please select a file to import.",
+        title: "No content provided",
+        description: "Please either select a file or enter text to import.",
         variant: "destructive",
       })
       return
@@ -55,7 +57,13 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
 
     try {
       const formData = new FormData()
-      formData.append("file", file)
+      if (file) {
+        formData.append("file", file)
+      } else {
+        // Create a text file from direct input
+        const textFile = new File([directInput], "import.txt", { type: "text/plain" })
+        formData.append("file", textFile)
+      }
       formData.append("format", importFormat)
 
       const response = await fetch("/api/import", {
@@ -80,6 +88,7 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
       // Reset and close dialog
       setFile(null)
       setPreviewText("")
+      setDirectInput("")
       onOpenChange(false)
     } catch (error) {
       toast({
@@ -98,6 +107,7 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
     }
     setFile(null)
     setPreviewText("")
+    setDirectInput("")
   }
 
   return (
@@ -107,10 +117,11 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
           <DialogTitle>Import Flashcards</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="markdown" onValueChange={(value) => setImportFormat(value as "markdown" | "tab")}>
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="markdown" onValueChange={(value) => setImportFormat(value as "markdown" | "tab" | "csv")}>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="markdown">Markdown</TabsTrigger>
             <TabsTrigger value="tab">Tab-Delimited</TabsTrigger>
+            <TabsTrigger value="csv">CSV</TabsTrigger>
           </TabsList>
 
           <TabsContent value="markdown" className="space-y-4 py-4">
@@ -136,7 +147,7 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
                 <input
                   id="markdown-file"
                   type="file"
-                  accept=".md,.markdown,text/markdown"
+                  accept=".md,text/markdown"
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
@@ -151,7 +162,20 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
                   </Button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">Accepted file types: .md, .markdown</p>
+              <p className="text-xs text-muted-foreground">Accepted file types: .md</p>
+            </div>
+
+            <div className="grid w-full items-center gap-1.5">
+              <label htmlFor="direct-input" className="text-sm font-medium">
+                Or Enter Text Directly
+              </label>
+              <Textarea
+                id="direct-input"
+                placeholder="Paste your markdown content here..."
+                value={directInput}
+                onChange={(e) => setDirectInput(e.target.value)}
+                className="min-h-[200px] font-mono text-sm"
+              />
             </div>
           </TabsContent>
 
@@ -196,6 +220,75 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
               </div>
               <p className="text-xs text-muted-foreground">Accepted file types: .txt</p>
             </div>
+
+            <div className="grid w-full items-center gap-1.5">
+              <label htmlFor="direct-input-tab" className="text-sm font-medium">
+                Or Enter Text Directly
+              </label>
+              <Textarea
+                id="direct-input-tab"
+                placeholder="Paste your tab-delimited content here..."
+                value={directInput}
+                onChange={(e) => setDirectInput(e.target.value)}
+                className="min-h-[200px] font-mono text-sm"
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="csv" className="space-y-4 py-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex flex-col gap-2">
+                <div>
+                  Your CSV file should have two columns: question and answer, separated by commas. The first line
+                  can be used for the deck name and description.
+                </div>
+                <div className="text-xs font-mono bg-muted p-2 rounded">
+                  Deck Name,Description{"\n"}
+                  Question 1,Answer 1{"\n"}
+                  Question 2,Answer 2
+                </div>
+              </AlertDescription>
+            </Alert>
+
+            <div className="grid w-full items-center gap-1.5">
+              <label htmlFor="csv-file" className="text-sm font-medium">
+                Select CSV File
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="csv-file"
+                  type="file"
+                  accept=".csv,text/csv"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
+                  <FileText className="mr-2 h-4 w-4" />
+                  {file ? file.name : "Choose file"}
+                </Button>
+                {file && (
+                  <Button type="button" variant="ghost" size="sm" onClick={resetFileInput}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Accepted file types: .csv</p>
+            </div>
+
+            <div className="grid w-full items-center gap-1.5">
+              <label htmlFor="direct-input-csv" className="text-sm font-medium">
+                Or Enter Text Directly
+              </label>
+              <Textarea
+                id="direct-input-csv"
+                placeholder="Paste your CSV content here..."
+                value={directInput}
+                onChange={(e) => setDirectInput(e.target.value)}
+                className="min-h-[200px] font-mono text-sm"
+              />
+            </div>
           </TabsContent>
         </Tabs>
 
@@ -212,7 +305,7 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
             Cancel
           </Button>
-          <Button onClick={handleImport} disabled={!file || isUploading}>
+          <Button onClick={handleImport} disabled={(!file && !directInput.trim()) || isUploading}>
             {isUploading ? (
               <>
                 <Upload className="mr-2 h-4 w-4 animate-spin" />
