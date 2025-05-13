@@ -300,7 +300,14 @@ export function StudyMode({ deckId }: StudyModeProps) {
             <Card className="card-front absolute w-full h-full flex items-center justify-center p-8 cursor-pointer">
               <div className="text-center text-xl space-y-4">
                 {currentCard.img_url && (
-                  <img src={currentCard.img_url} alt="Card image" className="max-h-[200px] mx-auto mb-4" />
+                  <div className="relative w-full flex justify-center items-center bg-white/5 rounded-lg p-2">
+                    <img 
+                      src={currentCard.img_url} 
+                      alt="Card image" 
+                      className="max-h-[200px] w-auto object-contain rounded-md shadow-sm" 
+                      style={{ mixBlendMode: 'multiply' }}
+                    />
+                  </div>
                 )}
                 <div>{currentCard.front}</div>
               </div>
@@ -308,7 +315,14 @@ export function StudyMode({ deckId }: StudyModeProps) {
             <Card className="card-back absolute w-full h-full flex items-center justify-center p-8 cursor-pointer">
               <div className="text-center space-y-4">
                 {currentCard.img_url && (
-                  <img src={currentCard.img_url} alt="Card image" className="max-h-[200px] mx-auto mb-4" />
+                  <div className="relative w-full flex justify-center items-center bg-white/5 rounded-lg p-2">
+                    <img 
+                      src={currentCard.img_url} 
+                      alt="Card image" 
+                      className="max-h-[200px] w-auto object-contain rounded-md shadow-sm" 
+                      style={{ mixBlendMode: 'multiply' }}
+                    />
+                  </div>
                 )}
                 <div>{currentCard.back}</div>
               </div>
