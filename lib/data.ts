@@ -72,6 +72,7 @@ export async function getDecks(): Promise<Deck[]> {
             id: card.id,
             front: card.front,
             back: card.back,
+            img_url: card.img_url,
             progress: cardProgress
               ? {
                   easeFactor: cardProgress.ease_factor,
@@ -159,6 +160,7 @@ export async function getDeck(id: number): Promise<Deck | undefined> {
         id: card.id,
         front: card.front,
         back: card.back,
+        img_url: card.img_url,
         progress: cardProgress
           ? {
               easeFactor: cardProgress.ease_factor,
