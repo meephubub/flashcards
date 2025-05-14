@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ModeToggle } from "@/components/mode-toggle"
-import { PlusCircle, Search, Settings, FileUp, Sparkles } from "lucide-react"
+import { PlusCircle, Search, Settings, FileUp, Sparkles, BookText } from "lucide-react"
 import { CreateDeckDialog } from "@/components/create-deck-dialog"
 import { ImportMarkdownDialog } from "@/components/import-markdown-dialog"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
@@ -85,6 +85,16 @@ export function Sidebar() {
         </ScrollArea>
 
         <div className="p-3 border-t border-gray-200 dark:border-gray-800 space-y-1">
+          <Button
+            variant="ghost"
+            className={`w-full justify-start gap-2 ${pathname === "/notes" ? "bg-accent" : ""}`}
+            asChild
+          >
+            <Link href="/notes">
+              <BookText className="h-4 w-4" />
+              Notes
+            </Link>
+          </Button>
           <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => setIsGenerateOpen(true)}>
             <Sparkles className="h-4 w-4" />
             AI Generate
