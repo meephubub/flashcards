@@ -27,6 +27,18 @@ export interface GeneratedNote {
   content: string; // Markdown formatted content
 }
 
+export interface MultipleChoiceQuestion {
+  question: string;
+  options: string[];
+  correctAnswer: string; // Or index of correct answer
+  explanation?: string; // Optional explanation for the correct answer
+}
+
+export interface MCQGenerationResult {
+  mcqs: MultipleChoiceQuestion[];
+  sourceNoteTitle?: string; // Optional: title of the note used as source
+}
+
 export async function generateFlashcards(topic: string, numberOfCards = 5): Promise<GenerationResult> {
   // Create a simpler, more direct prompt that's less likely to cause JSON parsing issues
   const prompt = `Generate ${numberOfCards} educational flashcards on the topic: "${topic}".
@@ -307,6 +319,116 @@ Example output:
     return {
       title: `Note on ${topic} (Error)`,
       content: `An error occurred while trying to generate a note for "${topic}". Please check the console for more details.`
+    };
+  }
+}
+
+export async function generateMultipleChoiceQuestionsWithGroq(noteContent: string, noteTitle?: string, numberOfQuestions = 3): Promise<MCQGenerationResult> {
+  const prompt = `Based on the following note content, generate ${numberOfQuestions} multiple-choice questions (MCQs). Each question should test understanding of key concepts from the note.
+
+Note Title (for context, if available): "${noteTitle || 'Untitled Note'}"
+
+Note Content:
+"""
+${noteContent}
+"""
+
+For each MCQ, provide:
+1.  A clear question.
+2.  An array of 4 distinct options (strings). One option must be the correct answer.
+3.  The correct answer as a string (must exactly match one of the options).
+4.  A brief explanation for why the answer is correct (optional, but encouraged).
+
+Format the response as a valid JSON object with an "mcqs" array. Each item in the array should be an object with "question" (string), "options" (array of strings), "correctAnswer" (string), and "explanation" (string, optional) properties.
+
+Example output:
+{
+  "mcqs": [
+    {
+      "question": "What is the primary function of mitochondria?",
+      "options": [
+        "Protein synthesis",
+        "Energy production (ATP)",
+        "Waste breakdown",
+        "Cellular movement"
+      ],
+      "correctAnswer": "Energy production (ATP)",
+      "explanation": "Mitochondria are known as the powerhouses of the cell because they generate most of the cell's supply of adenosine triphosphate (ATP), used as a source of chemical energy."
+    }
+  ]
+}
+`;
+
+  const systemMessage = "You are an expert in creating educational multiple-choice questions based on provided text. Your output must always be a valid JSON object with an 'mcqs' array, where each MCQ has 'question', 'options', 'correctAnswer', and optionally 'explanation' fields. Ensure the options are plausible and the correct answer is clearly identifiable from the note content.";
+
+  try {
+    const response = await makeGroqRequest(prompt, false, systemMessage);
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(response);
+      if (parsedContent && Array.isArray(parsedContent.mcqs)) {
+        // Basic validation for each MCQ structure
+        const validMcqs = parsedContent.mcqs.filter((mcq: any) => 
+          mcq &&
+          typeof mcq.question === 'string' &&
+          Array.isArray(mcq.options) &&
+          mcq.options.length === 4 && 
+          mcq.options.every((opt: any) => typeof opt === 'string') &&
+          typeof mcq.correctAnswer === 'string' &&
+          mcq.options.includes(mcq.correctAnswer) &&
+          (typeof mcq.explanation === 'string' || typeof mcq.explanation === 'undefined')
+        );
+
+        if (validMcqs.length === 0 && parsedContent.mcqs.length > 0) {
+          // Some MCQs were generated but didn't pass validation
+          console.warn("Some MCQs failed validation:", parsedContent.mcqs);
+          // Potentially try to fix them or return a partial result if needed in future
+        }
+
+        return {
+          mcqs: validMcqs,
+          sourceNoteTitle: noteTitle
+        };
+      }
+      throw new Error("Invalid MCQ structure in JSON response or no MCQs generated.");
+    } catch (error) {
+      console.log("Failed to parse JSON for MCQs, attempting to fix format:", response, error);
+      const fixPrompt = `The following response needs to be formatted as valid JSON with an "mcqs" array containing objects with "question", "options" (array of 4 strings), "correctAnswer" (string), and "explanation" (string, optional) properties. Ensure the correctAnswer is one of the options. Please convert this to proper JSON format:\n\n${response}\n\nReturn ONLY valid JSON.`;
+      let fixedResponse: string = "[No response from fix attempt]";
+      try {
+        fixedResponse = await makeGroqRequest(fixPrompt, false, "You are a JSON formatting expert. Convert the provided text into the specified JSON structure for multiple-choice questions. Ensure each MCQ is complete and valid.");
+        const fixedParsedContent = JSON.parse(fixedResponse);
+        if (fixedParsedContent && Array.isArray(fixedParsedContent.mcqs)) {
+           // Re-run validation on fixed content
+          const validFixedMcqs = fixedParsedContent.mcqs.filter((mcq: any) => 
+            mcq &&
+            typeof mcq.question === 'string' &&
+            Array.isArray(mcq.options) &&
+            mcq.options.length === 4 &&
+            mcq.options.every((opt: any) => typeof opt === 'string') &&
+            typeof mcq.correctAnswer === 'string' &&
+            mcq.options.includes(mcq.correctAnswer) &&
+            (typeof mcq.explanation === 'string' || typeof mcq.explanation === 'undefined')
+          );
+          return {
+            mcqs: validFixedMcqs,
+            sourceNoteTitle: noteTitle
+          };
+        }
+        throw new Error("Invalid MCQ structure in fixed JSON response.");
+      } catch (secondError) {
+        console.error("Failed to parse fixed JSON for MCQs:", secondError, fixedResponse);
+        return {
+          mcqs: [],
+          sourceNoteTitle: noteTitle,
+        };
+      }
+    }
+  } catch (error) {
+    console.error("Error generating MCQs with Groq:", error);
+    return {
+      mcqs: [],
+      sourceNoteTitle: noteTitle,
     };
   }
 }

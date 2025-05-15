@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabase";
 import type { Note } from "@/lib/supabase";
+import type { MultipleChoiceQuestion, MCQGenerationResult } from "@/lib/groq";
 import { NotesSidebar } from "@/components/NotesSidebar";
 import { CategoryCombobox } from "@/components/ui/CategoryCombobox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { XIcon, ListIcon, SparklesIcon, PlusCircleIcon, SendIcon } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { XIcon, ListIcon, SparklesIcon, PlusCircleIcon, SendIcon, HelpCircleIcon, CheckCircle2, XCircle, InfoIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle as ShadDialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 
 // Helper to generate slugs for IDs
 const generateSlug = (text: string) => {
@@ -205,6 +206,13 @@ export default function NotesPage() {
   const [aiPrompt, setAiPrompt] = useState<string>("");
   const [aiResponse, setAiResponse] = useState<string>("");
   const [isProcessingAiRequest, setIsProcessingAiRequest] = useState<boolean>(false);
+  const [isMcqDialogOpen, setIsMcqDialogOpen] = useState<boolean>(false);
+  const [generatedMcqs, setGeneratedMcqs] = useState<MultipleChoiceQuestion[]>([]);
+  const [isGeneratingMcqs, setIsGeneratingMcqs] = useState<boolean>(false);
+  const [mcqError, setMcqError] = useState<string | null>(null);
+  const [currentMcqNoteTitle, setCurrentMcqNoteTitle] = useState<string | undefined>(undefined);
+  const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
+  const [showMcqResults, setShowMcqResults] = useState<boolean>(false);
 
   const notesContainerRef = useRef<HTMLDivElement>(null);
   const activeNoteRef = useRef<HTMLDivElement>(null);
@@ -489,6 +497,77 @@ export default function NotesPage() {
     }
   };
 
+  const handleGenerateMcqs = async () => {
+    if (!focusedNoteId) {
+      setMcqError("Please select a note to generate MCQs from.");
+      return;
+    }
+    const noteToGenerateFrom = allNotes.find(note => note.id === focusedNoteId);
+    if (!noteToGenerateFrom) {
+      setMcqError("Focused note not found.");
+      return;
+    }
+
+    setIsGeneratingMcqs(true);
+    setMcqError(null);
+    setGeneratedMcqs([]);
+    setUserAnswers({});
+    setShowMcqResults(false);
+    setCurrentMcqNoteTitle(noteToGenerateFrom.title);
+
+    try {
+      const response = await fetch("/api/generate-mcq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          noteContent: noteToGenerateFrom.content,
+          noteTitle: noteToGenerateFrom.title,
+          numberOfQuestions: 5 // Or make this configurable
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate MCQs from API.");
+      }
+
+      const data: MCQGenerationResult = await response.json();
+      if (data.mcqs && data.mcqs.length > 0) {
+        setGeneratedMcqs(data.mcqs);
+        setIsMcqDialogOpen(true);
+      } else {
+        setMcqError("No MCQs were generated for this note. The content might be too short or not suitable.");
+      }
+    } catch (error: any) {
+      console.error("Error generating MCQs:", error);
+      setMcqError(error.message || "An unexpected error occurred while generating MCQs.");
+    } finally {
+      setIsGeneratingMcqs(false);
+    }
+  };
+
+  const handleMcqOptionSelect = (questionIndex: number, option: string) => {
+    setUserAnswers(prev => ({ ...prev, [questionIndex]: option }));
+  };
+
+  const handleSubmitMcqs = () => {
+    setShowMcqResults(true);
+  };
+  
+  const calculateMcqScore = () => {
+    let correctCount = 0;
+    generatedMcqs.forEach((mcq, index) => {
+      if (userAnswers[index] === mcq.correctAnswer) {
+        correctCount++;
+      }
+    });
+    return {
+      correct: correctCount,
+      total: generatedMcqs.length,
+      percentage: generatedMcqs.length > 0 ? (correctCount / generatedMcqs.length) * 100 : 0
+    };
+  };
+
   return (
     <div className="flex h-screen bg-neutral-950 text-neutral-100">
       <NotesSidebar
@@ -536,24 +615,24 @@ export default function NotesPage() {
         </div>
 
         {/* Floating Bottom Nav Bar */}
-        <div className="w-full p-3 border-t border-neutral-800 bg-neutral-900/90 backdrop-blur-lg shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.25),0_-3px_10px_-3px_rgba(0,0,0,0.15)] sticky bottom-0 z-20 flex items-center justify-between">
-          <div className="flex items-center">
+        <div className="w-full p-4 border-t border-neutral-800/50 bg-neutral-950/80 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.4)] sticky bottom-0 z-20 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
             <Button 
               variant="ghost"
               size="icon" 
               onClick={() => setIsAddNoteDialogOpen(true)} 
-              className="mr-3 text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100 p-2 rounded-full"
+              className="text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 p-2.5 rounded-lg backdrop-blur-sm border border-white/10 transition-all duration-200"
               aria-label="Add new note"
             >
-              <PlusCircleIcon className="h-6 w-6" />
+              <PlusCircleIcon className="h-5 w-5" />
             </Button>
             
-            <span className="hidden md:inline-flex items-center text-xs text-neutral-500 border border-neutral-800 rounded-md px-2 py-1 mr-3 bg-neutral-900">
-              <SparklesIcon className="h-3 w-3 mr-1" /> <kbd className="font-mono">Ctrl</kbd>+<kbd className="font-mono">K</kbd> for AI chat
+            <span className="hidden md:inline-flex items-center text-xs text-neutral-400 border border-white/10 rounded-lg px-2.5 py-1.5 bg-neutral-800/30 backdrop-blur-sm">
+              <SparklesIcon className="h-3 w-3 mr-1.5" /> <kbd className="font-mono text-[10px]">Ctrl+K</kbd>
             </span>
           </div>
 
-          <ScrollArea className="whitespace-nowrap flex-grow">
+          <ScrollArea className="whitespace-nowrap flex-grow mx-4">
             <div className="flex space-x-2 items-center h-10">
               {focusedNoteId && currentNoteHeadings.length > 0 ? (
                 currentNoteHeadings.map((heading, index) => (
@@ -565,7 +644,7 @@ export default function NotesPage() {
                       const headingEl = document.getElementById(`heading-${generateSlug(heading.text)}`);
                       if (headingEl) headingEl.scrollIntoView({ behavior: 'smooth' });
                     }}
-                    className={`text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100 data-[state=active]:bg-neutral-700 data-[state=active]:text-neutral-100 transition-all rounded-md px-3 py-1.5 ${
+                    className={`text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white transition-all rounded-lg px-3 py-2 text-sm ${
                       heading.level === 1 ? 'font-semibold' : 
                       heading.level === 2 ? 'pl-3' : 
                       heading.level === 3 ? 'pl-4 text-sm' : 
@@ -585,7 +664,7 @@ export default function NotesPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleSubheadingClick(sh)}
-                    className="text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100 data-[state=active]:bg-neutral-700 data-[state=active]:text-neutral-100 transition-all rounded-md px-3 py-1.5"
+                    className="text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white transition-all rounded-lg px-3 py-2 text-sm"
                   >
                     {sh}
                   </Button>
@@ -594,16 +673,21 @@ export default function NotesPage() {
                 <p className="text-sm text-neutral-500 px-3">No H2 subheadings (##). Add notes with `## Your Subheading`.</p>
               )}
             </div>
-            <ScrollBar orientation="horizontal" className="[&>div]:bg-neutral-700" />
+            <ScrollBar orientation="horizontal" className="[&>div]:bg-neutral-700/50 hover:[&>div]:bg-neutral-600/60" />
           </ScrollArea>
           {focusedNoteId && (
             <Button 
               variant="ghost"
               size="sm"
-              onClick={clearFocus} 
-              className="ml-4 flex-shrink-0 bg-neutral-800/80 text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100"
+              onClick={handleGenerateMcqs} 
+              disabled={isGeneratingMcqs}
+              className="flex-shrink-0 text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg px-4 py-2 transition-all duration-200"
             >
-              <ListIcon className="h-4 w-4 mr-2" /> Show all in category
+              {isGeneratingMcqs ? (
+                <SparklesIcon className="h-4 w-4 mr-2 animate-spin" /> 
+              ) : (
+                <><HelpCircleIcon className="h-4 w-4 mr-2" /> Quiz Me</>
+              )}
             </Button>
           )}
         </div>
@@ -613,7 +697,7 @@ export default function NotesPage() {
         <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0">
           <div className="p-6 sm:p-8">
             <DialogHeader className="mb-6">
-              <DialogTitle className="text-2xl font-bold text-neutral-100">Add New Note</DialogTitle>
+              <ShadDialogTitle className="text-2xl font-bold text-neutral-100">Add New Note</ShadDialogTitle>
             </DialogHeader>
             
             <div className="space-y-4 mb-6 p-4 border border-neutral-700 rounded-lg bg-neutral-800/50">
@@ -691,7 +775,7 @@ export default function NotesPage() {
         <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0">
           <div className="p-6 sm:p-8">
             <DialogHeader className="mb-6">
-              <DialogTitle className="text-2xl font-bold text-neutral-100">AI Chat</DialogTitle>
+              <ShadDialogTitle className="text-2xl font-bold text-neutral-100">AI Chat</ShadDialogTitle>
             </DialogHeader>
             
             <div className="space-y-4">
@@ -750,6 +834,141 @@ export default function NotesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* MCQ Dialog */}
+      <Dialog open={isMcqDialogOpen} onOpenChange={(isOpen) => {
+          setIsMcqDialogOpen(isOpen);
+          if (!isOpen) {
+              setGeneratedMcqs([]);
+              setUserAnswers({});
+              setShowMcqResults(false);
+              setCurrentMcqNoteTitle(undefined);
+          }
+      }}>
+        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-3xl rounded-xl shadow-2xl p-0 sm:p-0">
+          <ScrollArea className="max-h-[80vh]">
+            <div className="p-6 sm:p-8">
+              <DialogHeader className="mb-6">
+                <ShadDialogTitle className="text-2xl font-bold text-neutral-100">
+                  Quiz: {currentMcqNoteTitle || "Multiple Choice Questions"}
+                </ShadDialogTitle>
+                {generatedMcqs.length > 0 && (
+                  <DialogDescription className="text-neutral-400">
+                    Test your knowledge based on the selected note.
+                  </DialogDescription>
+                )}
+              </DialogHeader>
+
+              {mcqError && (
+                <div className="text-red-400 text-sm p-3 bg-red-900/40 border border-red-700/60 rounded-md mb-4">
+                  {mcqError}
+                </div>
+              )}
+
+              {generatedMcqs.length > 0 ? (
+                <div className="space-y-6">
+                  {generatedMcqs.map((mcq, index) => (
+                      <Card key={index} className={`bg-neutral-850 border-neutral-700 p-5 rounded-lg transition-all ${showMcqResults && userAnswers[index] !== mcq.correctAnswer ? 'border-red-500/70' : showMcqResults && userAnswers[index] === mcq.correctAnswer ? 'border-green-500/70' : ''}`}>
+                        <CardHeader className="p-0 pb-3 mb-3 border-b border-neutral-700">
+                          <CardTitle className="text-lg font-semibold text-neutral-100">
+                            Question {index + 1}: {mcq.question}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0 space-y-2">
+                          {mcq.options.map((option: string, optIndex: number) => {
+                            const isSelected = userAnswers[index] === option;
+                            const isCorrect = option === mcq.correctAnswer;
+                            const isUserChoiceIncorrect = isSelected && !isCorrect;
+        
+                            let optionButtonClasses = "w-full justify-start text-left h-auto py-2.5 px-4 whitespace-normal rounded-md transition-colors duration-150 disabled:opacity-70 disabled:cursor-default border";
+        
+                            if (showMcqResults) {
+                              if (isCorrect) {
+                                optionButtonClasses += ' bg-green-500/20 border-green-500/60 text-green-200 hover:bg-green-500/30';
+                              } else if (isUserChoiceIncorrect) {
+                                optionButtonClasses += ' bg-red-500/20 border-red-500/60 text-red-200 hover:bg-red-500/30';
+                              } else {
+                                optionButtonClasses += ' bg-neutral-800 border-neutral-700 text-neutral-500 opacity-70 hover:bg-neutral-750'; // Other options during results
+                              }
+                            } else {
+                              // Not showing results yet
+                              if (isSelected) {
+                                optionButtonClasses += ' bg-neutral-600 border-neutral-500 text-neutral-100 ring-2 ring-neutral-500 hover:bg-neutral-550'; // Selected
+                              } else {
+                                optionButtonClasses += ' bg-neutral-800 border-neutral-700 text-neutral-200 hover:bg-neutral-750'; // Default, unselected
+                              }
+                            }
+
+                            return (
+                              <Button
+                                key={optIndex}
+                                onClick={() => !showMcqResults && handleMcqOptionSelect(index, option)}
+                                className={optionButtonClasses}
+                                disabled={showMcqResults}
+                              >
+                                <span className={`mr-3 h-5 w-5 rounded-full flex items-center justify-center border ${
+                                  showMcqResults 
+                                    ? (option === mcq.correctAnswer ? 'bg-green-500 border-green-400' : (userAnswers[index] === option && option !== mcq.correctAnswer ? 'bg-red-500 border-red-400' : 'border-neutral-600'))
+                                    : (userAnswers[index] === option ? 'bg-neutral-500 border-neutral-500' : 'border-neutral-600')
+                                }`}>
+                                  {showMcqResults && option === mcq.correctAnswer && <CheckCircle2 className="h-3.5 w-3.5 text-white"/>}
+                                  {showMcqResults && userAnswers[index] === option && option !== mcq.correctAnswer && <XCircle className="h-3.5 w-3.5 text-white"/>}
+                                </span>
+                                {option}
+                              </Button>
+                            );
+                          })}
+                        </CardContent>
+                        {showMcqResults && (
+                          <div className={`mt-4 p-3 rounded-md text-sm 
+                                      ${userAnswers[index] === mcq.correctAnswer ? 'bg-green-800/50 text-green-200 border border-green-700/60' : 'bg-red-800/50 text-red-200 border border-red-700/60'}`}>
+                            <p className="font-semibold mb-1">
+                                {userAnswers[index] === mcq.correctAnswer ? "Correct!" : "Incorrect."}
+                                {userAnswers[index] !== mcq.correctAnswer && ` Correct answer: ${mcq.correctAnswer}`}
+                            </p>
+                            {mcq.explanation && <p className="text-xs opacity-90">{mcq.explanation}</p>}
+                          </div>
+                        )}
+                      </Card>
+                  ))}
+                  
+                  {!showMcqResults && generatedMcqs.length > 0 && (
+                    <DialogFooter className="mt-8 sm:justify-center">
+                      <Button 
+                        onClick={handleSubmitMcqs} 
+                        disabled={Object.keys(userAnswers).length !== generatedMcqs.length}
+                        className="w-full md:w-auto bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-sky-700"
+                       >
+                         Submit Answers & See Results
+                       </Button>
+                    </DialogFooter>
+                  )}
+
+                  {showMcqResults && (
+                    <div className="mt-8 p-5 bg-neutral-800/60 border border-neutral-700 rounded-lg text-center">
+                      <h3 className="text-xl font-semibold text-neutral-100 mb-2">Quiz Completed!</h3>
+                      <p className="text-neutral-300 mb-1">You scored: <strong className="text-xl">{calculateMcqScore().correct} out of {calculateMcqScore().total}</strong> ({calculateMcqScore().percentage.toFixed(0)}%)</p>
+                      {mcqError && <p className="text-xs text-red-400 mt-2">Note: {mcqError}</p>}
+                      <Button onClick={() => setIsMcqDialogOpen(false)} className="mt-4 bg-neutral-700 hover:bg-neutral-600 text-neutral-100">Close Quiz</Button>
+                    </div>
+                  )}
+                </div>
+              ) : isGeneratingMcqs ? (
+                <div className="text-center py-10">
+                  <SparklesIcon className="h-12 w-12 text-neutral-500 animate-pulse mx-auto mb-4" />
+                  <p className="text-neutral-400">Generating your quiz, please wait...</p>
+                </div>
+              ) : (
+                <div className="text-center py-10">
+                   <InfoIcon className="h-12 w-12 text-neutral-600 mx-auto mb-4" />
+                  <p className="text-neutral-400">No MCQs to display. {mcqError || "Try generating some from a note."}</p>
+                  <Button onClick={() => setIsMcqDialogOpen(false)} className="mt-6 bg-neutral-700 hover:bg-neutral-600 text-neutral-100">Close</Button>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-} 
+}
