@@ -34,17 +34,31 @@ CREATE TABLE IF NOT EXISTS card_progress (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create notes table
+CREATE TABLE IF NOT EXISTS notes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  category TEXT NOT NULL,
+  user_id UUID,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Add indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cards_deck_id ON cards(deck_id);
 CREATE INDEX IF NOT EXISTS idx_card_progress_card_id ON card_progress(card_id);
 CREATE INDEX IF NOT EXISTS idx_card_progress_due_date ON card_progress(due_date);
+CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category);
 
 -- Add RLS policies
 ALTER TABLE decks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE card_progress ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for public access (you may want to restrict this in a real app)
 CREATE POLICY "Allow public access to decks" ON decks FOR ALL USING (true);
 CREATE POLICY "Allow public access to cards" ON cards FOR ALL USING (true);
 CREATE POLICY "Allow public access to card_progress" ON card_progress FOR ALL USING (true);
+CREATE POLICY "Allow public access to notes" ON notes FOR ALL USING (true);

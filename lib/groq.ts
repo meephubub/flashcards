@@ -22,6 +22,11 @@ export interface GradingResult {
   relatedConcepts?: string[]
 }
 
+export interface GeneratedNote {
+  title: string;
+  content: string; // Markdown formatted content
+}
+
 export async function generateFlashcards(topic: string, numberOfCards = 5): Promise<GenerationResult> {
   // Create a simpler, more direct prompt that's less likely to cause JSON parsing issues
   const prompt = `Generate ${numberOfCards} educational flashcards on the topic: "${topic}".
@@ -212,10 +217,85 @@ Return the response as a JSON object with the following properties:
   }
 }
 
+export async function generateNoteWithGroq(topic: string): Promise<GeneratedNote> {
+  const prompt = `Generate a comprehensive and well-structured note on the topic: "${topic}".
+The note should include:
+- A concise and informative title.
+- Content formatted in Markdown, including headings (e.g., ##, ###), lists (bulleted or numbered), bold text, italics, and blockquotes where appropriate.
+- The content should be detailed enough to be useful for learning or review.
+- Aim for clarity, accuracy, and good organization.
+
+Format the response as a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties.
+
+Example output:
+{
+  "title": "Key Concepts of Photosynthesis",
+  "content": "## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)"
+}
+`;
+  const systemMessage = "You are an expert content creator specializing in generating well-structured and informative notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. Ensure the Markdown is clean and follows standard conventions.";
+
+  try {
+    // First attempt to generate the note
+    const response = await makeGroqRequest(prompt, false, systemMessage);
+
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(response);
+      if (parsedContent && typeof parsedContent.title === 'string' && typeof parsedContent.content === 'string') {
+        return {
+          title: parsedContent.title,
+          content: parsedContent.content
+        };
+      }
+      throw new Error("Invalid note structure in JSON response");
+    } catch (error) {
+      console.log("Failed to parse JSON for note, attempting to fix format:", response);
+
+      const fixPrompt = `The following response needs to be formatted as valid JSON with "title" and "content" (Markdown) properties. Please convert this to proper JSON format:\n\n${response}\n\nReturn ONLY valid JSON in this format:\n{\n  "title": "Note Title",\n  "content": "Markdown content..."\n}
+`;
+      let fixedResponse: string = "[No response from fix attempt]"; // Initialize fixedResponse
+      try {
+        fixedResponse = await makeGroqRequest(fixPrompt, false, "You are a JSON formatting expert. Convert the provided text into the specified JSON structure with 'title' and 'content' fields. Ensure content is valid Markdown.");
+        const fixedParsedContent = JSON.parse(fixedResponse);
+        if (fixedParsedContent && typeof fixedParsedContent.title === 'string' && typeof fixedParsedContent.content === 'string') {
+          return {
+            title: fixedParsedContent.title,
+            content: fixedParsedContent.content
+          };
+        }
+        throw new Error("Invalid note structure in fixed JSON response");
+      } catch (secondError) {
+        console.error("Failed to parse fixed JSON for note:", secondError, fixedResponse);
+        // If still failing, create a fallback note
+        return {
+          title: `Note on ${topic} (Generation Failed)`,
+          content: `Failed to generate content for "${topic}" after multiple attempts. Please try again or check the logs.`
+        };
+      }
+    }
+  } catch (error) {
+    console.error("Error generating note with Groq:", error);
+    return {
+      title: `Note on ${topic} (Error)`,
+      content: `An error occurred while trying to generate a note for "${topic}". Please check the console for more details.`
+    };
+  }
+}
+
 // Helper function to make a request to the Groq API
-export async function makeGroqRequest(promptContent: string, isQuestionGeneration = false): Promise<string> {
-  const models = ["llama3-70b-8192", "compound-beta", "llama-3.1-8b-instant"]
-  let lastError: Error | null = null
+export async function makeGroqRequest(promptContent: string, isQuestionGeneration = false, systemMessageOverride?: string): Promise<string> {
+  const models = ["llama3-70b-8192", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]; // Added mixtral as another option
+  let lastError: Error | null = null;
+
+  let currentSystemMessage = "";
+  if (systemMessageOverride) {
+    currentSystemMessage = systemMessageOverride;
+  } else if (isQuestionGeneration) {
+    currentSystemMessage = "You are an expert educational question generator. Your goal is to create clear, accurate, and well-structured questions that test understanding of concepts. Each question should be challenging but fair, with a clear correct answer. For multiple-choice questions, provide plausible distractors that test common misconceptions. Always include a helpful hint that guides without giving away the answer. Keep the language accessible and ensure all output is in valid JSON syntax.";
+  } else {
+    currentSystemMessage = "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Always return your output as a valid JSON object containing a cards array. Each element in the array should be an object with front (the question as a string) and back (the answer as a string). Keep the language accessible, avoid overly technical jargon unless the topic requires it, and ensure all output is in valid JSON syntax. Do not include any extra commentary, explanations, or markdown outside of the JSON.";
+  }
 
   for (const model of models) {
     try {
@@ -230,51 +310,51 @@ export async function makeGroqRequest(promptContent: string, isQuestionGeneratio
           messages: [
             {
               role: "system",
-              content: isQuestionGeneration
-                ? "You are an expert educational question generator. Your goal is to create clear, accurate, and well-structured questions that test understanding of concepts. Each question should be challenging but fair, with a clear correct answer. For multiple-choice questions, provide plausible distractors that test common misconceptions. Always include a helpful hint that guides without giving away the answer. Keep the language accessible and ensure all output is in valid JSON syntax."
-                : "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Always return your output as a valid JSON object containing a cards array. Each element in the array should be an object with front (the question as a string) and back (the answer as a string). Keep the language accessible, avoid overly technical jargon unless the topic requires it, and ensure all output is in valid JSON syntax. Do not include any extra commentary, explanations, or markdown outside of the JSON.",
+              content: currentSystemMessage,
             },
             {
               role: "user",
               content: promptContent,
             },
           ],
-          temperature: 0.7,
-          max_tokens: 2000,
+          temperature: 0.6, // Slightly lower temperature for more predictable note structure
+          max_tokens: 3000, // Increased for potentially longer notes
           response_format: { type: "json_object" },
         }),
-      })
+      });
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json();
         // If we get a rate limit error, continue to the next model
-        if (errorData.error?.message?.toLowerCase().includes("rate limit")) {
-          lastError = new Error(errorData.error?.message || "Rate limit exceeded")
-          continue
+        if (response.status === 429 || errorData.error?.message?.toLowerCase().includes("rate limit")) {
+          lastError = new Error(errorData.error?.message || `Rate limit exceeded for model ${model}`);
+          console.warn(`Rate limit for ${model}, trying next model...`);
+          continue;
         }
-        throw new Error(errorData.error?.message || "Failed to generate content")
+        throw new Error(errorData.error?.message || `Failed to generate content with ${model}: ${response.statusText}`);
       }
 
-      const data = await response.json()
-      const content = data.choices[0]?.message?.content
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
 
       if (!content) {
-        throw new Error("No content returned from Groq")
+        throw new Error(`No content returned from Groq model ${model}`);
       }
 
-      return content
+      return content;
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error))
-      // If it's not a rate limit error, throw immediately
-      if (!lastError.message.toLowerCase().includes("rate limit")) {
-        throw lastError
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`Error with model ${model}:`, lastError.message);
+      // If it's not a rate limit error, and it's the last model, we throw
+      if (!lastError.message.toLowerCase().includes("rate limit") && models.indexOf(model) === models.length - 1) {
+        throw lastError;
       }
-      // Otherwise continue to the next model
+      // Otherwise continue to the next model (or if it's a rate limit)
     }
   }
 
   // If we've tried all models and still failed, throw the last error
-  throw lastError || new Error("All models failed to generate content")
+  throw lastError || new Error("All models failed to generate content");
 }
 
 // Helper function to process a valid JSON response
