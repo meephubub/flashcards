@@ -219,21 +219,49 @@ Return the response as a JSON object with the following properties:
 
 export async function generateNoteWithGroq(topic: string): Promise<GeneratedNote> {
   const prompt = `Generate a comprehensive and well-structured note on the topic: "${topic}".
+
 The note should include:
-- A concise and informative title.
-- Content formatted in Markdown, including headings (e.g., ##, ###), lists (bulleted or numbered), bold text, italics, and blockquotes where appropriate.
-- The content should be detailed enough to be useful for learning or review.
-- Aim for clarity, accuracy, and good organization.
+- A concise and informative title that summarizes the topic.
+- Rich markdown content with a clear structure and logical flow.
+
+## Supported Markdown Formatting (use all of these):
+
+### Headings
+- Use # for main title (h1)
+- Use ## for major sections (h2) 
+- Use ### for subsections (h3)
+- Use #### and ##### for smaller headings when needed
+
+### Lists
+- Bullet lists with * or - at the start of line
+- Numbered lists with 1., 2., etc.
+
+### Text Formatting
+- **Bold text** using double asterisks
+- *Italic text* using single asterisks
+- ~~Strikethrough~~ using double tildes
+- ==Highlighted text== using double equals (for important terms or concepts)
+- \`inline code\` using backticks for technical terms or commands
+
+### Block Elements
+- > Blockquotes for quotes or important callouts
+- Horizontal rules with --- for section dividers
+- Code blocks with triple backticks (\`\`\` ... \`\`\`)
+- Centered text with double colons (::centered text::)
+
+### Links
+- [Link text](URL) syntax for references
+
+Ensure the content is detailed, accurate, and organized in a way that facilitates learning. Break complex concepts into digestible sections and use diverse formatting elements to emphasize key points.
 
 Format the response as a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties.
 
 Example output:
 {
   "title": "Key Concepts of Photosynthesis",
-  "content": "## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)"
-}
-`;
-  const systemMessage = "You are an expert content creator specializing in generating well-structured and informative notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. Ensure the Markdown is clean and follows standard conventions.";
+  "content": "# Photosynthesis: The Foundation of Life\\n\\n## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)\\n\\n> This process is fundamental to life on Earth, providing both oxygen and energy.\\n\\n## Chemical Equation\\n\`6CO2 + 6H2O + light → C6H12O6 + 6O2\`\\n\\n---\\n\\n## Key Stages\\n1. Light-dependent reactions\\n2. Calvin cycle (light-independent reactions)\\n\\n### Light-Dependent Reactions\\n==These reactions convert light energy to chemical energy==\\n\\n\`\`\`\\nStage 1: Photon absorption by chlorophyll\\nStage 2: Electron transport chain\\nStage 3: ATP synthesis\\n\`\`\`\\n\\n::The miracle of converting sunlight to chemical energy::"
+}`;
+  const systemMessage = "You are an expert content creator specializing in generating well-structured and informative notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. Ensure the Markdown is clean and follows standard conventions. Incorporate all the specific Markdown formatting elements requested in the prompt to create rich, visually engaging notes.";
 
   try {
     // First attempt to generate the note
