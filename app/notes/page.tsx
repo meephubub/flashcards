@@ -367,10 +367,24 @@ export default function NotesPage() {
               if (note) {
                 // Update the note content with highlighted text
                 const selectedText = selection.toString().trim();
-                const updatedContent = note.content.replace(
-                  new RegExp(`\\b${selectedText}\\b`, 'g'),
-                  `==${selectedText}==`
-                );
+                const isAlreadyHighlighted = selectedText.startsWith('==') && selectedText.endsWith('==');
+                
+                let updatedContent;
+                if (isAlreadyHighlighted) {
+                  // Remove the == markers
+                  const unhighlightedText = selectedText.slice(2, -2);
+                  updatedContent = note.content.replace(
+                    new RegExp(`==${unhighlightedText}==`, 'g'),
+                    unhighlightedText
+                  );
+                } else {
+                  // Add the == markers
+                  updatedContent = note.content.replace(
+                    new RegExp(`\\b${selectedText}\\b`, 'g'),
+                    `==${selectedText}==`
+                  );
+                }
+                
                 // Update the note in Supabase
                 supabase
                   .from("notes")
