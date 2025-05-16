@@ -357,10 +357,14 @@ export default function NotesPage() {
           e.preventDefault();
           const selection = window.getSelection();
           if (selection && selection.toString().trim()) {
-            setHighlightedText(selection.toString().trim());
+            // setHighlightedText(selection.toString().trim()); // This state seems unused now, can be removed if confirmed
             // Find the note containing the selection
             const range = selection.getRangeAt(0);
-            const noteElement = (range.commonAncestorContainer as Element).closest('[id^="note-"]');
+            
+            const ancestorNode = range.commonAncestorContainer;
+            const parentElementForClosest = ancestorNode.nodeType === Node.ELEMENT_NODE ? (ancestorNode as Element) : ancestorNode.parentElement;
+            const noteElement = parentElementForClosest?.closest('[id^="note-"]');
+
             if (noteElement) {
               const noteId = noteElement.id.replace('note-', '');
               const note = allNotes.find(n => n.id === noteId);
