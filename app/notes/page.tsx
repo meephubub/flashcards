@@ -366,9 +366,10 @@ export default function NotesPage() {
               const note = allNotes.find(n => n.id === noteId);
               if (note) {
                 // Update the note content with highlighted text
+                const selectedText = selection.toString().trim();
                 const updatedContent = note.content.replace(
-                  selection.toString().trim(),
-                  `==${selection.toString().trim()}==`
+                  new RegExp(`\\b${selectedText}\\b`, 'g'),
+                  `==${selectedText}==`
                 );
                 // Update the note in Supabase
                 supabase
