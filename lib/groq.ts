@@ -434,77 +434,74 @@ Example output:
 }
 
 // Helper function to make a request to the Groq API
-export async function makeGroqRequest(promptContent: string, isQuestionGeneration = false, systemMessageOverride?: string): Promise<string> {
-  const models = ["llama3-70b-8192", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]; // Added mixtral as another option
+export async function makeGroqRequest(promptContent: string, isQuestionGeneration = false, systemMessageOverride?: string, forceJsonFormat = false): Promise<string> {
+  const models = ["llama3-70b-8192", "llama-3.1-8b-instant"]; // Added mixtral as another option
   let lastError: Error | null = null;
-
   let currentSystemMessage = "";
+  
   if (systemMessageOverride) {
     currentSystemMessage = systemMessageOverride;
   } else if (isQuestionGeneration) {
-    currentSystemMessage = "You are an expert educational question generator. Your goal is to create clear, accurate, and well-structured questions that test understanding of concepts. Each question should be challenging but fair, with a clear correct answer. For multiple-choice questions, provide plausible distractors that test common misconceptions. Always include a helpful hint that guides without giving away the answer. Keep the language accessible and ensure all output is in valid JSON syntax.";
+    currentSystemMessage = "You are an expert educational question generator. Your goal is to create clear, accurate, and well-structured questions that test understanding of concepts. Each question should be challenging but fair, with a clear correct answer. For multiple-choice questions, provide plausible distractors that test common misconceptions. Always include a helpful hint that guides without giving away the answer. Keep the language accessible and clear.";
   } else {
-    currentSystemMessage = "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Always return your output as a valid JSON object containing a cards array. Each element in the array should be an object with front (the question as a string) and back (the answer as a string). Keep the language accessible, avoid overly technical jargon unless the topic requires it, and ensure all output is in valid JSON syntax. Do not include any extra commentary, explanations, or markdown outside of the JSON.";
+    currentSystemMessage = "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Keep the language accessible and avoid overly technical jargon unless the topic requires it.";
   }
-
+  
+  // Only add JSON reference if we're forcing JSON format
+  let enhancedPromptContent = promptContent;
+  if (forceJsonFormat && !promptContent.toLowerCase().includes('json')) {
+    enhancedPromptContent = `${promptContent}\n\nPlease return your response as a JSON object.`;
+  }
+  
   for (const model of models) {
     try {
+      const requestBody: any = {
+        model,
+        messages: [
+          {
+            role: "system",
+            content: currentSystemMessage,
+          },
+          {
+            role: "user",
+            content: enhancedPromptContent,
+          },
+        ],
+        temperature: 0.6, // Slightly lower temperature for more predictable structure
+        max_tokens: 3000, // Increased for potentially longer responses
+      };
+      
+      // Only add response_format if JSON is forced
+      if (forceJsonFormat) {
+        requestBody.response_format = { type: "json_object" };
+      }
+      
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: "system",
-              content: currentSystemMessage
-            },
-            {
-              role: "user",
-              content: promptContent
-            }
-          ],
-          temperature: 0.6,
-          max_tokens: 3000,
-          response_format: { type: "json_object" }
-        })
+        body: JSON.stringify(requestBody),
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        // If we get a rate limit error, continue to the next model
-        if (response.status === 429 || errorData.error?.message?.toLowerCase().includes("rate limit")) {
-          lastError = new Error(errorData.error?.message || `Rate limit exceeded for model ${model}`);
-          console.warn(`Rate limit for ${model}, trying next model...`);
-          continue;
-        }
-        throw new Error(errorData.error?.message || `Failed to generate content with ${model}: ${response.statusText}`);
+        lastError = new Error(`API error: ${errorData.error?.message || response.statusText}`);
+        continue; // Try next model
       }
 
       const data = await response.json();
-      const content = data.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error(`No content returned from Groq model ${model}`);
-      }
-
-      return content;
+      return data.choices[0].message.content;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`Error with model ${model}:`, lastError.message);
-      // If it's not a rate limit error, and it's the last model, we throw
-      if (!lastError.message.toLowerCase().includes("rate limit") && models.indexOf(model) === models.length - 1) {
-        throw lastError;
-      }
-      // Otherwise continue to the next model (or if it's a rate limit)
+      // Continue to next model
     }
   }
 
-  // If we've tried all models and still failed, throw the last error
-  throw lastError || new Error("All models failed to generate content");
+  // If we get here, all models failed
+  throw lastError || new Error("All models failed to generate a response");
 }
 
 // Helper function to process a valid JSON response
