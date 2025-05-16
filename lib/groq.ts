@@ -460,17 +460,17 @@ export async function makeGroqRequest(promptContent: string, isQuestionGeneratio
           messages: [
             {
               role: "system",
-              content: currentSystemMessage,
+              content: currentSystemMessage
             },
             {
               role: "user",
-              content: promptContent,
-            },
+              content: promptContent
+            }
           ],
-          temperature: 0.6, // Slightly lower temperature for more predictable note structure
-          max_tokens: 3000, // Increased for potentially longer notes
-          response_format: { type: "json_object" },
-        }),
+          temperature: 0.6,
+          max_tokens: 3000,
+          response_format: { type: "json_object" }
+        })
       });
 
       if (!response.ok) {
