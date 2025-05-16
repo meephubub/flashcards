@@ -447,6 +447,10 @@ export async function makeGroqRequest(promptContent: string, isQuestionGeneratio
     currentSystemMessage = "You are a helpful assistant that generates educational flashcards based on a given topic. Your goal is to create clear, accurate, and well-structured flashcards suitable for learners. Each flashcard must include a direct, focused question on the front and a concise but informative answer on the back. Always return your output as a valid JSON object containing a cards array. Each element in the array should be an object with front (the question as a string) and back (the answer as a string). Keep the language accessible, avoid overly technical jargon unless the topic requires it, and ensure all output is in valid JSON syntax. Do not include any extra commentary, explanations, or markdown outside of the JSON.";
   }
 
+  const enhancedPromptContent = promptContent.toLowerCase().includes('json') 
+    ? promptContent 
+    : `${promptContent}\n\nPlease return your response as a JSON object.`;
+  
   for (const model of models) {
     try {
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -464,7 +468,7 @@ export async function makeGroqRequest(promptContent: string, isQuestionGeneratio
             },
             {
               role: "user",
-              content: promptContent,
+              content: enhancedPromptContent,
             },
           ],
           temperature: 0.6, // Slightly lower temperature for more predictable note structure
