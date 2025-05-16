@@ -483,7 +483,6 @@ export async function makeGroqRequest(promptContent: string, isQuestionGeneratio
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         },
         body: JSON.stringify(requestBody),
-        }),
       });
 
       if (!response.ok) {
