@@ -435,7 +435,7 @@ Example output:
 
 // Helper function to make a request to the Groq API
 export async function makeGroqRequest(promptContent: string, isQuestionGeneration = false, systemMessageOverride?: string): Promise<string> {
-  const models = ["llama3-70b-8192", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]; // Added mixtral as another option
+  const models = ["llama3-70b-8192", "llama-3.1-8b-instant"]; // Added mixtral as another option
   let lastError: Error | null = null;
 
   let currentSystemMessage = "";
