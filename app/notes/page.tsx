@@ -365,26 +365,48 @@ export default function NotesPage() {
               const noteId = noteElement.id.replace('note-', '');
               const note = allNotes.find(n => n.id === noteId);
               if (note) {
-                // Update the note content with highlighted text
                 const selectedText = selection.toString().trim();
-                const isAlreadyHighlighted = selectedText.startsWith('==') && selectedText.endsWith('==');
+
+                if (!selectedText) {
+                  return; // No text selected
+                }
+
+                // Helper to escape regex special characters
+                const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\\\]/g, '\\\\$&');
                 
-                let updatedContent;
-                if (isAlreadyHighlighted) {
-                  // Remove the == markers
-                  const unhighlightedText = selectedText.slice(2, -2);
+                const escapedSelectedText = escapeRegExp(selectedText);
+                const highlightedVersion = `==${selectedText}==`;
+                const escapedHighlightedVersionForRegex = escapeRegExp(highlightedVersion);
+
+                let updatedContent: string | undefined = undefined;
+
+                // Check if the exact highlighted version exists in the content
+                if (note.content.includes(highlightedVersion)) {
+                  // It's highlighted, so unhighlight it
+                  // Replace all occurrences of ==selectedText== with selectedText
                   updatedContent = note.content.replace(
-                    new RegExp(`==${unhighlightedText}==`, 'g'),
-                    unhighlightedText
+                    new RegExp(escapedHighlightedVersionForRegex, 'g'),
+                    selectedText
+                  );
+                } else if (note.content.includes(selectedText)) {
+                  // It's plain text (or not highlighted in the ==...== form), so highlight it
+                  // Replace all occurrences of selectedText with ==selectedText==
+                  updatedContent = note.content.replace(
+                    new RegExp(escapedSelectedText, 'g'),
+                    highlightedVersion
                   );
                 } else {
-                  // Add the == markers
-                  updatedContent = note.content.replace(
-                    new RegExp(`\\b${selectedText}\\b`, 'g'),
-                    `==${selectedText}==`
-                  );
+                  // Selected text (neither plain nor in our highlighted form) not found.
+                  console.warn("Text to highlight/unhighlight not found in note content:", selectedText);
+                  return;
                 }
                 
+                // Only update if content actually changed
+                if (updatedContent === undefined || updatedContent === note.content) {
+                  console.warn("Highlight toggle resulted in no change to content.");
+                  return;
+                }
+
                 // Update the note in Supabase
                 supabase
                   .from("notes")
