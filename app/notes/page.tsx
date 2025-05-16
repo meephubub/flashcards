@@ -29,6 +29,9 @@ const renderNoteContent = (content: string) => {
   let inList = false;
   let listType: 'ul' | 'ol' | null = null;
   let listItems: React.ReactNode[] = [];
+  let inTable = false;
+  let tableRows: string[][] = [];
+  let tableHeaders: string[] = [];
 
   const processList = () => {
     if (inList && listItems.length > 0) {
@@ -43,8 +46,68 @@ const renderNoteContent = (content: string) => {
     listType = null;
   };
 
+  const processTable = () => {
+    if (tableRows.length > 0) {
+      elements.push(
+        <div key={`table-${elements.length}`} className="my-4 overflow-x-auto">
+          <table className="min-w-full border-collapse border border-neutral-700">
+            <thead>
+              <tr>
+                {tableHeaders.map((header, index) => (
+                  <th key={index} className="border border-neutral-700 bg-neutral-800 px-4 py-2 text-left text-neutral-200 font-semibold">
+                    {parseInlineMarkdown(header.trim())}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((row, rowIndex) => (
+                <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-neutral-900' : 'bg-neutral-800/50'}>
+                  {row.map((cell, cellIndex) => (
+                    <td key={cellIndex} className="border border-neutral-700 px-4 py-2 text-neutral-300">
+                      {parseInlineMarkdown(cell.trim())}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    inTable = false;
+    tableRows = [];
+    tableHeaders = [];
+  };
+
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
+
+    // Check for table
+    if (line.includes('|')) {
+      const cells = line.split('|').filter(cell => cell.trim() !== '');
+      
+      // Check if this is a separator line (contains only dashes and |)
+      if (line.replace(/[\s|]/g, '').replace(/-/g, '') === '') {
+        continue; // Skip separator line
+      }
+      
+      if (!inTable) {
+        inTable = true;
+        tableHeaders = cells;
+      } else {
+        tableRows.push(cells);
+      }
+      continue;
+    } else if (inTable) {
+      processTable();
+    }
+
+    // Check for line break (---)
+    if (line.trim() === '---') {
+      elements.push(<hr key={i} className="my-8 border-neutral-700/50" />);
+      continue;
+    }
 
     // Check for list items first to handle them before paragraphing
     const ulMatch = line.match(/^\s*[-*]\s+(.*)/);
@@ -149,6 +212,7 @@ const renderNoteContent = (content: string) => {
     }
   }
   processList(); // Process any remaining list items after the loop
+  processTable(); // Process any remaining table after the loop
 
   return <>{elements}</>; // Return a fragment
 };
@@ -173,7 +237,7 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
   processedText = processedText.replace(/(?<![a-zA-Z0-9])_(?!\s)(.*?)(?<!\s)_(?![a-zA-Z0-9])/g, '<em class="italic text-neutral-300">$1</em>');
   
   // Highlight: ==text==
-  processedText = processedText.replace(/==(.*?)==/g, '<span class="bg-neutral-700/50 text-neutral-200 px-1 rounded">$1</span>');
+  processedText = processedText.replace(/==(.*?)==/g, '<span class="bg-[rgba(140,140,140,0.4)] text-neutral-200 px-1 rounded">$1</span>');
   
   // Inline Code: `code`
   processedText = processedText.replace(/`(.*?)`/g, '<code class="bg-neutral-800 text-neutral-200 px-1.5 py-0.5 rounded-md text-sm font-mono">$1</code>');
@@ -187,6 +251,7 @@ export default function NotesPage() {
   const [subheadings, setSubheadings] = useState<string[]>([]);
   const [currentNoteHeadings, setCurrentNoteHeadings] = useState<{text: string, level: number}[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [highlightedText, setHighlightedText] = useState<string>("");
   
   const [newNote, setNewNote] = useState({
     title: "",
@@ -275,17 +340,48 @@ export default function NotesPage() {
     }
   }, [focusedNoteId, displayedNotes]);
 
-  // Handle text selection and Ctrl+K
+  // Handle text selection and Ctrl+K and Ctrl+B
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'k') {
-        e.preventDefault();
-        const selection = window.getSelection();
-        if (selection && selection.toString().trim()) {
-          setSelectedText(selection.toString().trim());
-          setAiPrompt("");
-          setAiResponse("");
-          setIsAiChatDialogOpen(true);
+      if (e.ctrlKey) {
+        if (e.key === 'k') {
+          e.preventDefault();
+          const selection = window.getSelection();
+          if (selection && selection.toString().trim()) {
+            setSelectedText(selection.toString().trim());
+            setAiPrompt("");
+            setAiResponse("");
+            setIsAiChatDialogOpen(true);
+          }
+        } else if (e.key === 'b') {
+          e.preventDefault();
+          const selection = window.getSelection();
+          if (selection && selection.toString().trim()) {
+            setHighlightedText(selection.toString().trim());
+            // Find the note containing the selection
+            const range = selection.getRangeAt(0);
+            const noteElement = (range.commonAncestorContainer as Element).closest('[id^="note-"]');
+            if (noteElement) {
+              const noteId = noteElement.id.replace('note-', '');
+              const note = allNotes.find(n => n.id === noteId);
+              if (note) {
+                // Update the note content with highlighted text
+                const updatedContent = note.content.replace(
+                  selection.toString().trim(),
+                  `==${selection.toString().trim()}==`
+                );
+                // Update the note in Supabase
+                supabase
+                  .from("notes")
+                  .update({ content: updatedContent })
+                  .eq("id", noteId)
+                  .then(() => {
+                    // Refresh notes after update
+                    fetchNotes();
+                  });
+              }
+            }
+          }
         }
       }
     };
@@ -294,7 +390,7 @@ export default function NotesPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [allNotes]);
 
   // Apply text selection styles
   useEffect(() => {
@@ -629,6 +725,10 @@ export default function NotesPage() {
             
             <span className="hidden md:inline-flex items-center text-xs text-neutral-400 border border-white/10 rounded-lg px-2.5 py-1.5 bg-neutral-800/30 backdrop-blur-sm">
               <SparklesIcon className="h-3 w-3 mr-1.5" /> <kbd className="font-mono text-[10px]">Ctrl+K</kbd>
+            </span>
+            
+            <span className="hidden md:inline-flex items-center text-xs text-neutral-400 border border-white/10 rounded-lg px-2.5 py-1.5 bg-neutral-800/30 backdrop-blur-sm">
+              <span className="h-3 w-3 mr-1.5 flex items-center justify-center font-bold">H</span> <kbd className="font-mono text-[10px]">Ctrl+B</kbd>
             </span>
           </div>
 
