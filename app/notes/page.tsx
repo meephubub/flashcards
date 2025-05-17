@@ -11,7 +11,7 @@ import type { MultipleChoiceQuestion, MCQGenerationResult } from "@/lib/groq";
 import { NotesSidebar } from "@/components/NotesSidebar";
 import { CategoryCombobox } from "@/components/ui/CategoryCombobox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { XIcon, ListIcon, SparklesIcon, PlusCircleIcon, SendIcon, HelpCircleIcon, CheckCircle2, XCircle, InfoIcon } from "lucide-react";
+import { XIcon, ListIcon, SparklesIcon, PlusCircleIcon, SendIcon, HelpCircleIcon, CheckCircle2, XCircle, InfoIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle as ShadDialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 
 // Helper to generate slugs for IDs
@@ -32,6 +32,9 @@ const renderNoteContent = (content: string) => {
   let inTable = false;
   let tableRows: string[][] = [];
   let tableHeaders: string[] = [];
+  let inInfoBox = false;
+  let infoBoxColor = '';
+  let infoBoxContent: string[] = [];
 
   const processList = () => {
     if (inList && listItems.length > 0) {
@@ -80,8 +83,57 @@ const renderNoteContent = (content: string) => {
     tableHeaders = [];
   };
 
+  const processInfoBox = () => {
+    if (infoBoxContent.length > 0) {
+      const colorClasses = {
+        blue: 'bg-blue-900/30 border-blue-700/60 text-blue-200',
+        purple: 'bg-purple-900/30 border-purple-700/60 text-purple-200',
+        green: 'bg-green-900/30 border-green-700/60 text-green-200',
+        amber: 'bg-amber-900/30 border-amber-700/60 text-amber-200',
+        rose: 'bg-rose-900/30 border-rose-700/60 text-rose-200'
+      };
+
+      const colorClass = colorClasses[infoBoxColor as keyof typeof colorClasses] || colorClasses.blue;
+
+      elements.push(
+        <div key={`infobox-${elements.length}`} className={`my-4 p-4 rounded-lg border ${colorClass}`}>
+          {infoBoxContent.map((line, index) => (
+            <p key={index} className="mb-2 last:mb-0">
+              {parseInlineMarkdown(line)}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    inInfoBox = false;
+    infoBoxContent = [];
+    infoBoxColor = '';
+  };
+
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
+
+    // Check for info box start
+    const infoBoxMatch = line.match(/^::(blue|purple|green|amber|rose)\s*$/);
+    if (infoBoxMatch) {
+      processList(); // Process any existing list
+      processTable(); // Process any existing table
+      inInfoBox = true;
+      infoBoxColor = infoBoxMatch[1];
+      continue;
+    }
+
+    // Check for info box end
+    if (line.trim() === '::' && inInfoBox) {
+      processInfoBox();
+      continue;
+    }
+
+    // If in info box, collect content
+    if (inInfoBox) {
+      infoBoxContent.push(line);
+      continue;
+    }
 
     // Check for table
     if (line.includes('|')) {
@@ -213,6 +265,7 @@ const renderNoteContent = (content: string) => {
   }
   processList(); // Process any remaining list items after the loop
   processTable(); // Process any remaining table after the loop
+  processInfoBox(); // Process any remaining info box after the loop
 
   return <>{elements}</>; // Return a fragment
 };
@@ -278,6 +331,10 @@ export default function NotesPage() {
   const [currentMcqNoteTitle, setCurrentMcqNoteTitle] = useState<string | undefined>(undefined);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [showMcqResults, setShowMcqResults] = useState<boolean>(false);
+  const [isEditNoteDialogOpen, setIsEditNoteDialogOpen] = useState<boolean>(false);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false);
+  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
 
   const notesContainerRef = useRef<HTMLDivElement>(null);
   const activeNoteRef = useRef<HTMLDivElement>(null);
@@ -705,6 +762,90 @@ export default function NotesPage() {
     };
   };
 
+  const handleEditNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNote) return;
+    
+    setErrorMessage(null);
+    
+    if (!editingNote.title || !editingNote.content) {
+      setErrorMessage("Title and content are required.");
+      return;
+    }
+    if (!editingNote.category.trim()) {
+      setErrorMessage("Category is required. Please select or create one.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from("notes")
+        .update({
+          title: editingNote.title,
+          content: editingNote.content,
+          category: editingNote.category.trim().toLowerCase()
+        })
+        .eq("id", editingNote.id);
+
+      if (error) {
+        console.error("Supabase error updating note:", error);
+        setErrorMessage(`Error updating note: ${error.message}`);
+        throw error;
+      }
+      
+      setEditingNote(null);
+      setIsEditNoteDialogOpen(false);
+      await fetchNotes(); // Refresh all notes
+    } catch (error: any) {
+      // Error message already set
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    const note = allNotes.find(n => n.id === noteId);
+    if (note) {
+      setNoteToDelete(note);
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!noteToDelete) return;
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from("notes")
+        .delete()
+        .eq("id", noteToDelete.id);
+
+      if (error) {
+        console.error("Supabase error deleting note:", error);
+        setErrorMessage(`Error deleting note: ${error.message}`);
+        throw error;
+      }
+      
+      if (focusedNoteId === noteToDelete.id) {
+        setFocusedNoteId(null);
+      }
+      await fetchNotes(); // Refresh all notes
+      setIsDeleteDialogOpen(false);
+      setNoteToDelete(null);
+    } catch (error: any) {
+      // Error message already set
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startEditingNote = (note: Note) => {
+    setEditingNote({ ...note });
+    setIsEditNoteDialogOpen(true);
+  };
+
   return (
     <div className="flex h-screen bg-neutral-950 text-neutral-100">
       <NotesSidebar
@@ -739,7 +880,27 @@ export default function NotesPage() {
                 className="bg-neutral-900 border-neutral-800 border-[0.5px] rounded-xl shadow-xl p-6 md:p-8 transition-all duration-300 ease-in-out hover:shadow-2xl data-[focused='true']:ring-1 data-[focused='true']:ring-neutral-500 data-[focused='true']:scale-[1.01]"
                 data-focused={focusedNoteId === note.id}
               >
-                <h3 className="text-4xl font-bold mb-6 pb-4 border-b border-neutral-700/50 text-neutral-50">{note.title}</h3>
+                <div className="flex justify-between items-start mb-6 pb-4 border-b border-neutral-700/50">
+                  <h3 className="text-4xl font-bold text-neutral-50">{note.title}</h3>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => startEditingNote(note)}
+                      className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteNote(note.id)}
+                      className="text-neutral-400 hover:text-red-400 hover:bg-red-900/20"
+                    >
+                      <Trash2Icon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
                 <div className="prose-custom max-w-none">
                   {renderNoteContent(note.content)}
                 </div>
@@ -1108,6 +1269,104 @@ export default function NotesPage() {
               )}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Note Dialog */}
+      <Dialog open={isEditNoteDialogOpen} onOpenChange={setIsEditNoteDialogOpen}>
+        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0">
+          <div className="p-6 sm:p-8">
+            <DialogHeader className="mb-6">
+              <ShadDialogTitle className="text-2xl font-bold text-neutral-100">Edit Note</ShadDialogTitle>
+            </DialogHeader>
+            
+            <form onSubmit={handleEditNote} className="space-y-6">
+              <div>
+                <Input
+                  placeholder="Note Title"
+                  value={editingNote?.title || ''}
+                  onChange={(e) => editingNote && setEditingNote({ ...editingNote, title: e.target.value })}
+                  className="bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500"
+                />
+              </div>
+              <div>
+                <Textarea
+                  placeholder="Note Content (use #, ##, *, -, 1., etc. for formatting)"
+                  value={editingNote?.content || ''}
+                  onChange={(e) => editingNote && setEditingNote({ ...editingNote, content: e.target.value })}
+                  className="min-h-[160px] bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500 font-mono text-sm"
+                />
+              </div>
+              <div>
+                <CategoryCombobox 
+                  categories={availableCategories}
+                  value={editingNote?.category || ''}
+                  onChange={(value) => editingNote && setEditingNote({ ...editingNote, category: value })}
+                  placeholder="Select or create category..."
+                  inputPlaceholder="Search/Create category..."
+                  emptyPlaceholder="Type to create new category."
+                />
+              </div>
+
+              {errorMessage && (
+                <div className="text-red-400 text-sm p-3 bg-red-900/40 border border-red-700/60 rounded-md">
+                  {errorMessage}
+                </div>
+              )}
+              <div className="flex justify-end space-x-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditNoteDialogOpen(false)} className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isLoading} className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700">
+                  {isLoading ? "Updating Note..." : "Update Note"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(isOpen) => {
+        setIsDeleteDialogOpen(isOpen);
+        if (!isOpen) {
+          setNoteToDelete(null);
+        }
+      }}>
+        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-md rounded-xl shadow-2xl p-0 sm:p-0">
+          <div className="p-6 sm:p-8">
+            <DialogHeader className="mb-6">
+              <ShadDialogTitle className="text-2xl font-bold text-neutral-100">Delete Note</ShadDialogTitle>
+              <DialogDescription className="text-neutral-400 mt-2">
+                Are you sure you want to delete "{noteToDelete?.title}"? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            {errorMessage && (
+              <div className="text-red-400 text-sm p-3 bg-red-900/40 border border-red-700/60 rounded-md mb-4">
+                {errorMessage}
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsDeleteDialogOpen(false)} 
+                className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="button" 
+                onClick={confirmDelete} 
+                disabled={isLoading}
+                className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-red-700"
+              >
+                {isLoading ? "Deleting..." : "Delete Note"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
