@@ -31,30 +31,42 @@ export async function gradeAnswer(
       }
     }
 
-    // Use Groq for grading
-    const result = await gradeAnswerWithGroq(
-      questionType,
-      question,
-      correctAnswer,
-      userAnswer,
-      {
-        adaptiveScoring: options?.adaptiveScoring,
-        timePressure: options?.timePressure,
-        previousAnswers: options?.previousAnswers
-      }
-    )
+    // Only grade freeform types with Groq
+    if (questionType === "short-answer" || questionType === "fill-in-blank") {
+      const result = await gradeAnswerWithGroq(
+        questionType,
+        question,
+        correctAnswer,
+        userAnswer,
+        {
+          adaptiveScoring: options?.adaptiveScoring,
+          timePressure: options?.timePressure,
+          previousAnswers: options?.previousAnswers
+        }
+      )
 
-    // Apply time pressure adjustments if needed
-    if (options?.timePressure === "high") {
-      result.score = Math.round(result.score * 1.1) // Bonus for quick answers
-    } else if (options?.timePressure === "low") {
-      result.score = Math.round(result.score * 0.9) // Slightly reduced score for unlimited time
+      // Apply time pressure adjustments if needed
+      if (options?.timePressure === "high") {
+        result.score = Math.round(result.score * 1.1) // Bonus for quick answers
+      } else if (options?.timePressure === "low") {
+        result.score = Math.round(result.score * 0.9) // Slightly reduced score for unlimited time
+      }
+
+      // Ensure score doesn't exceed 100
+      result.score = Math.min(100, result.score)
+      return result
     }
 
-    // Ensure score doesn't exceed 100
-    result.score = Math.min(100, result.score)
-
-    return result
+    // For all other types, do simple grading (case-insensitive, trimmed)
+    const isCorrect = userAnswer.trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+    return {
+      isCorrect,
+      score: isCorrect ? 100 : 0,
+      feedback: isCorrect ? "Correct!" : "Incorrect.",
+      explanation: isCorrect
+        ? undefined
+        : `The correct answer was: ${correctAnswer}`,
+    };
   } catch (error) {
     console.error("Error grading answer:", error)
     return {
