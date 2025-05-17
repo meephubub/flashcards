@@ -255,18 +255,25 @@ The note should include:
 - ==Highlighted text== using double equals (for important terms or concepts)
 - \`inline code\` using backticks for technical terms or commands
 
+### LaTeX Math Notation
+- Use $...$ for inline math: $E = mc^2$
+- Use $$...$$ for display math:
+$$
+\\frac{d}{dx}(x^n) = nx^{n-1}
+$$
+- Use \\text{} for text within math: $\\text{Mass Number (A)} = \\text{Protons} + \\text{Neutrons}$
+- Common LaTeX symbols:
+  - Greek letters: $\\alpha$, $\\beta$, $\\gamma$, $\\pi$
+  - Operators: $\\sum$, $\\prod$, $\\int$
+  - Fractions: $\\frac{a}{b}$
+  - Subscripts and superscripts: $x_{1}$, $x^{2}$
+  - Matrices: $\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$
+
 ### Block Elements
 - > Blockquotes for quotes or important callouts
 - Horizontal rules with --- for section dividers
 - Code blocks with triple backticks (\`\`\` ... \`\`\`)
 - Centered text with double colons (::centered text::)
-
-### Info Boxes
-- ::blue:: for blue info box
-- ::purple:: for purple info box
-- ::green:: for green info box
-- ::amber:: for amber info box
-- ::rose:: for rose info box
 
 ### Links
 - [Link text](URL) syntax for references
@@ -278,7 +285,7 @@ Format the response as a valid JSON object with "title" (string) and "content" (
 Example output:
 {
   "title": "Key Concepts of Photosynthesis",
-  "content": "# Photosynthesis: The Foundation of Life\\n\\n## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)\\n\\n> This process is fundamental to life on Earth, providing both oxygen and energy.\\n\\n## Chemical Equation\\n\`6CO2 + 6H2O + light → C6H12O6 + 6O2\`\\n\\n---\\n\\n## Key Stages\\n1. Light-dependent reactions\\n2. Calvin cycle (light-independent reactions)\\n\\n### Light-Dependent Reactions\\n==These reactions convert light energy to chemical energy==\\n\\n\`\`\`\\nStage 1: Photon absorption by chlorophyll\\nStage 2: Electron transport chain\\nStage 3: ATP synthesis\\n\`\`\`\\n\\n::The miracle of converting sunlight to chemical energy::"
+  "content": "# Photosynthesis: The Foundation of Life\\n\\n## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)\\n\\n> This process is fundamental to life on Earth, providing both oxygen and energy.\\n\\n## Chemical Equation\\n$6CO_2 + 6H_2O + \\text{light} \\rightarrow C_6H_{12}O_6 + 6O_2$\\n\\n---\\n\\n## Key Stages\\n1. Light-dependent reactions\\n2. Calvin cycle (light-independent reactions)\\n\\n### Light-Dependent Reactions\\n==These reactions convert light energy to chemical energy==\\n\\nThe energy conversion can be expressed as:\\n$$E = h\\nu = \\frac{hc}{\\lambda}$$\\n\\nWhere:\\n- $E$ is the energy of a photon\\n- $h$ is Planck's constant\\n- $\\nu$ is the frequency\\n- $\\lambda$ is the wavelength\\n\\n::The miracle of converting sunlight to chemical energy::"
 }`;
   const systemMessage = "You are an expert content creator specializing in generating well-structured and informative notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. Ensure the Markdown is clean and follows standard conventions. Incorporate all the specific Markdown formatting elements requested in the prompt to create rich, visually engaging notes.";
 
