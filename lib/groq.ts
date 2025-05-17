@@ -196,10 +196,26 @@ Return the response as a JSON object with the following properties:
 
   try {
     const response = await makeGroqRequest(prompt, true)
-    const parsedContent = JSON.parse(response)
+    let parsedContent: any
+    try {
+      parsedContent = JSON.parse(response)
+    } catch (jsonErr) {
+      // Try to extract JSON substring
+      const match = response.match(/\{[\s\S]*\}/)
+      if (match) {
+        try {
+          parsedContent = JSON.parse(match[0])
+        } catch (extractErr) {
+          // Parsing failed again, fallback below
+          parsedContent = null
+        }
+      } else {
+        parsedContent = null
+      }
+    }
 
     // Validate the response format
-    if (typeof parsedContent.isCorrect !== 'boolean' || 
+    if (!parsedContent || typeof parsedContent.isCorrect !== 'boolean' || 
         typeof parsedContent.score !== 'number' || 
         typeof parsedContent.feedback !== 'string') {
       throw new Error('Invalid response format from Groq')
