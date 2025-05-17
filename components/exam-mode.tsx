@@ -32,7 +32,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { generateQuestionsFromCards, type ExamQuestion, type GradingResult } from "@/app/actions/generate-questions"
 import { gradeAnswer } from "@/app/actions/grade-answer"
-import { getSentenceEmbedding, cosineSimilarity } from "./xenova-similarity"
+import { gradeAnswerWithGroq } from "@/lib/groq";
+import { getSentenceEmbedding, cosineSimilarity } from "@/app/actions/xenova-similarity"
 import { useToast } from "@/hooks/use-toast"
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd"
 import confetti from "canvas-confetti"
@@ -295,41 +296,83 @@ export function ExamMode({ deckId }: ExamModeProps) {
     }))
 
     try {
-      let gradingResult = await gradeAnswer(
-        currentQuestion.type,
-        currentQuestion.question,
-        currentQuestion.type === "matching"
-          ? JSON.stringify(currentQuestion.matchingPairs)
-          : currentQuestion.type === "sequence"
-            ? JSON.stringify(currentQuestion.sequence)
-            : currentQuestion.correctAnswer,
-        answerToSave,
-        {
-          adaptiveScoring,
-          timePressure,
-          previousAnswers: Object.values(results),
-          questionType: currentQuestion.type
-        }
-      )
-
-      // For short-answer and fill-in-blank, use Xenova similarity as a fallback/boost
-      if ((currentQuestion.type === "short-answer" || currentQuestion.type === "fill-in-blank") && gradingResult && !gradingResult.isCorrect) {
+      let gradingResult;
+      if (currentQuestion.type === "short-answer" || currentQuestion.type === "fill-in-blank") {
+        // Use Xenova similarity as the default grading method
         try {
-          const userEmbedding = await getSentenceEmbedding(answerToSave)
-          const llmEmbedding = await getSentenceEmbedding(gradingResult.correctAnswer || currentQuestion.correctAnswer)
-          const similarity = cosineSimilarity(userEmbedding, llmEmbedding)
-          if (similarity > 0.75) {
+          const userEmbedding = await getSentenceEmbedding(answerToSave);
+          const correctEmbedding = await getSentenceEmbedding(currentQuestion.correctAnswer);
+          const similarity = cosineSimilarity(userEmbedding, correctEmbedding);
+          console.log("[Xenova] Cosine similarity:", similarity);
+          if (similarity > 0.5) {
             gradingResult = {
-              ...gradingResult,
               isCorrect: true,
               score: 100,
-              feedback: gradingResult.feedback + " (Accepted by semantic similarity)",
-            }
+              feedback: `Accepted by semantic similarity (score: ${similarity.toFixed(4)})`,
+            };
+          } else {
+            // If not similar enough, use Groq as a fallback for grading and feedback
+            gradingResult = await gradeAnswerWithGroq(
+              currentQuestion.type,
+              currentQuestion.question,
+              currentQuestion.correctAnswer,
+              answerToSave,
+              {
+                adaptiveScoring,
+                timePressure,
+                previousAnswers: Object.values(results),
+                questionType: currentQuestion.type
+              }
+            );
+            gradingResult = {
+              ...gradingResult,
+              isCorrect: gradingResult.isCorrect ?? false,
+              feedback: (gradingResult.feedback || "") + ` (Semantic similarity: ${similarity.toFixed(4)})`,
+            };
           }
-        } catch (simErr) {
-          // If Xenova fails, just continue with the original gradingResult
-          console.error("Xenova similarity error:", simErr)
+        } catch (simErr: any) {
+          // If Xenova fails due to the sharp module error, silently ignore/log nothing
+          const errorMsg = simErr?.message || String(simErr);
+          if (
+            errorMsg.includes("Something went wrong installing the \"sharp\" module") ||
+            errorMsg.includes("Cannot find module '../build/Release/sharp-win32-x64.node'")
+          ) {
+            // Silently ignore this known error
+          } else {
+            // Log other errors
+            console.error("[Xenova] Similarity error:", simErr);
+          }
+          gradingResult = await gradeAnswer(
+            currentQuestion.type,
+            currentQuestion.question,
+            currentQuestion.correctAnswer,
+            answerToSave,
+            {
+              adaptiveScoring,
+              timePressure,
+              previousAnswers: Object.values(results),
+              questionType: currentQuestion.type
+            }
+          );
         }
+      } else {
+        // For other types, use legacy grading
+        gradingResult = await gradeAnswer(
+          currentQuestion.type,
+          currentQuestion.question,
+          currentQuestion.type === "matching"
+            ? JSON.stringify(currentQuestion.matchingPairs)
+            : currentQuestion.type === "sequence"
+              ? JSON.stringify(currentQuestion.sequence)
+              : currentQuestion.correctAnswer,
+          answerToSave,
+          {
+            adaptiveScoring,
+            timePressure,
+            previousAnswers: Object.values(results),
+            questionType: currentQuestion.type
+          }
+        );
       }
 
       // Update user answers and results
@@ -361,10 +404,12 @@ export function ExamMode({ deckId }: ExamModeProps) {
         setStreakCount(0)
       }
 
+      // Always show the correct answer in the toast notification
       toast({
         title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
-        description: gradingResult.feedback,
-        variant: gradingResult.isCorrect ? "default" : "destructive"
+        description: `${gradingResult.feedback}\n\nCorrect answer: ${currentQuestion.correctAnswer}`,
+        variant: gradingResult.isCorrect ? "default" : "destructive",
+        duration: 120 // Give users more time to read the correct answer
       })
     } catch (error) {
       console.error("Error grading answer:", error)
