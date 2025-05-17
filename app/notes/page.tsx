@@ -13,6 +13,8 @@ import { CategoryCombobox } from "@/components/ui/CategoryCombobox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { XIcon, ListIcon, SparklesIcon, PlusCircleIcon, SendIcon, HelpCircleIcon, CheckCircle2, XCircle, InfoIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle as ShadDialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import 'katex/dist/katex.min.css';
+import katex from 'katex';
 
 // Helper to generate slugs for IDs
 const generateSlug = (text: string) => {
@@ -20,6 +22,57 @@ const generateSlug = (text: string) => {
     .toLowerCase()
     .replace(/\s+/g, '-')      // Replace spaces with -
     .replace(/[^\w-]+/g, ''); // Remove all non-word chars
+};
+
+// Helper function for inline Markdown parsing
+const parseInlineMarkdown = (text: string): React.ReactNode => {
+  // Process LaTeX math first
+  let processedText = text;
+  
+  // Process display math ($$...$$)
+  processedText = processedText.replace(/\$\$(.*?)\$\$/gs, (match, p1) => {
+    try {
+      return katex.renderToString(p1, { displayMode: true });
+    } catch (error) {
+      console.error('KaTeX error:', error);
+      return match;
+    }
+  });
+
+  // Process inline math ($...$)
+  processedText = processedText.replace(/\$([^$\n]+?)\$/g, (match, p1) => {
+    try {
+      return katex.renderToString(p1, { displayMode: false });
+    } catch (error) {
+      console.error('KaTeX error:', error);
+      return match;
+    }
+  });
+
+  // Links: [text](url)
+  processedText = processedText.replace(/!?\[(.*?)\]\((.*?)\)/g, (match, p1, p2) => {
+    return `<a class="text-neutral-400 underline hover:text-neutral-300 cursor-pointer transition-colors" href="${p2}" target="_blank" rel="noopener noreferrer">${p1}</a>`;
+  });
+
+  // Order matters: Process **bold** and *italic* after links and code to avoid conflicts
+  // Strikethrough: ~~text~~
+  processedText = processedText.replace(/~~(.*?)~~/g, '<del class="text-neutral-500">$1</del>');
+
+  // Bold: **text** or __text__
+  processedText = processedText.replace(/(?<!\w)\*\*(?!\s)(.*?)(?<!\s)\*\*(?!\w)/g, '<strong class="font-bold text-neutral-200">$1</strong>');
+  processedText = processedText.replace(/(?<!\w)__(?!\s)(.*?)(?<!\s)__(?!\w)/g, '<strong class="font-bold text-neutral-200">$1</strong>');
+
+  // Italic: *text* or _text_
+  processedText = processedText.replace(/(?<!\w)\*(?!\s)(.*?)(?<!\s)\*(?!\w)/g, '<em class="italic text-neutral-300">$1</em>');
+  processedText = processedText.replace(/(?<![a-zA-Z0-9])_(?!\s)(.*?)(?<!\s)_(?![a-zA-Z0-9])/g, '<em class="italic text-neutral-300">$1</em>');
+  
+  // Highlight: ==text==
+  processedText = processedText.replace(/==(.*?)==/g, '<span class="bg-[rgba(140,140,140,0.4)] text-neutral-200 px-1 rounded">$1</span>');
+  
+  // Inline Code: `code`
+  processedText = processedText.replace(/`(.*?)`/g, '<code class="bg-neutral-800 text-neutral-200 px-1.5 py-0.5 rounded-md text-sm font-mono">$1</code>');
+  
+  return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
 };
 
 // Enhanced renderNoteContent function
@@ -35,6 +88,8 @@ const renderNoteContent = (content: string) => {
   let inInfoBox = false;
   let infoBoxColor = '';
   let infoBoxContent: string[] = [];
+  let inMathBlock = false;
+  let mathBlockContent: string[] = [];
 
   const processList = () => {
     if (inList && listItems.length > 0) {
@@ -110,8 +165,54 @@ const renderNoteContent = (content: string) => {
     infoBoxColor = '';
   };
 
+  const processMathBlock = () => {
+    if (mathBlockContent.length > 0) {
+      try {
+        const mathContent = mathBlockContent.join('\n');
+        const renderedMath = katex.renderToString(mathContent, { displayMode: true });
+        elements.push(
+          <div 
+            key={`math-${elements.length}`} 
+            className="my-4 overflow-x-auto"
+            dangerouslySetInnerHTML={{ __html: renderedMath }}
+          />
+        );
+      } catch (error) {
+        console.error('KaTeX error:', error);
+        elements.push(
+          <div key={`math-error-${elements.length}`} className="my-4 p-4 bg-red-900/30 border border-red-700/60 text-red-200 rounded-lg">
+            Error rendering math: {error instanceof Error ? error.message : 'Unknown error'}
+          </div>
+        );
+      }
+    }
+    inMathBlock = false;
+    mathBlockContent = [];
+  };
+
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
+
+    // Check for math block start
+    if (line.trim() === '$$') {
+      processList(); // Process any existing list
+      processTable(); // Process any existing table
+      processInfoBox(); // Process any existing info box
+      inMathBlock = true;
+      continue;
+    }
+
+    // Check for math block end
+    if (line.trim() === '$$' && inMathBlock) {
+      processMathBlock();
+      continue;
+    }
+
+    // If in math block, collect content
+    if (inMathBlock) {
+      mathBlockContent.push(line);
+      continue;
+    }
 
     // Check for info box start
     const infoBoxMatch = line.match(/^::(blue|purple|green|amber|rose)\s*$/);
@@ -266,36 +367,9 @@ const renderNoteContent = (content: string) => {
   processList(); // Process any remaining list items after the loop
   processTable(); // Process any remaining table after the loop
   processInfoBox(); // Process any remaining info box after the loop
+  processMathBlock(); // Process any remaining math block after the loop
 
   return <>{elements}</>; // Return a fragment
-};
-
-// Helper function for inline Markdown parsing
-const parseInlineMarkdown = (text: string): React.ReactNode => {
-  // Links: [text](url) - Basic styling, not a real link for simplicity in this regex approach
-  let processedText = text.replace(/!?\[(.*?)\]\((.*?)\)/g, (match, p1, p2) => {
-    return `<a class="text-neutral-400 underline hover:text-neutral-300 cursor-pointer transition-colors" href="${p2}" target="_blank" rel="noopener noreferrer">${p1}</a>`;
-  });
-
-  // Order matters: Process **bold** and *italic* after links and code to avoid conflicts
-  // Strikethrough: ~~text~~
-  processedText = processedText.replace(/~~(.*?)~~/g, '<del class="text-neutral-500">$1</del>');
-
-  // Bold: **text** or __text__ (ensure __ is not part of a word_internal_thing)
-  processedText = processedText.replace(/(?<!\w)\*\*(?!\s)(.*?)(?<!\s)\*\*(?!\w)/g, '<strong class="font-bold text-neutral-200">$1</strong>');
-  processedText = processedText.replace(/(?<!\w)__(?!\s)(.*?)(?<!\s)__(?!\w)/g, '<strong class="font-bold text-neutral-200">$1</strong>');
-
-  // Italic: *text* or _text_ (ensure _ is not part of a word_internal_thing)
-  processedText = processedText.replace(/(?<!\w)\*(?!\s)(.*?)(?<!\s)\*(?!\w)/g, '<em class="italic text-neutral-300">$1</em>');
-  processedText = processedText.replace(/(?<![a-zA-Z0-9])_(?!\s)(.*?)(?<!\s)_(?![a-zA-Z0-9])/g, '<em class="italic text-neutral-300">$1</em>');
-  
-  // Highlight: ==text==
-  processedText = processedText.replace(/==(.*?)==/g, '<span class="bg-[rgba(140,140,140,0.4)] text-neutral-200 px-1 rounded">$1</span>');
-  
-  // Inline Code: `code`
-  processedText = processedText.replace(/`(.*?)`/g, '<code class="bg-neutral-800 text-neutral-200 px-1.5 py-0.5 rounded-md text-sm font-mono">$1</code>');
-  
-  return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
 };
 
 export default function NotesPage() {
