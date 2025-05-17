@@ -280,18 +280,19 @@ $$
 
 Ensure the content is detailed, accurate, and organized in a way that facilitates learning. Break complex concepts into digestible sections and use diverse formatting elements to emphasize key points.
 
-Format the response as a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties.
+IMPORTANT: Format the response as a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties. The response must be valid JSON that can be parsed by JSON.parse().
 
 Example output:
 {
   "title": "Key Concepts of Photosynthesis",
   "content": "# Photosynthesis: The Foundation of Life\\n\\n## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)\\n\\n> This process is fundamental to life on Earth, providing both oxygen and energy.\\n\\n## Chemical Equation\\n$6CO_2 + 6H_2O + \\text{light} \\rightarrow C_6H_{12}O_6 + 6O_2$\\n\\n---\\n\\n## Key Stages\\n1. Light-dependent reactions\\n2. Calvin cycle (light-independent reactions)\\n\\n### Light-Dependent Reactions\\n==These reactions convert light energy to chemical energy==\\n\\nThe energy conversion can be expressed as:\\n$$E = h\\nu = \\frac{hc}{\\lambda}$$\\n\\nWhere:\\n- $E$ is the energy of a photon\\n- $h$ is Planck's constant\\n- $\\nu$ is the frequency\\n- $\\lambda$ is the wavelength\\n\\n::The miracle of converting sunlight to chemical energy::"
 }`;
-  const systemMessage = "You are an expert content creator specializing in generating well-structured and informative notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. Ensure the Markdown is clean and follows standard conventions. Incorporate all the specific Markdown formatting elements requested in the prompt to create rich, visually engaging notes.";
+
+  const systemMessage = "You are an expert content creator specializing in generating well-structured notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. The response must be valid JSON that can be parsed by JSON.parse(). Ensure the Markdown is clean and follows standard conventions.";
 
   try {
-    // First attempt to generate the note
-    const response = await makeGroqRequest(prompt, false, systemMessage);
+    // First attempt to generate the note with forced JSON format
+    const response = await makeGroqRequest(prompt, false, systemMessage, true);
 
     let parsedContent;
     try {
@@ -306,11 +307,31 @@ Example output:
     } catch (error) {
       console.log("Failed to parse JSON for note, attempting to fix format:", response);
 
-      const fixPrompt = `The following response needs to be formatted as valid JSON with "title" and "content" (Markdown) properties. Please convert this to proper JSON format:\n\n${response}\n\nReturn ONLY valid JSON in this format:\n{\n  "title": "Note Title",\n  "content": "Markdown content..."\n}
-`;
-      let fixedResponse: string = "[No response from fix attempt]"; // Initialize fixedResponse
+      // Try to extract title and content from the response
+      const titleMatch = response.match(/"title"\s*:\s*"([^"]+)"/);
+      const contentMatch = response.match(/"content"\s*:\s*"([^"]+)"/);
+
+      if (titleMatch && contentMatch) {
+        try {
+          // Create a properly formatted JSON object
+          const fixedJson = {
+            title: titleMatch[1],
+            content: contentMatch[1]
+          };
+          return {
+            title: fixedJson.title,
+            content: fixedJson.content
+          };
+        } catch (extractError) {
+          console.error("Failed to extract title and content:", extractError);
+        }
+      }
+
+      // If extraction failed, try one more time with a more specific fix prompt
+      const fixPrompt = `The following response needs to be formatted as valid JSON with "title" and "content" (Markdown) properties. Please convert this to proper JSON format, ensuring all special characters are properly escaped:\n\n${response}\n\nReturn ONLY valid JSON in this format:\n{\n  "title": "Note Title",\n  "content": "Markdown content..."\n}`;
+
       try {
-        fixedResponse = await makeGroqRequest(fixPrompt, false, "You are a JSON formatting expert. Convert the provided text into the specified JSON structure with 'title' and 'content' fields. Ensure content is valid Markdown.");
+        const fixedResponse = await makeGroqRequest(fixPrompt, false, "You are a JSON formatting expert. Convert the provided text into the specified JSON structure with 'title' and 'content' fields. Ensure all special characters are properly escaped and the output is valid JSON.", true);
         const fixedParsedContent = JSON.parse(fixedResponse);
         if (fixedParsedContent && typeof fixedParsedContent.title === 'string' && typeof fixedParsedContent.content === 'string') {
           return {
@@ -320,8 +341,8 @@ Example output:
         }
         throw new Error("Invalid note structure in fixed JSON response");
       } catch (secondError) {
-        console.error("Failed to parse fixed JSON for note:", secondError, fixedResponse);
-        // If still failing, create a fallback note
+        console.error("Failed to parse fixed JSON for note:", secondError);
+        // If all attempts fail, create a fallback note
         return {
           title: `Note on ${topic} (Generation Failed)`,
           content: `Failed to generate content for "${topic}" after multiple attempts. Please try again or check the logs.`
