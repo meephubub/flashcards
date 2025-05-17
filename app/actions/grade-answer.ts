@@ -31,30 +31,35 @@ export async function gradeAnswer(
       }
     }
 
-    // Only grade freeform types with Groq
+    // Only grade freeform types with Xenova similarity (no Groq)
     if (questionType === "short-answer" || questionType === "fill-in-blank") {
-      const result = await gradeAnswerWithGroq(
-        questionType,
-        question,
-        correctAnswer,
-        userAnswer,
-        {
-          adaptiveScoring: options?.adaptiveScoring,
-          timePressure: options?.timePressure,
-          previousAnswers: options?.previousAnswers
+      try {
+        const { getSentenceEmbedding, cosineSimilarity } = await import("./xenova-similarity")
+        const userEmbedding = await getSentenceEmbedding(userAnswer)
+        const correctEmbedding = await getSentenceEmbedding(correctAnswer)
+        const similarity = cosineSimilarity(userEmbedding, correctEmbedding)
+        const isCorrect = similarity > 0.75
+
+        return {
+          isCorrect,
+          score: isCorrect ? 100 : Math.round(similarity * 100),
+          feedback: isCorrect
+            ? `Correct! (Semantic similarity: ${similarity.toFixed(2)})`
+            : `Not quite right. (Semantic similarity: ${similarity.toFixed(2)})\nExpected: ${correctAnswer}`,
+          explanation: isCorrect
+            ? undefined
+            : `Your answer was not semantically similar enough to the expected answer. Try to match the meaning more closely.`,
+          suggestions: isCorrect ? undefined : "Try rephrasing your answer to better match the expected meaning.",
         }
-      )
-
-      // Apply time pressure adjustments if needed
-      if (options?.timePressure === "high") {
-        result.score = Math.round(result.score * 1.1) // Bonus for quick answers
-      } else if (options?.timePressure === "low") {
-        result.score = Math.round(result.score * 0.9) // Slightly reduced score for unlimited time
+      } catch (simErr) {
+        console.error("Xenova similarity error (server):", simErr)
+        return {
+          isCorrect: false,
+          score: 0,
+          feedback: "An error occurred while grading with the similarity model.",
+          explanation: "Please try again or contact support if the problem persists.",
+        }
       }
-
-      // Ensure score doesn't exceed 100
-      result.score = Math.min(100, result.score)
-      return result
     }
 
     // For all other types, do simple grading (case-insensitive, trimmed)
