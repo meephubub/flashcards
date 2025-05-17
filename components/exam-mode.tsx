@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { generateQuestionsFromCards, type ExamQuestion, type GradingResult } from "@/app/actions/generate-questions"
 import { gradeAnswer } from "@/app/actions/grade-answer"
+import { getSentenceEmbedding, cosineSimilarity } from "./xenova-similarity"
 import { useToast } from "@/hooks/use-toast"
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd"
 import confetti from "canvas-confetti"
@@ -294,7 +295,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
     }))
 
     try {
-      const gradingResult = await gradeAnswer(
+      let gradingResult = await gradeAnswer(
         currentQuestion.type,
         currentQuestion.question,
         currentQuestion.type === "matching"
@@ -310,6 +311,26 @@ export function ExamMode({ deckId }: ExamModeProps) {
           questionType: currentQuestion.type
         }
       )
+
+      // For short-answer and fill-in-blank, use Xenova similarity as a fallback/boost
+      if ((currentQuestion.type === "short-answer" || currentQuestion.type === "fill-in-blank") && gradingResult && !gradingResult.isCorrect) {
+        try {
+          const userEmbedding = await getSentenceEmbedding(answerToSave)
+          const llmEmbedding = await getSentenceEmbedding(gradingResult.correctAnswer || currentQuestion.correctAnswer)
+          const similarity = cosineSimilarity(userEmbedding, llmEmbedding)
+          if (similarity > 0.75) {
+            gradingResult = {
+              ...gradingResult,
+              isCorrect: true,
+              score: 100,
+              feedback: gradingResult.feedback + " (Accepted by semantic similarity)",
+            }
+          }
+        } catch (simErr) {
+          // If Xenova fails, just continue with the original gradingResult
+          console.error("Xenova similarity error:", simErr)
+        }
+      }
 
       // Update user answers and results
       setUserAnswers(prev => ({

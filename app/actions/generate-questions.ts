@@ -279,7 +279,6 @@ Return the response as a JSON object with the following structure:
   "explanation": "Detailed explanation of the answer",
   "relatedConcepts": ["Concept 1", "Concept 2", ...]
 }`
-    console.log(prompt)
     const response = await makeGroqRequest(prompt, true)
     console.log(response)
     let parsedContent
