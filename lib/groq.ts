@@ -256,18 +256,19 @@ The note should include:
 - \`inline code\` using backticks for technical terms or commands
 
 ### LaTeX Math Notation
-- Use $...$ for inline math: $E = mc^2$
-- Use $$...$$ for display math:
+IMPORTANT: When using LaTeX math, ensure proper spacing and line breaks:
+- For inline math, use $...$ with spaces around the $ signs: $ E = mc^2 $
+- For display math, use $$...$$ on separate lines:
 $$
 \\frac{d}{dx}(x^n) = nx^{n-1}
 $$
-- Use \\text{} for text within math: $\\text{Mass Number (A)} = \\text{Protons} + \\text{Neutrons}$
-- Common LaTeX symbols:
-  - Greek letters: $\\alpha$, $\\beta$, $\\gamma$, $\\pi$
-  - Operators: $\\sum$, $\\prod$, $\\int$
-  - Fractions: $\\frac{a}{b}$
-  - Subscripts and superscripts: $x_{1}$, $x^{2}$
-  - Matrices: $\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$
+- For text within math, use \\text{}: $ \\text{Mass Number (A)} = \\text{Protons} + \\text{Neutrons} $
+- Common LaTeX symbols (with proper spacing):
+  - Greek letters: $ \\alpha $, $ \\beta $, $ \\gamma $, $ \\pi $
+  - Operators: $ \\sum $, $ \\prod $, $ \\int $
+  - Fractions: $ \\frac{a}{b} $
+  - Subscripts and superscripts: $ x_{1} $, $ x^{2} $
+  - Matrices: $ \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix} $
 
 ### Block Elements
 - > Blockquotes for quotes or important callouts
@@ -280,15 +281,15 @@ $$
 
 Ensure the content is detailed, accurate, and organized in a way that facilitates learning. Break complex concepts into digestible sections and use diverse formatting elements to emphasize key points.
 
-IMPORTANT: Format the response as a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties. The response must be valid JSON that can be parsed by JSON.parse().
+IMPORTANT: Format the response as a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties. The response must be valid JSON that can be parsed by JSON.parse(). When using LaTeX math, ensure proper spacing and line breaks to prevent parsing errors.
 
 Example output:
 {
   "title": "Key Concepts of Photosynthesis",
-  "content": "# Photosynthesis: The Foundation of Life\\n\\n## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)\\n\\n> This process is fundamental to life on Earth, providing both oxygen and energy.\\n\\n## Chemical Equation\\n$6CO_2 + 6H_2O + \\text{light} \\rightarrow C_6H_{12}O_6 + 6O_2$\\n\\n---\\n\\n## Key Stages\\n1. Light-dependent reactions\\n2. Calvin cycle (light-independent reactions)\\n\\n### Light-Dependent Reactions\\n==These reactions convert light energy to chemical energy==\\n\\nThe energy conversion can be expressed as:\\n$$E = h\\nu = \\frac{hc}{\\lambda}$$\\n\\nWhere:\\n- $E$ is the energy of a photon\\n- $h$ is Planck's constant\\n- $\\nu$ is the frequency\\n- $\\lambda$ is the wavelength\\n\\n::The miracle of converting sunlight to chemical energy::"
+  "content": "# Photosynthesis: The Foundation of Life\\n\\n## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)\\n\\n> This process is fundamental to life on Earth, providing both oxygen and energy.\\n\\n## Chemical Equation\\n$ 6CO_2 + 6H_2O + \\text{light} \\rightarrow C_6H_{12}O_6 + 6O_2 $\\n\\n---\\n\\n## Key Stages\\n1. Light-dependent reactions\\n2. Calvin cycle (light-independent reactions)\\n\\n### Light-Dependent Reactions\\n==These reactions convert light energy to chemical energy==\\n\\nThe energy conversion can be expressed as:\\n$$\\nE = h\\nu = \\frac{hc}{\\lambda}\\n$$\\n\\nWhere:\\n- $ E $ is the energy of a photon\\n- $ h $ is Planck's constant\\n- $ \\nu $ is the frequency\\n- $ \\lambda $ is the wavelength\\n\\n::The miracle of converting sunlight to chemical energy::"
 }`;
 
-  const systemMessage = "You are an expert content creator specializing in generating well-structured notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. The response must be valid JSON that can be parsed by JSON.parse(). Ensure the Markdown is clean and follows standard conventions.";
+  const systemMessage = "You are an expert content creator specializing in generating well-structured notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. The response must be valid JSON that can be parsed by JSON.parse(). When using LaTeX math, ensure proper spacing and line breaks to prevent parsing errors. Ensure the Markdown is clean and follows standard conventions.";
 
   try {
     // First attempt to generate the note with forced JSON format
@@ -298,9 +299,16 @@ Example output:
     try {
       parsedContent = JSON.parse(response);
       if (parsedContent && typeof parsedContent.title === 'string' && typeof parsedContent.content === 'string') {
+        // Clean up any potential LaTeX math formatting issues
+        const cleanedContent = parsedContent.content
+          .replace(/\$\s*#/g, '$ ') // Remove any # characters that might appear after $
+          .replace(/#\s*\$/g, ' $') // Remove any # characters that might appear before $
+          .replace(/\$\$\s*#/g, '$$ ') // Remove any # characters that might appear after $$
+          .replace(/#\s*\$\$/g, ' $$'); // Remove any # characters that might appear before $$
+
         return {
           title: parsedContent.title,
-          content: parsedContent.content
+          content: cleanedContent
         };
       }
       throw new Error("Invalid note structure in JSON response");
@@ -313,14 +321,16 @@ Example output:
 
       if (titleMatch && contentMatch) {
         try {
-          // Create a properly formatted JSON object
-          const fixedJson = {
-            title: titleMatch[1],
-            content: contentMatch[1]
-          };
+          // Create a properly formatted JSON object and clean up LaTeX math
+          const content = contentMatch[1]
+            .replace(/\$\s*#/g, '$ ')
+            .replace(/#\s*\$/g, ' $')
+            .replace(/\$\$\s*#/g, '$$ ')
+            .replace(/#\s*\$\$/g, ' $$');
+
           return {
-            title: fixedJson.title,
-            content: fixedJson.content
+            title: titleMatch[1],
+            content: content
           };
         } catch (extractError) {
           console.error("Failed to extract title and content:", extractError);
@@ -328,15 +338,22 @@ Example output:
       }
 
       // If extraction failed, try one more time with a more specific fix prompt
-      const fixPrompt = `The following response needs to be formatted as valid JSON with "title" and "content" (Markdown) properties. Please convert this to proper JSON format, ensuring all special characters are properly escaped:\n\n${response}\n\nReturn ONLY valid JSON in this format:\n{\n  "title": "Note Title",\n  "content": "Markdown content..."\n}`;
+      const fixPrompt = `The following response needs to be formatted as valid JSON with "title" and "content" (Markdown) properties. Please convert this to proper JSON format, ensuring all special characters are properly escaped and LaTeX math expressions are properly formatted with spaces:\n\n${response}\n\nReturn ONLY valid JSON in this format:\n{\n  "title": "Note Title",\n  "content": "Markdown content..."\n}`;
 
       try {
-        const fixedResponse = await makeGroqRequest(fixPrompt, false, "You are a JSON formatting expert. Convert the provided text into the specified JSON structure with 'title' and 'content' fields. Ensure all special characters are properly escaped and the output is valid JSON.", true);
+        const fixedResponse = await makeGroqRequest(fixPrompt, false, "You are a JSON formatting expert. Convert the provided text into the specified JSON structure with 'title' and 'content' fields. Ensure all special characters are properly escaped and LaTeX math expressions are properly formatted with spaces.", true);
         const fixedParsedContent = JSON.parse(fixedResponse);
         if (fixedParsedContent && typeof fixedParsedContent.title === 'string' && typeof fixedParsedContent.content === 'string') {
+          // Clean up any potential LaTeX math formatting issues
+          const cleanedContent = fixedParsedContent.content
+            .replace(/\$\s*#/g, '$ ')
+            .replace(/#\s*\$/g, ' $')
+            .replace(/\$\$\s*#/g, '$$ ')
+            .replace(/#\s*\$\$/g, ' $$');
+
           return {
             title: fixedParsedContent.title,
-            content: fixedParsedContent.content
+            content: cleanedContent
           };
         }
         throw new Error("Invalid note structure in fixed JSON response");
