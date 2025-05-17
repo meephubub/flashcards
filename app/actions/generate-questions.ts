@@ -48,115 +48,6 @@ export async function generateQuestionsFromCards(
     return card
   }
 
-  // Helper function to generate options for multiple choice
-  const generateOptions = (correctAnswer: string, card: Card) => {
-    const options = [correctAnswer]
-    const otherCards = cards.filter(c => c !== card)
-    
-    while (options.length < 4) {
-      const randomCard = otherCards[Math.floor(Math.random() * otherCards.length)]
-      const option = randomCard.back
-      if (!options.includes(option)) {
-        options.push(option)
-      }
-    }
-    
-    return options.sort(() => Math.random() - 0.5)
-  }
-
-  // Helper function to generate matching pairs
-  const generateMatchingPairs = (card: Card) => {
-    const pairs = [{ left: card.front, right: card.back }]
-    const otherCards = cards.filter(c => c !== card)
-    
-    while (pairs.length < 4) {
-      const randomCard = otherCards[Math.floor(Math.random() * otherCards.length)]
-      const pair = { left: randomCard.front, right: randomCard.back }
-      if (!pairs.some(p => p.left === pair.left || p.right === pair.right)) {
-        pairs.push(pair)
-      }
-    }
-    
-    return pairs.sort(() => Math.random() - 0.5)
-  }
-
-  // Helper function to generate sequence
-  const generateSequence = (card: Card) => {
-    const sequence = [card.back]
-    const otherCards = cards.filter(c => c !== card)
-    
-    while (sequence.length < 4) {
-      const randomCard = otherCards[Math.floor(Math.random() * otherCards.length)]
-      if (!sequence.includes(randomCard.back)) {
-        sequence.push(randomCard.back)
-      }
-    }
-    
-    return sequence.sort(() => Math.random() - 0.5)
-  }
-
-  // Helper function to generate analogy
-  const generateAnalogy = (card: Card) => {
-    const otherCards = cards.filter(c => c !== card)
-    const randomCard = otherCards[Math.floor(Math.random() * otherCards.length)]
-    return `${card.front} is to ${card.back} as ${randomCard.front} is to ${randomCard.back}`
-  }
-
-  // Generate questions based on type distribution
-  const generateQuestion = (type: QuestionType, card: Card): ExamQuestion => {
-    const question: ExamQuestion = {
-      id: questions.length + 1,
-      type,
-      question: "",
-      correctAnswer: card.back,
-      difficulty: options?.difficulty || "medium"
-    }
-
-    switch (type) {
-      case "multiple-choice":
-        question.question = `What is the correct answer for: ${card.front}?`
-        question.options = generateOptions(card.back, card)
-        break
-
-      case "true-false":
-        const isTrue = Math.random() > 0.5
-        question.question = `${card.front} is ${card.back}. True or False?`
-        question.correctAnswer = isTrue ? "True" : "False"
-        break
-
-      case "fill-in-blank":
-        const words = card.back.split(/\s+/)
-        const blankIndex = Math.floor(Math.random() * words.length)
-        const blankedWords = [...words]
-        blankedWords[blankIndex] = "_____"
-        question.question = `${card.front}: ${blankedWords.join(" ")}`
-        question.correctAnswer = words[blankIndex]
-        break
-
-      case "short-answer":
-        question.question = `Explain the relationship between: ${card.front}`
-        break
-
-      case "matching":
-        question.question = "Match the following terms with their correct definitions:"
-        question.matchingPairs = generateMatchingPairs(card)
-        question.correctAnswer = JSON.stringify(question.matchingPairs)
-        break
-
-      case "sequence":
-        question.question = "Arrange the following items in the correct order:"
-        question.sequence = generateSequence(card)
-        question.correctAnswer = JSON.stringify(question.sequence)
-        break
-
-      case "analogy":
-        question.question = generateAnalogy(card)
-        break
-    }
-
-    return question
-  }
-
   // Determine question types based on difficulty and previous questions
   const getQuestionTypes = (): QuestionType[] => {
     if (options?.type) {
@@ -182,21 +73,40 @@ export async function generateQuestionsFromCards(
     return types
   }
 
-  // Generate the requested number of questions
+  // Generate the requested number of questions using Groq
   for (let i = 0; i < count; i++) {
     const card = getRandomCard()
     if (!card) break
 
     const availableTypes = getQuestionTypes()
     const type = availableTypes[Math.floor(Math.random() * availableTypes.length)]
-    
-    const question = generateQuestion(type, card)
-    questions.push(question)
+    try {
+      // Use Groq to generate a high-quality question
+      // createQuestionFromCard is async and will fallback if Groq fails
+      // @ts-ignore: createQuestionFromCard may not be exported, import it if needed
+      // eslint-disable-next-line no-undef
+      const question = await (typeof createQuestionFromCard !== 'undefined' ? createQuestionFromCard : (await import('./generate-questions')).createQuestionFromCard)(
+        card,
+        type,
+        cards,
+        options?.difficulty || 'medium',
+      )
+      questions.push(question)
+    } catch (err) {
+      // If Groq fails for any reason, fallback to local logic
+      // Fallback logic uses the same type and card
+      if (typeof fallbackQuestionGeneration !== 'undefined') {
+        // @ts-ignore
+        const fallback = fallbackQuestionGeneration(card, type, cards, options?.difficulty || 'medium')
+        questions.push(fallback)
+      }
+    }
   }
 
   revalidatePath("/deck/[id]/exam", "page")
   return questions
 }
+
 
 function getQuestionTypesByDifficulty(difficulty: ExamDifficulty): QuestionType[] {
   // Simplified to avoid API errors
@@ -332,27 +242,34 @@ async function createQuestionFromCard(
   difficulty: ExamDifficulty,
 ): Promise<ExamQuestion> {
   try {
-    const prompt = `Generate an engaging and challenging exam question based on the following flashcard:
+    const prompt = `You are an expert exam question writer. Given the following flashcard, generate a high-quality, natural-sounding exam question of the specified type. Only generate a question if it makes sense for the card content and type. If not, rephrase or skip that type.
 
-Front: ${card.front}
-Back: ${card.back}
-Type: ${type}
+Flashcard Front: ${card.front}
+Flashcard Back: ${card.back}
+Question Type: ${type}
 Difficulty: ${difficulty}
 
-The question should:
-1. Test deep understanding rather than just memorization
-2. Be clear and unambiguous
-3. Include relevant context
-4. Challenge critical thinking
-5. Be appropriate for the specified difficulty level
-6. Include detailed explanations and hints
+Instructions:
+- The question should test deep understanding, not just memorization.
+- The question should be clear, unambiguous, and contextually appropriate.
+- For true/false, only generate a statement that is naturally true or false. Do NOT rephrase open-ended questions or definitions as true/false. If the card's answer is not a factual statement, skip true/false or rephrase as a factual statement (e.g. "Coronary heart disease is caused when the artery supplying blood becomes blocked. True or False?").
+- For multiple-choice, analogy, and matching: Include at least 2 red herrings or plausible distractors that are commonly confused with the correct answer, or that sound similar but are incorrect. Make the options challenging for someone who knows the basics but may be tripped up by subtle differences. Avoid using obviously wrong answers. For science/math, use distractors that are related concepts, similar formulas, or common misconceptions.
+- For fill-in-the-blank, blank out a key term from the answer only if the answer is a phrase or sentence.
+- For short-answer, ask for explanation or reasoning.
+- For matching, provide 3-5 pairs, and for each pair, ensure at least one incorrect option is a common misconception or a similar-sounding term.
+- For sequence, provide 3-5 steps or items to order.
+- For analogy, use the format "A is to B as C is to D" and make the analogy subtle, not obvious.
+- For critical-thinking, scenario, compare-contrast, cause-effect, or application, follow the type's intent.
+- Always include a detailed explanation.
+- Remember just to return json, no other text, no intro etc.
 
-For ${type} questions specifically:
-${type === "critical-thinking" ? "- Present a scenario that requires analysis and evaluation" : ""}
-${type === "application" ? "- Ask how the concept would be applied in a real-world situation" : ""}
-${type === "scenario" ? "- Create a realistic scenario that tests understanding" : ""}
-${type === "compare-contrast" ? "- Ask to compare and contrast related concepts" : ""}
-${type === "cause-effect" ? "- Focus on understanding relationships and consequences" : ""}
+Examples:
+- Multiple Choice (good): "What is the main function of the heart? A) Pump blood B) Digest food C) Circulate oxygen D) Store fat" (where C is a plausible but incorrect answer)
+- Multiple Choice (science): "Which equation is correct for magnification? A) image size / real size B) real size / image size C) image size x real size D) image size + real size"
+- Matching: "Match the enzyme to its function: (a) Amylase - (1) breaks down starch, (b) Protease - (2) breaks down proteins, (c) Lipase - (3) breaks down fats, (d) Sucrase - (4) breaks down sucrose" (include a pair like "breaks down cellulose" as a distractor)
+- Analogy: "Mitochondria is to energy as ribosome is to protein synthesis"
+- True/False (good): "The heart pumps blood throughout the body. True or False?" (NOT: "How does the heart pump blood? True or False?")
+- Fill-in-the-blank: "The main artery in the body is called the _______."
 
 Return the response as a JSON object with the following structure:
 {
@@ -360,12 +277,32 @@ Return the response as a JSON object with the following structure:
   "options": ["Option 1", "Option 2", ...] (for multiple choice),
   "correctAnswer": "The correct answer",
   "explanation": "Detailed explanation of the answer",
-  "hints": ["Hint 1", "Hint 2", "Hint 3"],
   "relatedConcepts": ["Concept 1", "Concept 2", ...]
 }`
-
+    console.log(prompt)
     const response = await makeGroqRequest(prompt, true)
-    const parsedContent = JSON.parse(response)
+    console.log(response)
+    let parsedContent
+    try {
+      // Try normal JSON parse
+      parsedContent = JSON.parse(response)
+    } catch (jsonErr) {
+      // Try to extract JSON object from response string
+      const jsonStart = response.indexOf('{')
+      const jsonEnd = response.lastIndexOf('}')
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        const jsonString = response.substring(jsonStart, jsonEnd + 1)
+        try {
+          parsedContent = JSON.parse(jsonString)
+        } catch (extractErr) {
+          console.error('Groq non-JSON response (after extraction):', response)
+          throw new Error('Groq response could not be parsed as JSON')
+        }
+      } else {
+        console.error('Groq non-JSON response:', response)
+        throw new Error('Groq response could not be parsed as JSON')
+      }
+    }
 
     return {
       id: card.id,
@@ -374,7 +311,7 @@ Return the response as a JSON object with the following structure:
       options: parsedContent.options,
       correctAnswer: parsedContent.correctAnswer,
       explanation: parsedContent.explanation,
-      hints: parsedContent.hints,
+
       relatedConcepts: parsedContent.relatedConcepts,
       difficulty,
       originalCard: card
