@@ -261,6 +261,13 @@ The note should include:
 - Code blocks with triple backticks (\`\`\` ... \`\`\`)
 - Centered text with double colons (::centered text::)
 
+### Info Boxes
+- ::blue:: for blue info box
+- ::purple:: for purple info box
+- ::green:: for green info box
+- ::amber:: for amber info box
+- ::rose:: for rose info box
+
 ### Links
 - [Link text](URL) syntax for references
 
