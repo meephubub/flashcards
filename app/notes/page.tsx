@@ -471,7 +471,12 @@ export default function NotesPage() {
     }
   }, [focusedNoteId, displayedNotes]);
 
-  // Handle text selection and Ctrl+K and Ctrl+B
+  // State for inline editing
+  const [inlineEditingNoteId, setInlineEditingNoteId] = useState<string | null>(null);
+  const [inlineEditContent, setInlineEditContent] = useState<string>("");
+  const inlineEditRef = useRef<HTMLTextAreaElement>(null);
+
+  // Handle text selection and Ctrl+K, Ctrl+B, and Ctrl+E
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey) {
@@ -488,8 +493,6 @@ export default function NotesPage() {
           e.preventDefault();
           const selection = window.getSelection();
           if (selection && selection.toString().trim()) {
-            // setHighlightedText(selection.toString().trim()); // This state seems unused now, can be removed if confirmed
-            // Find the note containing the selection
             const range = selection.getRangeAt(0);
             
             const ancestorNode = range.commonAncestorContainer;
@@ -507,33 +510,40 @@ export default function NotesPage() {
                 }
 
                 // Helper to escape regex special characters
-                const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\\\]/g, '\\\\$&');
+                const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 
-                const escapedSelectedText = escapeRegExp(selectedText);
                 const highlightedVersion = `==${selectedText}==`;
-                const escapedHighlightedVersionForRegex = escapeRegExp(highlightedVersion);
-
+                const noteContent = note.content;
                 let updatedContent: string | undefined = undefined;
-
-                // Check if the exact highlighted version exists in the content
-                if (note.content.includes(highlightedVersion)) {
-                  // It's highlighted, so unhighlight it
-                  // Replace all occurrences of ==selectedText== with selectedText
-                  updatedContent = note.content.replace(
-                    new RegExp(escapedHighlightedVersionForRegex, 'g'),
-                    selectedText
-                  );
-                } else if (note.content.includes(selectedText)) {
-                  // It's plain text (or not highlighted in the ==...== form), so highlight it
-                  // Replace all occurrences of selectedText with ==selectedText==
-                  updatedContent = note.content.replace(
-                    new RegExp(escapedSelectedText, 'g'),
-                    highlightedVersion
-                  );
+                
+                // Find the exact position of the selected text in the original content
+                // We need to determine if we're dealing with a highlighted or plain text
+                const isHighlighted = noteContent.includes(highlightedVersion);
+                
+                if (isHighlighted) {
+                  // We're unhighlighting text
+                  // Find the highlighted version in the content
+                  const highlightedPattern = `==${selectedText}==`;
+                  
+                  // Replace only the first occurrence of the highlighted pattern
+                  const firstIndex = noteContent.indexOf(highlightedPattern);
+                  if (firstIndex !== -1) {
+                    updatedContent = noteContent.substring(0, firstIndex) + 
+                                     selectedText + 
+                                     noteContent.substring(firstIndex + highlightedPattern.length);
+                  }
                 } else {
-                  // Selected text (neither plain nor in our highlighted form) not found.
-                  console.warn("Text to highlight/unhighlight not found in note content:", selectedText);
-                  return;
+                  // We're highlighting plain text
+                  // Find the plain text in the content
+                  const plainTextIndex = noteContent.indexOf(selectedText);
+                  if (plainTextIndex !== -1) {
+                    updatedContent = noteContent.substring(0, plainTextIndex) + 
+                                     highlightedVersion + 
+                                     noteContent.substring(plainTextIndex + selectedText.length);
+                  } else {
+                    console.warn("Text to highlight not found in note content:", selectedText);
+                    return;
+                  }
                 }
                 
                 // Only update if content actually changed
@@ -554,7 +564,71 @@ export default function NotesPage() {
               }
             }
           }
+        } else if (e.key === 'e') {
+          console.log('Ctrl+E pressed');
+          e.preventDefault();
+          let targetNoteId: string | null = null;
+          let derivationMethod: string = "None";
+          const selection = window.getSelection();
+
+          // 1. Try from selection
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const ancestorNode = range.commonAncestorContainer;
+            const parentElementForClosest = ancestorNode.nodeType === Node.ELEMENT_NODE ? (ancestorNode as Element) : ancestorNode.parentElement;
+            const noteElement = parentElementForClosest?.closest<HTMLElement>('[id^="note-"]');
+            if (noteElement) {
+              targetNoteId = noteElement.id.replace('note-', '');
+              derivationMethod = "Selection";
+              console.log('Target note ID from selection:', targetNoteId);
+            }
+          }
+
+          // 2. If no note from selection, try from active element
+          if (!targetNoteId && document.activeElement) {
+            const noteElement = document.activeElement.closest<HTMLElement>('[id^="note-"]');
+            if (noteElement) {
+              targetNoteId = noteElement.id.replace('note-', '');
+              derivationMethod = "Active Element";
+              console.log('Target note ID from active element:', targetNoteId);
+            }
+          }
+          
+          // 3. If still no note, use focusedNoteId (if a note is uniquely displayed/focused)
+          if (!targetNoteId && focusedNoteId) {
+            targetNoteId = focusedNoteId;
+            derivationMethod = "Focused Note ID";
+            console.log('Target note ID from focusedNoteId:', targetNoteId);
+          }
+
+          console.log(`Final targetNoteId: ${targetNoteId}, Derived by: ${derivationMethod}`);
+
+          if (targetNoteId) {
+            const noteToEdit = allNotes.find(n => n.id === targetNoteId);
+            if (noteToEdit) {
+              console.log('Note found to edit:', noteToEdit.id, '; Setting inline edit state.');
+              setInlineEditingNoteId(targetNoteId);
+              setInlineEditContent(noteToEdit.content);
+              setTimeout(() => {
+                if (inlineEditRef.current) {
+                  console.log('Focusing textarea.');
+                  inlineEditRef.current.focus();
+                  // Optional: select all text for easier editing
+                  // inlineEditRef.current.select(); 
+                } else {
+                  console.log('inlineEditRef.current is null, cannot focus.');
+                }
+              }, 0);
+            } else {
+              console.log('TargetNoteId was set, but no note found in allNotes with ID:', targetNoteId);
+            }
+          } else {
+            console.log('No targetNoteId could be determined.');
+          }
         }
+      } else if (e.key === 'Escape' && inlineEditingNoteId) {
+        // Cancel inline editing on Escape key
+        setInlineEditingNoteId(null);
       }
     };
 
@@ -562,7 +636,34 @@ export default function NotesPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [allNotes]);
+  }, [allNotes, inlineEditingNoteId]);
+  
+  // Handle saving inline edits
+  const handleSaveInlineEdit = async () => {
+    if (!inlineEditingNoteId) return;
+    
+    try {
+      setIsLoading(true);
+      const { error } = await supabase
+        .from("notes")
+        .update({ content: inlineEditContent })
+        .eq("id", inlineEditingNoteId);
+
+      if (error) {
+        console.error("Error updating note:", error);
+        setErrorMessage(`Error updating note: ${error.message}`);
+      } else {
+        // Clear inline editing state
+        setInlineEditingNoteId(null);
+        // Refresh notes
+        await fetchNotes();
+      }
+    } catch (error: any) {
+      setErrorMessage(`Error updating note: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Apply text selection styles
   useEffect(() => {
@@ -976,7 +1077,36 @@ export default function NotesPage() {
                   </div>
                 </div>
                 <div className="prose-custom max-w-none">
-                  {renderNoteContent(note.content)}
+                  {inlineEditingNoteId === note.id ? (
+                    <div className="relative">
+                      <Textarea
+                        ref={inlineEditRef}
+                        value={inlineEditContent}
+                        onChange={(e) => setInlineEditContent(e.target.value)}
+                        className="min-h-[300px] w-full bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500 font-mono text-sm p-4"
+                        placeholder="Edit your note content..."
+                      />
+                      <div className="flex justify-end mt-4 space-x-3">
+                        <Button 
+                          onClick={() => setInlineEditingNoteId(null)} 
+                          variant="outline" 
+                          className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          onClick={handleSaveInlineEdit} 
+                          className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700"
+                        >
+                          Save Changes
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div id={`note-content-${note.id}`}>
+                      {renderNoteContent(note.content)}
+                    </div>
+                  )}
                 </div>
                 <div className="text-xs text-neutral-500 mt-8 pt-4 border-t border-neutral-700/50">
                   Category: <span className="font-medium text-neutral-400">{note.category.charAt(0).toUpperCase() + note.category.slice(1)}</span> | Created: {new Date(note.created_at).toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' })}
