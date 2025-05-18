@@ -263,66 +263,63 @@ Return the response as a JSON object with the following properties:
 export async function generateNoteWithGroq(
   topic: string,
 ): Promise<GeneratedNote> {
-  const prompt = `Generate a comprehensive and well-structured note on the topic: "${topic}".
+  const prompt = `Generate a comprehensive, well-structured, and visually rich note on the topic: "${topic}".
 
-The note should include:
-- A concise and informative title that summarizes the topic.
-- Rich markdown content with a clear structure and logical flow.
+  The note should include:
+  - A concise and informative title that clearly reflects the topic.
+  - Well-organized markdown content with logical flow and appropriate use of formatting elements to enhance readability and engagement.
 
-## Supported Markdown Formatting (use all of these where applicable):
+  Markdown Formatting Guidelines (Use all where applicable):
 
-### Info Boxes
-- Use :: and then a color e.g ::rose then place the content on a new line and place another :: on the line below
-- Example:
-::rose
-this is an example
-::
-- Available colors: rose, amber, blue, green
+  Titles and Headings
+  - Use # for main title (h1)
+  - Use ## for major sections (h2)
+  - Use ###, ####, ##### for nested subsections as needed
 
-### Headings
-- Use # for main title (h1)
-- Use ## for major sections (h2)
-- Use ### for subsections (h3)
-- Use #### and ##### for smaller headings when needed
+  Info Boxes
+  - Use colored info blocks to highlight important points or summaries:
+    Syntax:
+    ::color
+    content
+    ::
+  - Available colors: rose, amber, blue, green
 
-### Lists
-- Bullet lists with * or - at the start of line
-- Numbered lists with 1., 2., etc.
+  Lists
+  - Bullet points with * or -
+  - Numbered lists with 1., 2., etc.
 
-### Text Formatting
-- **Bold text** using double asterisks
-- *Italic text* using single asterisks
-- ~~Strikethrough~~ using double tildes
-- ==Highlighted text== using double equals (for important terms or concepts)
-- \`inline code\` using backticks for technical terms or commands
+  Text Formatting
+  - Bold for emphasis (double asterisks)
+  - Italic for nuance (single asterisks)
+  - Strikethrough for removed/incorrect content (double tildes)
+  - Highlight important terms with double equals
+  - Use inline code backticks for technical references or commands
 
-### LaTeX Math Notation
-IMPORTANT: When using LaTeX math, ensure proper spacing and line breaks:
-- For inline math, use $...$ with spaces around the $ signs: $ E = mc^2 $
-- For display math, use $$...$$ on separate lines:
-$$
-\\frac{d}{dx}(x^n) = nx^{n-1}
-$$
-- For text within math, use \\text{}: $ \\text{Mass Number (A)} = \\text{Protons} + \\text{Neutrons} $
-- Common LaTeX symbols (with proper spacing):
-  - Greek letters: $ \\alpha $, $ \\beta $, $ \\gamma $, $ \\pi $
-  - Operators: $ \\sum $, $ \\prod $, $ \\int $
-  - Fractions: $ \\frac{a}{b} $
-  - Subscripts and superscripts: $ x_{1} $, $ x^{2} $
-  - Matrices: $ \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix} $
+  LaTeX Math (Use only when needed)
+  - Inline math: $ E = mc^2 $
+  - Block math:
+  $$
+  \\frac{d}{dx}(x^n) = nx^{n-1}
+  $$
+  - For inline text: $ \\text{Example} $
+  - Supported symbols include Greek letters (e.g. $ \\alpha $, $ \\pi $), operators (e.g. $ \\sum $, $ \\int $), fractions, exponents, subscripts, and matrices
 
-### Block Elements
-- > Blockquotes for quotes or important callouts
-- Horizontal rules with --- for section dividers
-- Code blocks with triple backticks (\`\`\` ... \`\`\`)
-- Centered text with double colons (::centered text::)
+  Block Elements
+  - Use > for blockquotes (citations or emphasis)
+  - Use --- for horizontal rules to separate sections
+  - Use triple backticks for code blocks:
+  \`\`\`
+  Your code here
+  \`\`\`
+  - Use double colons for centered text: ::centered text::
 
-### Links
-- [Link text](URL) syntax for references
+  Links
+  - Use [Link text](URL) syntax for citations, sources, or related reading
 
-Ensure the content is detailed, accurate, and organized in a way that facilitates learning. Break complex concepts into digestible sections and use diverse formatting elements to emphasize key points.
-You don't need to use each formatting if not necessary e.g don't include latex or code when not needed
-When using LaTeX math, ensure proper spacing and line breaks to prevent parsing errors.
+  Output Requirements:
+  - Ensure content is detailed, accurate, and structured clearly.
+  - Break down complex ideas into digestible parts.
+  - Use formatting tools judiciously—avoid LaTeX, code blocks, or centering unless relevant.
 IMPORTANT: Format the response as a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties. The response must be valid JSON that can be parsed by JSON.parse().
 
 Example output:
