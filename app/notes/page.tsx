@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, ChangeEvent } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,12 @@ import type { MultipleChoiceQuestion, MCQGenerationResult } from "@/lib/groq";
 import { NotesSidebar } from "@/components/NotesSidebar";
 import { CategoryCombobox } from "@/components/ui/CategoryCombobox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { XIcon, ListIcon, SparklesIcon, PlusCircleIcon, SendIcon, HelpCircleIcon, CheckCircle2, XCircle, InfoIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { XIcon, ListIcon, SparklesIcon, PlusCircleIcon, SendIcon, HelpCircleIcon, CheckCircle2, XCircle, InfoIcon, PencilIcon, Trash2Icon, ImageIcon, UploadIcon, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle as ShadDialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
+import { v4 as uuidv4 } from 'uuid';
 
 // Helper to generate slugs for IDs
 const generateSlug = (text: string) => {
@@ -50,8 +52,13 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
     }
   });
 
+  // Images: ![alt](url)
+  processedText = processedText.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, src) => {
+    return `<img src="${src}" alt="${alt}" class="max-w-full h-auto rounded-md my-2" />`;
+  });
+
   // Links: [text](url)
-  processedText = processedText.replace(/!?\[(.*?)\]\((.*?)\)/g, (match, p1, p2) => {
+  processedText = processedText.replace(/\[(.*?)\]\((.*?)\)/g, (match, p1, p2) => {
     return `<a class="text-neutral-400 underline hover:text-neutral-300 cursor-pointer transition-colors" href="${p2}" target="_blank" rel="noopener noreferrer">${p1}</a>`;
   });
 
