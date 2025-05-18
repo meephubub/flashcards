@@ -33,9 +33,14 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
   
   // Process display math ($$...$$)
   // Using a workaround for the 's' flag (dotall) which requires ES2018
-  processedText = processedText.replace(/\$\$(([\s\S])*?)\$\$/, (match, p1) => {
+  // More strict regex to ensure we only match valid math expressions
+  processedText = processedText.replace(/\$\$(([\s\S])*?)\$\$/g, (match, p1) => {
     try {
-      return katex.renderToString(p1, { displayMode: true });
+      // Make sure the content doesn't contain Markdown headers or other problematic patterns
+      if (p1.includes('#') || p1.includes('---')) {
+        return match; // Skip rendering if it contains Markdown syntax
+      }
+      return `<div class="text-white">${katex.renderToString(p1, { displayMode: true })}</div>`;
     } catch (error) {
       console.error('KaTeX error:', error);
       return match;
@@ -43,9 +48,14 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
   });
 
   // Process inline math ($...$)
-  processedText = processedText.replace(/\$([^$\n]+?)\$/g, (match, p1) => {
+  // More precise regex to avoid capturing non-math content
+  processedText = processedText.replace(/(?<!\\)\$([^$\n#]+?)(?<!\\)\$/g, (match, p1) => {
     try {
-      return katex.renderToString(p1, { displayMode: false });
+      // Skip if it contains Markdown syntax
+      if (p1.includes('#') || p1.includes('---') || p1.includes('![')){  
+        return match;
+      }
+      return `<span class="text-white">${katex.renderToString(p1, { displayMode: false })}</span>`;
     } catch (error) {
       console.error('KaTeX error:', error);
       return match;
@@ -54,7 +64,7 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
 
   // Images: ![alt](url)
   processedText = processedText.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, src) => {
-    return `<img src="${src}" alt="${alt}" class="max-w-full h-auto rounded-md my-2" />`;
+    return `<img src="${src}" alt="${alt}" class="max-w-full max-h-[400px] h-auto rounded-md my-2" />`;
   });
 
   // Links: [text](url)
@@ -177,14 +187,28 @@ const renderNoteContent = (content: string) => {
     if (mathBlockContent.length > 0) {
       try {
         const mathContent = mathBlockContent.join('\n');
-        const renderedMath = katex.renderToString(mathContent, { displayMode: true });
-        elements.push(
-          <div 
-            key={`math-${elements.length}`} 
-            className="my-4 overflow-x-auto"
-            dangerouslySetInnerHTML={{ __html: renderedMath }}
-          />
-        );
+        
+        // Check for Markdown syntax that would cause KaTeX errors
+        if (mathContent.includes('#') || mathContent.includes('---') || mathContent.includes('![')) {
+          // If problematic content is found, display it as code instead of trying to render as math
+          elements.push(
+            <div key={`math-code-${elements.length}`} className="my-4 p-4 bg-neutral-800 border border-neutral-700 rounded-lg">
+              <pre className="text-neutral-200 font-mono text-sm overflow-x-auto">
+                {mathContent}
+              </pre>
+            </div>
+          );
+        } else {
+          // Only try to render with KaTeX if content looks like valid math
+          const renderedMath = katex.renderToString(mathContent, { displayMode: true });
+          elements.push(
+            <div 
+              key={`math-${elements.length}`} 
+              className="my-4 overflow-x-auto text-white"
+              dangerouslySetInnerHTML={{ __html: renderedMath }}
+            />
+          );
+        }
       } catch (error) {
         console.error('KaTeX error:', error);
         elements.push(
