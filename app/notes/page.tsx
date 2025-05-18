@@ -30,7 +30,8 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
   let processedText = text;
   
   // Process display math ($$...$$)
-  processedText = processedText.replace(/\$\$(.*?)\$\$/gs, (match, p1) => {
+  // Using a workaround for the 's' flag (dotall) which requires ES2018
+  processedText = processedText.replace(/\$\$(([\s\S])*?)\$\$/, (match, p1) => {
     try {
       return katex.renderToString(p1, { displayMode: true });
     } catch (error) {
@@ -475,6 +476,37 @@ export default function NotesPage() {
   const [inlineEditingNoteId, setInlineEditingNoteId] = useState<string | null>(null);
   const [inlineEditContent, setInlineEditContent] = useState<string>("");
   const inlineEditRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Handle saving inline edits
+  const handleSaveInlineEdit = useCallback(async () => {
+    if (!inlineEditingNoteId) return;
+    
+    try {
+      setIsLoading(true);
+      const { error } = await supabase
+        .from("notes")
+        .update({ content: inlineEditContent })
+        .eq("id", inlineEditingNoteId);
+
+      if (error) {
+        console.error("Error updating note:", error);
+        setErrorMessage(`Error updating note: ${error.message}`);
+      } else {
+        // Show brief success message
+        setErrorMessage("Note updated successfully");
+        setTimeout(() => setErrorMessage(null), 1500);
+        
+        // Clear inline editing state
+        setInlineEditingNoteId(null);
+        // Refresh notes
+        await fetchNotes();
+      }
+    } catch (error: any) {
+      setErrorMessage(`Error updating note: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [inlineEditingNoteId, inlineEditContent]);
 
   // Handle text selection and Ctrl+K, Ctrl+B, and Ctrl+E
   useEffect(() => {
@@ -565,70 +597,78 @@ export default function NotesPage() {
             }
           }
         } else if (e.key === 'e') {
-          console.log('Ctrl+E pressed');
           e.preventDefault();
+          
+          // If already in edit mode, save the changes
+          if (inlineEditingNoteId) {
+            handleSaveInlineEdit();
+            return;
+          }
+          
+          // Determine which note to edit
           let targetNoteId: string | null = null;
-          let derivationMethod: string = "None";
+          
+          // 1. Try from selection first - this is most precise
           const selection = window.getSelection();
-
-          // 1. Try from selection
           if (selection && selection.rangeCount > 0) {
             const range = selection.getRangeAt(0);
             const ancestorNode = range.commonAncestorContainer;
-            const parentElementForClosest = ancestorNode.nodeType === Node.ELEMENT_NODE ? (ancestorNode as Element) : ancestorNode.parentElement;
-            const noteElement = parentElementForClosest?.closest<HTMLElement>('[id^="note-"]');
-            if (noteElement) {
-              targetNoteId = noteElement.id.replace('note-', '');
-              derivationMethod = "Selection";
-              console.log('Target note ID from selection:', targetNoteId);
-            }
-          }
-
-          // 2. If no note from selection, try from active element
-          if (!targetNoteId && document.activeElement) {
-            const noteElement = document.activeElement.closest<HTMLElement>('[id^="note-"]');
-            if (noteElement) {
-              targetNoteId = noteElement.id.replace('note-', '');
-              derivationMethod = "Active Element";
-              console.log('Target note ID from active element:', targetNoteId);
+            const parentElement = ancestorNode.nodeType === Node.ELEMENT_NODE 
+              ? (ancestorNode as Element) 
+              : ancestorNode.parentElement;
+            
+            // Look for either note-content-X or note-X elements
+            const noteContentElement = parentElement?.closest<HTMLElement>('[id^="note-content-"]');
+            if (noteContentElement) {
+              targetNoteId = noteContentElement.id.replace('note-content-', '');
+            } else {
+              const noteElement = parentElement?.closest<HTMLElement>('[id^="note-"]');
+              if (noteElement) {
+                targetNoteId = noteElement.id.replace('note-', '');
+              }
             }
           }
           
-          // 3. If still no note, use focusedNoteId (if a note is uniquely displayed/focused)
+          // 2. If no note from selection, try from active element
+          if (!targetNoteId && document.activeElement) {
+            const noteContentElement = document.activeElement.closest<HTMLElement>('[id^="note-content-"]');
+            if (noteContentElement) {
+              targetNoteId = noteContentElement.id.replace('note-content-', '');
+            } else {
+              const noteElement = document.activeElement.closest<HTMLElement>('[id^="note-"]');
+              if (noteElement) {
+                targetNoteId = noteElement.id.replace('note-', '');
+              }
+            }
+          }
+          
+          // 3. If still no note, use focusedNoteId (if a note is uniquely displayed)
           if (!targetNoteId && focusedNoteId) {
             targetNoteId = focusedNoteId;
-            derivationMethod = "Focused Note ID";
-            console.log('Target note ID from focusedNoteId:', targetNoteId);
           }
-
-          console.log(`Final targetNoteId: ${targetNoteId}, Derived by: ${derivationMethod}`);
-
+          
+          // If a note was found, prepare it for editing
           if (targetNoteId) {
             const noteToEdit = allNotes.find(n => n.id === targetNoteId);
             if (noteToEdit) {
-              console.log('Note found to edit:', noteToEdit.id, '; Setting inline edit state.');
               setInlineEditingNoteId(targetNoteId);
               setInlineEditContent(noteToEdit.content);
+              
+              // Focus the textarea after it's rendered
               setTimeout(() => {
                 if (inlineEditRef.current) {
-                  console.log('Focusing textarea.');
                   inlineEditRef.current.focus();
-                  // Optional: select all text for easier editing
-                  // inlineEditRef.current.select(); 
-                } else {
-                  console.log('inlineEditRef.current is null, cannot focus.');
                 }
-              }, 0);
-            } else {
-              console.log('TargetNoteId was set, but no note found in allNotes with ID:', targetNoteId);
+              }, 50);
             }
-          } else {
-            console.log('No targetNoteId could be determined.');
           }
         }
       } else if (e.key === 'Escape' && inlineEditingNoteId) {
         // Cancel inline editing on Escape key
         setInlineEditingNoteId(null);
+      } else if (e.key === 'Enter' && e.ctrlKey && inlineEditingNoteId) {
+        // Save changes on Ctrl+Enter
+        handleSaveInlineEdit();
       }
     };
 
@@ -636,35 +676,8 @@ export default function NotesPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [allNotes, inlineEditingNoteId]);
+  }, [allNotes, inlineEditingNoteId, handleSaveInlineEdit]);
   
-  // Handle saving inline edits
-  const handleSaveInlineEdit = async () => {
-    if (!inlineEditingNoteId) return;
-    
-    try {
-      setIsLoading(true);
-      const { error } = await supabase
-        .from("notes")
-        .update({ content: inlineEditContent })
-        .eq("id", inlineEditingNoteId);
-
-      if (error) {
-        console.error("Error updating note:", error);
-        setErrorMessage(`Error updating note: ${error.message}`);
-      } else {
-        // Clear inline editing state
-        setInlineEditingNoteId(null);
-        // Refresh notes
-        await fetchNotes();
-      }
-    } catch (error: any) {
-      setErrorMessage(`Error updating note: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Apply text selection styles
   useEffect(() => {
     // Create a style element
