@@ -84,7 +84,7 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
   })
 
   // Images: ![alt](url) or ![alt|maxheight=500](url) for custom height
-  processedText = processedText.replace(/!\[(.*?)\]$$(.*?)$$/g, (match, alt, src) => {
+  processedText = processedText.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, src) => {
     // Check if alt text contains height specification
     const heightMatch = alt.match(/\|\s*maxheight=(\d+)/)
     let maxHeight = 400 // Default max height
@@ -100,7 +100,7 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
   })
 
   // Links: [text](url)
-  processedText = processedText.replace(/\[(.*?)\]$$(.*?)$$/g, (match, p1, p2) => {
+  processedText = processedText.replace(/\[(.*?)\]\((.*?)\)/g, (match, p1, p2) => {
     return `<a class="text-neutral-400 underline hover:text-neutral-300 cursor-pointer transition-colors" href="${p2}" target="_blank" rel="noopener noreferrer">${p1}</a>`
   })
 
