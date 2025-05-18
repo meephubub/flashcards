@@ -157,7 +157,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         questionCount: 12,
         hintAllowed: true,
         passingScore: 75,
-        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching"],
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer"],
         adaptiveScoring: true,
         timePressure: "medium" as const,
         feedbackDetail: "detailed"
@@ -195,7 +195,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         questionCount: 12,
         hintAllowed: true,
         passingScore: 70,
-        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching"],
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer"],
         adaptiveScoring: false,
         timePressure: "medium" as const,
         feedbackDetail: "detailed"
@@ -206,7 +206,7 @@ export function getDifficultySettings(difficulty: ExamDifficulty, userPerformanc
         questionCount: 15,
         hintAllowed: false,
         passingScore: 80,
-        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "matching", "sequence", "analogy"],
+        questionTypes: ["multiple-choice", "true-false", "fill-in-blank", "short-answer", "sequence", "analogy"],
         adaptiveScoring: false,
         timePressure: "high" as const,
         feedbackDetail: "detailed"

@@ -409,7 +409,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
         title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
         description: `${gradingResult.feedback}\n\nCorrect answer: ${currentQuestion.correctAnswer}`,
         variant: gradingResult.isCorrect ? "default" : "destructive",
-        duration: 120 // Give users more time to read the correct answer
+        duration: 1200 // Give users more time to read the correct answer
       })
     } catch (error) {
       console.error("Error grading answer:", error)
