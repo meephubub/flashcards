@@ -62,9 +62,20 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
     }
   });
 
-  // Images: ![alt](url)
+  // Images: ![alt](url) or ![alt|maxheight=500](url) for custom height
   processedText = processedText.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, src) => {
-    return `<img src="${src}" alt="${alt}" class="max-w-full max-h-[400px] h-auto rounded-md my-2" />`;
+    // Check if alt text contains height specification
+    const heightMatch = alt.match(/\|\s*maxheight=(\d+)/);
+    let maxHeight = 400; // Default max height
+    let cleanAlt = alt;
+    
+    if (heightMatch) {
+      maxHeight = parseInt(heightMatch[1], 10);
+      // Remove the height specification from alt text
+      cleanAlt = alt.replace(/\|\s*maxheight=\d+/, '').trim();
+    }
+    
+    return `<img src="${src}" alt="${cleanAlt}" class="max-w-full max-h-[${maxHeight}px] h-auto rounded-md my-2" />`;
   });
 
   // Links: [text](url)
