@@ -43,6 +43,7 @@ export function SettingsContent() {
       enableSpacedRepetition: settings.studySettings.enableSpacedRepetition,
       autoFlip: settings.studySettings.autoFlip,
       autoFlipDelay: settings.studySettings.autoFlipDelay,
+      languageSimilarityThreshold: settings.studySettings.languageSimilarityThreshold ?? 0.75, // Ensure default if undefined
     },
   })
 
@@ -316,6 +317,29 @@ export function SettingsContent() {
                   />
                 </div>
               )}
+              <div className="space-y-2">
+                <Label htmlFor="similarity-threshold">Language Study Similarity Threshold: {Math.round((localSettings.studySettings.languageSimilarityThreshold ?? 0.75) * 100)}%</Label>
+                <p className="text-xs text-muted-foreground">
+                  Set the minimum text similarity required for an answer to be considered correct in Language Study mode.
+                </p>
+                <Slider
+                  id="similarity-threshold"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={[(localSettings.studySettings.languageSimilarityThreshold ?? 0.75)]}
+                  onValueChange={(value) =>
+                    setLocalSettings({
+                      ...localSettings,
+                      studySettings: {
+                        ...localSettings.studySettings,
+                        languageSimilarityThreshold: value[0],
+                      },
+                    })
+                  }
+                  className="py-4"
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

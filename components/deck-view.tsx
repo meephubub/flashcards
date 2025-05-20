@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { ArrowLeft, Play, Plus, Edit, Trophy } from "lucide-react"
+import { ArrowLeft, Play, Plus, Edit, Trophy, BookText } from "lucide-react"
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { useDecks } from "@/context/deck-context"
@@ -121,6 +121,12 @@ export function DeckView({ deckId }: DeckViewProps) {
               <Link href={`/deck/${deckId}/edit`}>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Deck
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href={`/deck/${deckId}/language-study`}>
+                <BookText className="h-4 w-4 mr-2" />
+                Language Study
               </Link>
             </Button>
           </div>
