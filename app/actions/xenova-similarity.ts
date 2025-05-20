@@ -1,14 +1,20 @@
-import { pipeline } from '@xenova/transformers';
-let extractor: ((input: string | string[], options?: any) => Promise<any>) | null = null;
+import { pipeline } from "@xenova/transformers";
+let extractor:
+  | ((input: string | string[], options?: any) => Promise<any>)
+  | null = null;
 
 /**
  * Get or initialize the feature extractor pipeline.
  */
 export async function getFeatureExtractor() {
   if (!extractor) {
-    console.log('[xenova-similarity] Initializing feature extractor...');
-    extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    console.log('[xenova-similarity] Feature extractor initialized:', typeof extractor);
+    console.log("[xenova-similarity] Initializing feature extractor...");
+    extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+
+    console.log(
+      "[xenova-similarity] Feature extractor initialized:",
+      typeof extractor,
+    );
   }
   return extractor;
 }
@@ -18,18 +24,27 @@ export async function getFeatureExtractor() {
  * @param sentence - The input sentence to encode.
  * @returns A Float32Array representing the sentence embedding.
  */
-export async function getSentenceEmbedding(sentence: string): Promise<Float32Array> {
-  if (typeof sentence !== 'string' || !sentence.trim()) {
-    throw new Error('[xenova-similarity] Invalid input: sentence must be a non-empty string');
+export async function getSentenceEmbedding(
+  sentence: string,
+): Promise<Float32Array> {
+  if (typeof sentence !== "string" || !sentence.trim()) {
+    throw new Error(
+      "[xenova-similarity] Invalid input: sentence must be a non-empty string",
+    );
   }
   const extractor = await getFeatureExtractor();
-  if (!extractor || typeof extractor !== 'function') {
-    throw new Error('[xenova-similarity] Extractor is not initialized or not a function');
+  if (!extractor || typeof extractor !== "function") {
+    throw new Error(
+      "[xenova-similarity] Extractor is not initialized or not a function",
+    );
   }
   // Always pass an array of sentences, as per HuggingFace docs
-  const output = await extractor([sentence], { pooling: 'mean', normalize: true });
+  const output = await extractor([sentence], {
+    pooling: "mean",
+    normalize: true,
+  });
   if (!output || !output.data) {
-    throw new Error('[xenova-similarity] Output or output.data is undefined');
+    throw new Error("[xenova-similarity] Output or output.data is undefined");
   }
   // output.data is a Float32Array of shape [1, 384] for a single sentence
   // Return the first row only
