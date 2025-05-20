@@ -533,10 +533,10 @@ export async function importCardsFromMarkdown(parsedDeck: any): Promise<Deck | u
 }
 
 // Generate AI flashcards
-export async function generateAIFlashcards(topic: string, numberOfCards: number, deckId?: number): Promise<any> {
+export async function generateAIFlashcards(topic: string, numberOfCards: number, deckId?: number, noteContent?: string): Promise<any> {
   try {
     // Generate flashcards using Groq
-    const result = await generateFlashcards(topic, numberOfCards)
+    const result = await generateFlashcards(topic, numberOfCards, noteContent)
 
     if (deckId) {
       // Add cards to existing deck

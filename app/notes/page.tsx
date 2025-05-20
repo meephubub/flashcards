@@ -13,6 +13,7 @@ import { NotesSidebar } from "@/components/NotesSidebar"
 import { CategoryCombobox } from "@/components/ui/CategoryCombobox"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
 import {
   SparklesIcon,
   PlusCircleIcon,
@@ -25,7 +26,8 @@ import {
   Trash2Icon,
   SearchIcon,
   XIcon,
-  Menu
+  Menu,
+  FlaskConical
 } from "lucide-react"
 import {
   Dialog,
@@ -549,6 +551,8 @@ export default function NotesPage() {
   const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false)
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
+  const [isFlashcardsDialogOpen, setIsFlashcardsDialogOpen] = useState(false)
+  const [noteForFlashcards, setNoteForFlashcards] = useState<Note | null>(null)
 
   const notesContainerRef = useRef<HTMLDivElement>(null)
   const activeNoteRef = useRef<HTMLDivElement>(null)
@@ -645,6 +649,7 @@ export default function NotesPage() {
       if (error) {
         console.error("Error updating note:", error)
         setErrorMessage(`Error updating note: ${error.message}`)
+        throw error
       } else {
         // Show brief success message
         setErrorMessage("Note updated successfully")
@@ -1365,23 +1370,36 @@ export default function NotesPage() {
               >
                 <div className="flex justify-between items-start mb-4 md:mb-6 pb-3 md:pb-4 border-b border-neutral-700/50">
                   <h3 className="text-2xl md:text-4xl font-bold text-neutral-50 mr-2">{note.title}</h3>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                  <div className="flex gap-x-2">
+                    <div className="text-xs text-neutral-500">Actions:</div>
+                    <button
                       onClick={() => startEditingNote(note)}
-                      className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+                      className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
+                      aria-label="Edit note"
                     >
-                      <PencilIcon className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteNote(note.id)}
-                      className="text-neutral-400 hover:text-red-400 hover:bg-red-900/20"
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        setNoteToDelete(note)
+                        setIsDeleteDialogOpen(true)
+                      }}
+                      className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
+                      aria-label="Delete note"
                     >
-                      <Trash2Icon className="h-4 w-4" />
-                    </Button>
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Set the current note for flashcard generation
+                        setNoteForFlashcards(note);
+                        setIsFlashcardsDialogOpen(true)
+                      }}
+                      className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
+                      aria-label="Create flashcards from note"
+                    >
+                      Create Flashcards
+                    </button>
                   </div>
                 </div>
                 <div className="prose-custom max-w-none text-sm md:text-base">
@@ -1964,6 +1982,17 @@ export default function NotesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Generate Flashcards Dialog */}
+      <GenerateFlashcardsDialog 
+        open={isFlashcardsDialogOpen}
+        onOpenChange={(open) => {
+          setIsFlashcardsDialogOpen(open);
+          if (!open) setNoteForFlashcards(null);
+        }}
+        noteContent={noteForFlashcards?.content}
+        noteTitle={noteForFlashcards?.title}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog

@@ -14,9 +14,11 @@ import { Slider } from "@/components/ui/slider"
 interface GenerateFlashcardsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  noteContent?: string
+  noteTitle?: string
 }
 
-export function GenerateFlashcardsDialog({ open, onOpenChange }: GenerateFlashcardsDialogProps) {
+export function GenerateFlashcardsDialog({ open, onOpenChange, noteContent, noteTitle }: GenerateFlashcardsDialogProps) {
   const [topic, setTopic] = useState("")
   const [numberOfCards, setNumberOfCards] = useState(5)
   const [selectedDeckId, setSelectedDeckId] = useState<string>("new")
@@ -27,11 +29,11 @@ export function GenerateFlashcardsDialog({ open, onOpenChange }: GenerateFlashca
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
-      setTopic("")
+      setTopic(noteTitle || "")
       setNumberOfCards(5)
       setSelectedDeckId("new")
     }
-  }, [open])
+  }, [open, noteTitle])
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -55,6 +57,7 @@ export function GenerateFlashcardsDialog({ open, onOpenChange }: GenerateFlashca
           topic: topic.trim(),
           numberOfCards,
           deckId: selectedDeckId !== "new" ? Number.parseInt(selectedDeckId) : undefined,
+          noteContent: noteContent, // Pass note content if available
         }),
       })
 
@@ -89,12 +92,12 @@ export function GenerateFlashcardsDialog({ open, onOpenChange }: GenerateFlashca
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Generate AI Flashcards</DialogTitle>
+          <DialogTitle>{noteContent ? "Generate Flashcards from Note" : "Generate AI Flashcards"}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="topic">Topic</Label>
+            <Label htmlFor="topic">{noteContent ? "Note Title" : "Topic"}</Label>
             <Input
               id="topic"
               placeholder="e.g., Quantum Physics, French Revolution, JavaScript Promises"
@@ -102,7 +105,11 @@ export function GenerateFlashcardsDialog({ open, onOpenChange }: GenerateFlashca
               onChange={(e) => setTopic(e.target.value)}
               disabled={isGenerating}
             />
-            <p className="text-xs text-muted-foreground">Enter a specific topic to generate flashcards about</p>
+            <p className="text-xs text-muted-foreground">
+              {noteContent 
+                ? "This will be the title of your flashcard deck" 
+                : "Enter a specific topic to generate flashcards about"}
+            </p>
           </div>
 
           <div className="grid gap-2">
