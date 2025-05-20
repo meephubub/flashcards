@@ -3,13 +3,13 @@ import { generateAIFlashcards } from "@/lib/data"
 
 export async function POST(request: Request) {
   try {
-    const { topic, numberOfCards, deckId } = await request.json()
+    const { topic, numberOfCards, deckId, noteContent } = await request.json()
 
     if (!topic) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 })
     }
 
-    const result = await generateAIFlashcards(topic, numberOfCards || 5, deckId)
+    const result = await generateAIFlashcards(topic, numberOfCards || 5, deckId, noteContent)
 
     return NextResponse.json(result)
   } catch (error: any) {

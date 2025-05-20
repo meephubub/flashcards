@@ -42,15 +42,33 @@ export interface MCQGenerationResult {
 export async function generateFlashcards(
   topic: string,
   numberOfCards = 5,
+  noteContent?: string
 ): Promise<GenerationResult> {
   // Create a simpler, more direct prompt that's less likely to cause JSON parsing issues
-  const prompt = `Generate ${numberOfCards} educational flashcards on the topic: "${topic}".
+  let prompt = "";
+
+  if (noteContent) {
+    // If we have note content, use it to generate more relevant flashcards
+    prompt = `Generate ${numberOfCards} educational flashcards based on the following note about "${topic}":
+
+${noteContent}
+
+Each flashcard should include:
+
+A clear, concise question on the front that tests understanding of a specific concept from the note.
+
+A comprehensive, informative answer on the back that accurately reflects information from the note.`;
+  } else {
+    // Otherwise, use the topic only
+    prompt = `Generate ${numberOfCards} educational flashcards on the topic: "${topic}".
 Each flashcard should include:
 
 A clear, concise question on the front.
 
-A comprehensive, informative answer on the back.
+A comprehensive, informative answer on the back.`;
+  }
 
+  prompt += `
 Format the response as a valid JSON object with a "cards" array.
 Each item in the array should be an object with "front" and "back" string properties.
 
@@ -70,24 +88,24 @@ Example output:
 
   try {
     // First attempt to generate flashcards
-    const response = await makeGroqRequest(prompt);
+    const responseText = await makeGroqRequest(prompt);
 
     // Try to parse the JSON response
     let parsedContent;
     try {
-      parsedContent = JSON.parse(response);
+      parsedContent = JSON.parse(responseText);
       // If we successfully parsed JSON, process it
       return processFlashcardResponse(parsedContent, topic);
     } catch (error) {
       console.log(
         "Failed to parse JSON response, attempting to fix format:",
-        response,
+        responseText,
       );
 
       // If parsing failed, send a follow-up request to fix the format
       const fixPrompt = `The following response needs to be formatted as valid JSON with a "cards" array containing objects with "front" and "back" properties. Please convert this to proper JSON format:
 
-${response}
+${responseText}
 
 Return ONLY valid JSON in this format:
 {
@@ -111,11 +129,11 @@ Return ONLY valid JSON in this format:
         } catch (secondError) {
           console.error("Failed to parse fixed JSON response:", fixedResponse);
           // If still failing, extract content manually
-          return extractCardsManually(response, topic);
+          return extractCardsManually(responseText, topic);
         }
       } catch (retryError) {
         console.error("Error in retry request:", retryError);
-        return extractCardsManually(response, topic);
+        return extractCardsManually(responseText, topic);
       }
     }
   } catch (error) {
@@ -479,7 +497,20 @@ Example output:
     let parsedContent;
     try {
       parsedContent = JSON.parse(response);
-      if (parsedContent && Array.isArray(parsedContent.mcqs)) {
+    } catch (jsonErr) {
+      // Try to extract JSON substring
+      const match = response.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsedContent = JSON.parse(match[0]);
+        } catch (extractErr) {
+          parsedContent = null;
+        }
+      } else {
+        parsedContent = null;
+      }
+    }
+    if (parsedContent && Array.isArray(parsedContent.mcqs)) {
         // Basic validation for each MCQ structure
         const validMcqs = parsedContent.mcqs.filter(
           (mcq: any) =>
@@ -522,7 +553,22 @@ Example output:
           false,
           "You are a JSON formatting expert. Convert the provided text into the specified JSON structure for multiple-choice questions. Ensure each MCQ is complete and valid.",
         );
-        const fixedParsedContent = JSON.parse(fixedResponse);
+        let fixedParsedContent;
+        try {
+          fixedParsedContent = JSON.parse(fixedResponse);
+        } catch (jsonErr) {
+          // Try to extract JSON substring
+          const match = fixedResponse.match(/\{[\s\S]*\}/);
+          if (match) {
+            try {
+              fixedParsedContent = JSON.parse(match[0]);
+            } catch (extractErr) {
+              fixedParsedContent = null;
+            }
+          } else {
+            fixedParsedContent = null;
+          }
+        }
         if (fixedParsedContent && Array.isArray(fixedParsedContent.mcqs)) {
           // Re-run validation on fixed content
           const validFixedMcqs = fixedParsedContent.mcqs.filter(
@@ -555,14 +601,7 @@ Example output:
         };
       }
     }
-  } catch (error) {
-    console.error("Error generating MCQs with Groq:", error);
-    return {
-      mcqs: [],
-      sourceNoteTitle: noteTitle,
-    };
   }
-}
 
 // Helper function to make a request to the Groq API
 export async function makeGroqRequest(
@@ -702,14 +741,11 @@ function processFlashcardResponse(
 }
 
 // Helper function to manually extract cards from a non-JSON response
-function extractCardsManually(
-  content: string,
-  topic: string,
-): GenerationResult {
+function extractCardsManually(responseText: string, topic: string): GenerationResult {
   const cards: GeneratedCard[] = [];
 
   // Try to extract front/back pairs using regex patterns
-  const frontBackPairs = content.match(
+  const frontBackPairs = responseText.match(
     /front["\s:]+([^"]+)["\s,]+back["\s:]+([^"]+)/gi,
   );
 
@@ -729,7 +765,7 @@ function extractCardsManually(
 
   // If we couldn't extract cards using regex, try to find question-answer patterns
   if (cards.length === 0) {
-    const lines = content.split("\n").filter((line) => line.trim().length > 0);
+    const lines = responseText.split("\n").filter((line: string) => line.trim().length > 0);
 
     for (let i = 0; i < lines.length - 1; i++) {
       const line = lines[i].trim();
