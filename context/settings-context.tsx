@@ -21,6 +21,7 @@ const defaultSettings: AppSettings = {
     enableSpacedRepetition: false,
     autoFlip: false,
     autoFlipDelay: 5,
+    languageSimilarityThreshold: 0.75, // Default value
   },
 }
 

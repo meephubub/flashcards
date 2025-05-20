@@ -6,6 +6,7 @@ export interface StudySettings {
   enableSpacedRepetition: boolean
   autoFlip: boolean
   autoFlipDelay: number // in seconds
+  languageSimilarityThreshold: number // for language study mode, 0.0 to 1.0
 }
 
 export interface AppSettings {
@@ -26,6 +27,7 @@ const defaultSettings: AppSettings = {
     enableSpacedRepetition: false,
     autoFlip: false,
     autoFlipDelay: 5,
+    languageSimilarityThreshold: 0.75,
   },
 }
 
