@@ -13,6 +13,7 @@ export interface AppSettings {
   theme: "light" | "dark" | "system"
   enableAnimations: boolean
   enableSounds: boolean
+  enableTTS: boolean
   studySettings: StudySettings
 }
 
@@ -21,6 +22,7 @@ const defaultSettings: AppSettings = {
   theme: "system",
   enableAnimations: true,
   enableSounds: false,
+  enableTTS: true,
   studySettings: {
     cardsPerSession: 20,
     showProgressBar: true,
@@ -62,6 +64,7 @@ export async function getSettings(): Promise<AppSettings> {
           theme: newSettings.theme,
           enableAnimations: newSettings.enable_animations,
           enableSounds: newSettings.enable_sounds,
+          enableTTS: newSettings.enable_tts,
           studySettings: newSettings.study_settings
         }
       }
@@ -74,6 +77,7 @@ export async function getSettings(): Promise<AppSettings> {
       theme: data.theme,
       enableAnimations: data.enable_animations,
       enableSounds: data.enable_sounds,
+      enableTTS: data.enable_tts ?? defaultSettings.enableTTS,
       studySettings: data.study_settings
     }
   } catch (error) {
@@ -91,6 +95,7 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
         theme: settings.theme,
         enable_animations: settings.enableAnimations,
         enable_sounds: settings.enableSounds,
+        enable_tts: settings.enableTTS,
         study_settings: settings.studySettings
       }])
       .select()
@@ -114,6 +119,7 @@ export async function resetSettings(): Promise<AppSettings> {
         theme: defaultSettings.theme,
         enable_animations: defaultSettings.enableAnimations,
         enable_sounds: defaultSettings.enableSounds,
+        enable_tts: defaultSettings.enableTTS,
         study_settings: defaultSettings.studySettings
       }])
       .select()
