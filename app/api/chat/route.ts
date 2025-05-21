@@ -21,37 +21,12 @@ export async function POST(req: Request) {
 4. Help identify knowledge gaps
 5. Provide examples and analogies when helpful
 
-Keep responses concise but comprehensive, using markdown formatting for clarity. Focus on helping the user understand and retain the information effectively.`;
+Keep responses concise but comprehensive Focus on helping the user understand and retain the information effectively.`;
 
     // Optimize the prompt for better processing
     const optimizedPrompt = `
-I need you to analyze this note content and provide educational insights or answer the question about it.
-
+answer the users question concisely.
 ${prompt}
-
-Please structure your response to maximize learning and understanding:
-
-1. Answer the question
-   - Provide a clear, direct response to the query
-   - Break down complex concepts into digestible parts
-   - Use examples or analogies where helpful
-
-2. Key Points
-   - Highlight the most important concepts
-   - Connect ideas to broader context
-   - Note any potential misconceptions
-
-3. Learning Tips
-   - Suggest memory techniques or study strategies
-   - Recommend related topics to explore
-   - Provide practice questions if relevant
-
-Use markdown formatting for improved readability:
-- Use headings (## or ###) for main sections
-- Use bullet points or numbered lists for key points
-- Use emphasis (*italic* or **bold**) for important terms
-- Use code blocks for technical content
-- Use blockquotes for important callouts
 
 Keep your response focused, educational, and directly relevant to the note content or question.`;
 

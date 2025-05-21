@@ -14,6 +14,7 @@ import { CategoryCombobox } from "@/components/ui/CategoryCombobox"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
+import { AIAssistantSidebar } from "@/components/ai-assistant-sidebar"
 import {
   SparklesIcon,
   PlusCircleIcon,
@@ -548,6 +549,7 @@ export default function NotesPage() {
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({})
   const [showMcqResults, setShowMcqResults] = useState<boolean>(false)
   const [isEditNoteDialogOpen, setIsEditNoteDialogOpen] = useState<boolean>(false)
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState<boolean>(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false)
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
@@ -761,6 +763,13 @@ export default function NotesPage() {
         } else if (e.key === "e") {
           e.preventDefault()
 
+          // Ctrl+E without any additional modifiers toggles the AI Assistant
+          if (!e.shiftKey && !e.altKey && !e.metaKey) {
+            // Toggle AI Assistant
+            setIsAiAssistantOpen(prev => !prev)
+            return
+          }
+          
           // If already in edit mode, save the changes
           if (inlineEditingNoteId) {
             handleSaveInlineEdit()
@@ -1260,8 +1269,55 @@ export default function NotesPage() {
   }
 
   const startEditingNote = (note: Note) => {
-    setEditingNote({ ...note })
-    setIsEditNoteDialogOpen(true)
+    setEditingNote(note);
+    setIsEditNoteDialogOpen(true);
+  }
+
+  // Handle AI note edit - apply edits from the AI Assistant
+  const handleAiNoteEdit = (newContent: string) => {
+    if (focusedNoteId) {
+      const noteToEdit = allNotes.find(note => note.id === focusedNoteId);
+      if (noteToEdit) {
+        setIsLoading(true);
+        setErrorMessage(null);
+        
+        supabase
+          .from("notes")
+          .update({ content: newContent })
+          .eq("id", focusedNoteId)
+          .then(({ error }) => {
+            if (error) {
+              console.error("Error updating note:", error);
+              setErrorMessage(`Failed to update note: ${error.message}`);
+              return;
+            }
+            
+            // Update the notes in state
+            setAllNotes(prevNotes =>
+              prevNotes.map(note =>
+                note.id === focusedNoteId
+                  ? { ...note, content: newContent }
+                  : note
+              )
+            );
+
+            setDisplayedNotes(prevNotes =>
+              prevNotes.map(note =>
+                note.id === focusedNoteId
+                  ? { ...note, content: newContent }
+                  : note
+              )
+            );
+            
+            setIsLoading(false);
+          })
+          .catch((error: Error) => {
+            console.error("Error updating note:", error);
+            setErrorMessage(`Failed to update note: ${error.message}`);
+            setIsLoading(false);
+          });
+      }
+    }
   }
 
   return (
@@ -2040,6 +2096,14 @@ export default function NotesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AI Assistant Sidebar */}
+      <AIAssistantSidebar
+        isOpen={isAiAssistantOpen}
+        onClose={() => setIsAiAssistantOpen(false)}
+        currentNote={allNotes.find(note => note.id === focusedNoteId) || null}
+        onApplyEdit={handleAiNoteEdit}
+      />
     </div>
   )
 }
