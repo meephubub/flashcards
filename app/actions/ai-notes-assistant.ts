@@ -77,6 +77,34 @@ export interface AIEditOperation {
   text?: string;         // New text for 'insert' or 'replace'
 }
 
+// Helper function to sanitize AI's JSON response
+function sanitizeAiJsonResponse(jsonString: string): string {
+  if (typeof jsonString !== 'string') return jsonString; // Should not happen if called correctly
+
+  // Known issue: "operation": "delete, "startIndex" should be "operation": "delete", "startIndex"
+  // This also handles "insert, " and "replace, " variants.
+  // Regex breakdown:
+  // ("operation":\s*") - Captures the prefix like "operation": "
+  // (delete|insert|replace) - Captures the operation type
+  // (,) - Captures the erroneous comma
+  // (\s*"startIndex") - Captures the part like "startIndex"
+  // The replacement puts a quote after the operation type and removes the erroneous comma.
+  let sanitizedString = jsonString.replace(
+    /("operation":\s*")(delete|insert|replace)(,)(\s*"startIndex")/g,
+    '$1$2"$4' // Corrected: $1 -> "operation": ", $2 -> delete, " (closing quote), $4 -> "startIndex"
+  );
+
+  // Example: If AI sometimes wraps JSON in ```json ... ``` or similar
+  // if (sanitizedString.startsWith("```json") && sanitizedString.endsWith("```")) {
+  //   sanitizedString = sanitizedString.substring(7, sanitizedString.length - 3).trim();
+  // } else if (sanitizedString.startsWith("```") && sanitizedString.endsWith("```")) {
+  //   sanitizedString = sanitizedString.substring(3, sanitizedString.length - 3).trim();
+  // }
+
+  // Add more sanitization rules here if other common AI malformations are found.
+  return sanitizedString;
+}
+
 export async function generateNoteEdits(
   noteContent: string,
   noteTitle: string | null,
@@ -165,20 +193,32 @@ Return ONLY the JSON array of edit operations as described in the system prompt.
       throw new Error("AI did not return any content for edits.");
     }
 
+    // Sanitize the response content before attempting to parse
+    const sanitizedContent = sanitizeAiJsonResponse(aiResponseContent);
+    if (sanitizedContent !== aiResponseContent) {
+        console.log("[GROQ DEBUG] Original AI response content for edits:", aiResponseContent);
+        console.log("[GROQ DEBUG] Sanitized AI response content for edits:", sanitizedContent);
+    }
+
     try {
-      // Attempt to parse the content as JSON. The AI should return a clean JSON string.
-      const operations: AIEditOperation[] = JSON.parse(aiResponseContent);
+      // Attempt to parse the SANITIZED content as JSON.
+      const operations: AIEditOperation[] = JSON.parse(sanitizedContent);
       console.log("[GROQ DEBUG] Parsed AI operations:", JSON.stringify(operations));
       // Basic validation of the parsed structure (can be expanded)
       if (!Array.isArray(operations) || operations.some(op => !op.operation || typeof op.startIndex !== 'number')) {
-        console.error("[GROQ DEBUG] Parsed operations do not match expected format:", operations);
-        throw new Error("AI response for edits was not in the expected JSON array format or lacked required fields.");
+        console.error("[GROQ DEBUG] Parsed operations (from sanitized content) do not match expected format. Sanitized content was:", sanitizedContent.substring(0,500));
+        throw new Error(`AI response for edits, after sanitization, was not in the expected JSON array format or lacked required fields. Original content prefix: ${aiResponseContent ? aiResponseContent.substring(0,200) : "N/A"}...`);
       }
       return operations;
     } catch (parseError) {
-      console.error("[GROQ DEBUG] Failed to parse AI response for edits as JSON. Content was:", aiResponseContent);
+      console.error("[GROQ DEBUG] Failed to parse AI response for edits as JSON.");
+      console.error("[GROQ DEBUG] Original Content was:", aiResponseContent);
+      if (sanitizedContent !== aiResponseContent && aiResponseContent) {
+        console.error("[GROQ DEBUG] Sanitized Content (which still failed to parse) was:", sanitizedContent);
+      }
       console.error("[GROQ DEBUG] Parse error:", parseError);
-      throw new Error(`AI response for edits was not valid JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}. Response: ${aiResponseContent.substring(0, 200)}...`);
+      // The error message to the client should refer to the original, as that's what the AI sent.
+      throw new Error(`AI response for edits was not valid JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}. Original Response: ${aiResponseContent ? aiResponseContent.substring(0, 200) : "N/A"}...`);
     }
   } catch (error) {
     console.error("[GROQ DEBUG] Error in generateNoteEdits:", error);
