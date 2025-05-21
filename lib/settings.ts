@@ -60,11 +60,20 @@ export async function getSettings(): Promise<AppSettings> {
           return defaultSettings
         }
 
+        // Get TTS setting from local storage if available
+        let ttsEnabled = defaultSettings.enableTTS;
+        if (typeof window !== 'undefined') {
+          const storedTTS = localStorage.getItem('flashcards_enable_tts');
+          if (storedTTS !== null) {
+            ttsEnabled = storedTTS === 'true';
+          }
+        }
+        
         return {
           theme: newSettings.theme,
           enableAnimations: newSettings.enable_animations,
           enableSounds: newSettings.enable_sounds,
-          enableTTS: newSettings.enable_tts,
+          enableTTS: ttsEnabled,
           studySettings: newSettings.study_settings
         }
       }
@@ -73,11 +82,20 @@ export async function getSettings(): Promise<AppSettings> {
       return defaultSettings
     }
 
+    // Get TTS setting from local storage if available
+    let ttsEnabled = defaultSettings.enableTTS;
+    if (typeof window !== 'undefined') {
+      const storedTTS = localStorage.getItem('flashcards_enable_tts');
+      if (storedTTS !== null) {
+        ttsEnabled = storedTTS === 'true';
+      }
+    }
+    
     return {
       theme: data.theme,
       enableAnimations: data.enable_animations,
       enableSounds: data.enable_sounds,
-      enableTTS: data.enable_tts ?? defaultSettings.enableTTS,
+      enableTTS: ttsEnabled,
       studySettings: data.study_settings
     }
   } catch (error) {
@@ -89,13 +107,18 @@ export async function getSettings(): Promise<AppSettings> {
 // Save settings
 export async function saveSettings(settings: AppSettings): Promise<void> {
   try {
+    // Store TTS setting in local storage until database schema is updated
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('flashcards_enable_tts', settings.enableTTS ? 'true' : 'false');
+    }
+    
     const { error } = await supabase
       .from("settings")
       .upsert([{
         theme: settings.theme,
         enable_animations: settings.enableAnimations,
         enable_sounds: settings.enableSounds,
-        enable_tts: settings.enableTTS,
+        // Don't save enable_tts to database until schema is updated
         study_settings: settings.studySettings
       }])
       .select()
@@ -113,13 +136,18 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
 // Reset settings to default
 export async function resetSettings(): Promise<AppSettings> {
   try {
+    // Store TTS setting in local storage until database schema is updated
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('flashcards_enable_tts', defaultSettings.enableTTS ? 'true' : 'false');
+    }
+    
     const { error } = await supabase
       .from("settings")
       .upsert([{
         theme: defaultSettings.theme,
         enable_animations: defaultSettings.enableAnimations,
         enable_sounds: defaultSettings.enableSounds,
-        enable_tts: defaultSettings.enableTTS,
+        // Don't save enable_tts to database until schema is updated
         study_settings: defaultSettings.studySettings
       }])
       .select()
