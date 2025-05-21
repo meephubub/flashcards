@@ -29,6 +29,10 @@ interface Flashcard {
   // Add other card properties if necessary
 }
 
+interface StudyCard extends Flashcard {
+  incorrectAttempts: number;
+}
+
 // Helper function to shuffle an array (Fisher-Yates)
 function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array];
@@ -47,8 +51,8 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
   const SIMILARITY_THRESHOLD = settings.studySettings.languageSimilarityThreshold ?? 0.75;
   const deck = getDeck(deckId);
 
-  const [cards, setCards] = useState<Flashcard[]>([]);
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [cards, setCards] = useState<StudyCard[]>([]); // Holds all unique cards for the session with their state
+  const [currentCardId, setCurrentCardId] = useState<string | number | null>(null);
   const [userAnswer, setUserAnswer] = useState<string | null>(null);
   const [similarityScore, setSimilarityScore] = useState<number | null>(null);
   const [isAnswerChecked, setIsAnswerChecked] = useState(false);
@@ -58,6 +62,9 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [questionsAnsweredThisSession, setQuestionsAnsweredThisSession] = useState(0);
+
+  const currentCard = cards.find(card => card.id === currentCardId);
 
   // Memoize resetCardState
   const resetCardState = useCallback(() => {
@@ -67,30 +74,100 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
     setIsSubmitting(false);
   }, []);
 
+  const selectAndSetNextCard = useCallback((currentCardsList: StudyCard[], previousCardId: string | number | null) => {
+    if (currentCardsList.length === 0) {
+      setSessionComplete(true);
+      return;
+    }
+
+    const eligibleCards = currentCardsList.filter(card => {
+      if (currentCardsList.length > 1 && card.id === previousCardId) {
+        return false;
+      }
+      return true;
+    });
+
+    const selectionPool: StudyCard[] = [];
+    const cardsToUseForPool = eligibleCards.length > 0 ? eligibleCards : currentCardsList;
+
+    cardsToUseForPool.forEach(card => {
+      const weight = (card.incorrectAttempts || 0) + 1;
+      for (let i = 0; i < weight; i++) {
+        selectionPool.push(card);
+      }
+    });
+
+    if (selectionPool.length === 0) {
+      if (currentCardsList.length > 0) { // Fallback if filtering made pool empty
+         const fallbackRandomIndex = Math.floor(Math.random() * currentCardsList.length);
+         setCurrentCardId(currentCardsList[fallbackRandomIndex].id);
+      } else {
+        setSessionComplete(true);
+      }
+      return;
+    }
+
+    const randomIndex = Math.floor(Math.random() * selectionPool.length);
+    const nextCard = selectionPool[randomIndex];
+    setCurrentCardId(nextCard.id);
+
+    const totalQuestionsTarget = settings.studySettings.cardsPerSession || currentCardsList.length;
+    if (totalQuestionsTarget > 0) {
+        // questionsAnsweredThisSession is 0-indexed count of ALREADY answered questions.
+        // So for the NEXT card, progress is (questionsAnsweredThisSession + 1)
+        setStudyProgress(((questionsAnsweredThisSession + 1) / totalQuestionsTarget) * 100);
+    } else {
+        setStudyProgress(0);
+    }
+  }, [setSessionComplete, setCurrentCardId, settings.studySettings.cardsPerSession, questionsAnsweredThisSession, setStudyProgress]);
+
   // Memoize handleNextCard
   const handleNextCard = useCallback(() => {
     resetCardState();
-    if (currentCardIndex < cards.length - 1) {
-      setCurrentCardIndex(prevIndex => prevIndex + 1);
-    } else {
+    const nextQuestionNumber = questionsAnsweredThisSession + 1;
+    setQuestionsAnsweredThisSession(nextQuestionNumber);
+
+    const totalQuestionsTarget = settings.studySettings.cardsPerSession || cards.length;
+
+    if (nextQuestionNumber >= totalQuestionsTarget && totalQuestionsTarget > 0) {
       setSessionComplete(true);
+    } else if (cards.length > 0) {
+      selectAndSetNextCard(cards, currentCard?.id ?? null);
+    } else {
+      setSessionComplete(true); // No cards to select from
     }
-  }, [currentCardIndex, cards, resetCardState]);
+  }, [resetCardState, questionsAnsweredThisSession, settings.studySettings.cardsPerSession, cards, currentCard, selectAndSetNextCard, setSessionComplete]);
 
   useEffect(() => {
     if (deck) {
-      const allCards = deck.cards as Flashcard[];
-      let cardsForSession = allCards.slice(0, settings.studySettings.cardsPerSession || allCards.length);
-      cardsForSession = shuffleArray(cardsForSession); // Shuffle the selected cards
-      setCards(cardsForSession);
-      if (cardsForSession.length > 0) {
-        setStudyProgress(0);
+      const allCardsFromDeck = deck.cards as Flashcard[];
+      const sessionSize = settings.studySettings.cardsPerSession || allCardsFromDeck.length;
+      // Take a slice, no need to shuffle here as selectAndSetNextCard handles weighted random picking
+      let initialSessionCardsRaw = allCardsFromDeck.slice(0, sessionSize);
+
+      const initialStudyCards: StudyCard[] = initialSessionCardsRaw.map(card => ({
+        ...card,
+        incorrectAttempts: 0,
+      }));
+      setCards(initialStudyCards);
+      
+      setQuestionsAnsweredThisSession(0);
+      setCorrectAnswers(0);
+      setCurrentStreak(0);
+      resetCardState();
+
+      if (initialStudyCards.length > 0) {
+        selectAndSetNextCard(initialStudyCards, null);
         setSessionComplete(false);
+        // Progress is set by selectAndSetNextCard
+      } else {
+        setSessionComplete(true);
+        setStudyProgress(0);
       }
     }
-  }, [deck, settings.studySettings.cardsPerSession]);
+  }, [deck, settings.studySettings.cardsPerSession, selectAndSetNextCard, resetCardState]);
 
-  const currentCard = cards[currentCardIndex];
+
 
   const handleAnswerSubmit = useCallback(async (submittedAnswer: string) => {
     if (!currentCard) return;
@@ -104,25 +181,40 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
       ]);
       const score = cosineSimilarity(answerEmbedding, correctAnswerEmbedding);
       setSimilarityScore(score);
+
       const isCorrect = score >= SIMILARITY_THRESHOLD;
+      setIsAnswerChecked(true);
+
+      setCards(prevCards =>
+        prevCards.map(card =>
+          card.id === currentCard.id
+            ? { ...card, incorrectAttempts: isCorrect ? card.incorrectAttempts : (card.incorrectAttempts || 0) + 1 }
+            : card
+        )
+      );
+
       if (isCorrect) {
         setCorrectAnswers(prev => prev + 1);
-        const newStreak = currentStreak + 1;
-        setCurrentStreak(newStreak);
-        if (newStreak > 0 && (newStreak % 3 === 0 || newStreak % 5 === 0)) { // Confetti on streaks of 3 or 5
+        const newCalculatedStreak = currentStreak + 1;
+        setCurrentStreak(newCalculatedStreak);
+        if (newCalculatedStreak > 0 && (newCalculatedStreak % 3 === 0 || newCalculatedStreak % 5 === 0)) {
           setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 4000); // Confetti for 4 seconds
+          setTimeout(() => setShowConfetti(false), 4000);
         }
+        toast({
+          title: "Correct!",
+          description: `Similarity: ${(score * 100).toFixed(1)}%`,
+          variant: "default", // Changed from "success"
+        });
       } else {
         setCurrentStreak(0); // Reset streak on incorrect answer
+        toast({
+          title: "Try again!",
+          description: `Similarity: ${(score * 100).toFixed(1)}%. Correct answer: ${currentCard.back}`,
+          variant: "destructive",
+        });
       }
-      toast({
-        title: isCorrect ? "Correct!" : "Incorrect",
-        description: `Similarity: ${(score * 100).toFixed(1)}%. Your answer: "${submittedAnswer}". Correct: "${currentCard.back}"`,        
-        variant: isCorrect ? "default" : "destructive",
-        duration: isCorrect ? 3000 : 5000, // Shorter for correct, longer for incorrect
-        className: "whitespace-pre-line"
-      });
+      // Study progress is updated by selectAndSetNextCard or when a card is first loaded
     } catch (error) {
       console.error("Error calculating similarity:", error);
       setSimilarityScore(0); // Treat error as incorrect
@@ -140,12 +232,6 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
     }, 500); // Adjust delay as needed, or remove if toast visibility isn't an issue
   }, [currentCard, toast, handleNextCard]);
 
-  useEffect(() => {
-    if (cards.length > 0) {
-      setStudyProgress(((currentCardIndex + (isAnswerChecked ? 1: 0)) / cards.length) * 100);
-    }
-  }, [currentCardIndex, cards.length, isAnswerChecked]);
-
   // useEffect for session completion confetti - MUST BE AT TOP LEVEL
   useEffect(() => {
     if (sessionComplete && cards.length > 0) {
@@ -158,16 +244,32 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
   }, [sessionComplete, correctAnswers, cards.length]);
 
   const restartSession = () => {
-    setCurrentCardIndex(0);
     resetCardState();
     setCorrectAnswers(0);
-    setCurrentStreak(0); // Reset streak on restart
+    setCurrentStreak(0);
     setSessionComplete(false);
+    setQuestionsAnsweredThisSession(0);
+
     if (deck) {
-        const allCards = deck.cards as Flashcard[];
-        let cardsForSession = allCards.slice(0, settings.studySettings.cardsPerSession || allCards.length);
-        cardsForSession = shuffleArray(cardsForSession); // Re-shuffle the cards
-        setCards(cardsForSession);
+      const allCardsFromDeck = deck.cards as Flashcard[];
+      const sessionSize = settings.studySettings.cardsPerSession || allCardsFromDeck.length;
+      let initialSessionCardsRaw = allCardsFromDeck.slice(0, sessionSize);
+
+      const reinitializedStudyCards: StudyCard[] = initialSessionCardsRaw.map(card => ({
+        ...card,
+        incorrectAttempts: 0, // Reset attempts for a new session
+      }));
+      setCards(reinitializedStudyCards);
+
+      if (reinitializedStudyCards.length > 0) {
+        selectAndSetNextCard(reinitializedStudyCards, null); // Select first card for new session
+      } else {
+        setSessionComplete(true); // No cards to study
+        setStudyProgress(0);
+      }
+    } else {
+      setSessionComplete(true); // Should not happen if deck was loaded
+      setStudyProgress(0);
     }
   };
 
@@ -242,7 +344,7 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
           Current Streak: {currentStreak} 🔥
         </div>
         <div className="text-sm text-muted-foreground">
-          Card {currentCardIndex + 1} of {cards.length}
+          Card {questionsAnsweredThisSession + 1} of {settings.studySettings.cardsPerSession || cards.length}
         </div>
       </div>
 
