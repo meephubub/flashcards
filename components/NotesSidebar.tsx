@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { SearchIcon, XIcon } from "lucide-react";
+import { SearchIcon, XIcon, ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface NotesSidebarProps {
   notes: Note[];
@@ -30,6 +31,7 @@ export function NotesSidebar({
   onClearSearch,
   className,
 }: NotesSidebarProps) {
+  const router = useRouter();
   const notesForSelectedCategory =
     selectedCategory === "all"
       ? notes
@@ -46,9 +48,21 @@ export function NotesSidebar({
   return (
     <Card className={cn("h-full overflow-y-auto bg-neutral-900 text-neutral-100 border-r-0 rounded-none", className)}>
       <CardHeader className="sticky top-0 bg-neutral-900 z-10 p-4 border-b border-neutral-800">
-        <div className="flex flex-col space-y-4">
+        <div className="flex items-center justify-between mb-4">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => router.push('/')} 
+            className="text-neutral-400 hover:text-neutral-100 hover:bg-neutral-700/50 h-8 w-8 p-1.5 -ml-2"
+            aria-label="Go back to homepage"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           <CardTitle className="text-lg font-semibold text-neutral-100">Categories</CardTitle>
-          
+          {/* Placeholder for potential right-aligned item if Categories title needs to be centered or if another icon goes here */}
+          <div className="w-8"></div> {/* This helps keep Categories title centered if needed, adjust or remove if layout is different */}
+        </div>
+        <div className="flex flex-col space-y-4">
           {/* Search Bar */}
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
