@@ -37,6 +37,7 @@ export function SettingsContent() {
     theme: settings.theme,
     enableAnimations: settings.enableAnimations,
     enableSounds: settings.enableSounds,
+    enableTTS: settings.enableTTS,
     studySettings: {
       cardsPerSession: settings.studySettings.cardsPerSession,
       showProgressBar: settings.studySettings.showProgressBar,
@@ -187,15 +188,35 @@ export function SettingsContent() {
                 />
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between space-y-1">
                 <div className="space-y-0.5">
-                  <Label htmlFor="sounds">Sound Effects</Label>
-                  <p className="text-sm text-muted-foreground">Enable sound effects for actions like flipping cards</p>
+                  <Label htmlFor="enableSounds">Sound Effects</Label>
+                  <p className="text-muted-foreground text-xs">
+                    Enable or disable sound effects for card interactions
+                  </p>
                 </div>
                 <Switch
-                  id="sounds"
+                  id="enableSounds"
                   checked={localSettings.enableSounds}
-                  onCheckedChange={(checked) => setLocalSettings({ ...localSettings, enableSounds: checked })}
+                  onCheckedChange={(value) =>
+                    setLocalSettings({ ...localSettings, enableSounds: value })
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between space-y-1">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableTTS">Text-to-Speech</Label>
+                  <p className="text-muted-foreground text-xs">
+                    Enable or disable text-to-speech for language cards
+                  </p>
+                </div>
+                <Switch
+                  id="enableTTS"
+                  checked={localSettings.enableTTS}
+                  onCheckedChange={(value) =>
+                    setLocalSettings({ ...localSettings, enableTTS: value })
+                  }
                 />
               </div>
             </CardContent>
