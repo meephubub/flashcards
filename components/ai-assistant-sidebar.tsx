@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react"; // Removed useMemo as it wasn't used directly here yet
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { processNoteQuestion, generateNoteEdits } from "@/app/actions/ai-notes-assistant";
-import { SendIcon, X, PencilLine, HelpCircle, CheckCircle, XCircle } from "lucide-react";
+import { SendIcon, X, PencilLine, HelpCircle, CheckCircle, XCircle, Undo2 } from "lucide-react"; // Added Undo2 icon
 import { Note } from "@/lib/supabase";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AIEditOperation } from "@/app/actions/ai-notes-assistant"; // Assuming it can be imported, if not, redefine below
+
+// If AIEditOperation cannot be imported from actions, define it here:
+import DiffView from "./diff-view"; // Import the new DiffView component
 
 // If AIEditOperation cannot be imported from actions, define it here:
 // export interface AIEditOperation {
@@ -48,6 +51,10 @@ export function AIAssistantSidebar({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [lastAppliedEdit, setLastAppliedEdit] = useState<{
+    originalContent: string;
+    appliedContent: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Focus input when sidebar opens
@@ -69,6 +76,7 @@ export function AIAssistantSidebar({
     setMessages([]);
     setInput("");
     setIsEditMode(false);
+    setLastAppliedEdit(null); // Reset revert state when note changes
   }, [currentNote?.id]);
 
   if (!isOpen) return null;
@@ -134,7 +142,6 @@ export function AIAssistantSidebar({
       role: "assistant",
       content: "",
       type: isEditMode ? "edit" : "question",
-      isLoading: true,
     };
 
     setMessages(prev => [...prev, userMessage, assistantMessage]);
@@ -149,12 +156,6 @@ export function AIAssistantSidebar({
           currentNote.title, 
           input
         );
-        // response = operations; // Keep for type consistency if needed elsewhere, or remove if only operations is used.
-
-        if (!currentNote) { // Should be caught earlier, but as a safeguard
-            throw new Error("Current note became null during edit generation.");
-        }
-
         const newContentPreview = applyAiOperations(currentNote.content, operations);
         
         setMessages(prev => 
@@ -162,12 +163,12 @@ export function AIAssistantSidebar({
             msg.id === assistantMessage.id 
               ? { 
                   ...msg, 
-                  // content: "Here are the suggested edits:", // Or a summary of operations
-                  content: `Suggested ${operations.length} change(s). Preview below.`, // Simple content
+                  role: "assistant" as const,
+                  content: `I've prepared some edits. Review them below:`, 
+                  type: "edit",
                   suggestedOperations: operations,
+                  isEditing: true,
                   editContent: newContentPreview,
-                  isLoading: false,
-                  isEditing: true
                 } 
               : msg
           )
@@ -182,7 +183,7 @@ export function AIAssistantSidebar({
         setMessages(prev => 
           prev.map(msg => 
             msg.id === assistantMessage.id 
-              ? { ...msg, content: questionResponse, isLoading: false } 
+              ? { ...msg, content: questionResponse } 
               : msg
           )
         );
@@ -195,7 +196,7 @@ export function AIAssistantSidebar({
       setMessages(prev => 
         prev.map(msg => 
           msg.id === assistantMessage.id 
-            ? { ...msg, content: `Error: ${errorMessage}`, isLoading: false } 
+            ? { ...msg, content: `Error: ${errorMessage}` } 
             : msg
         )
       );
@@ -211,22 +212,39 @@ export function AIAssistantSidebar({
     }
   }
 
-  function handleApplyEdit(editContent: string) {
-    if (editContent && currentNote) {
-      onApplyEdit(editContent);
-      
-      // Add a system message confirming the edit was applied
+  const handleApplyEdit = (editContentToApply: string) => {
+    if (currentNote) {
+      setLastAppliedEdit({
+        originalContent: currentNote.content, 
+        appliedContent: editContentToApply,
+      });
+      onApplyEdit(editContentToApply); 
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.editContent === editContentToApply && msg.isEditing
+            ? { ...msg, isEditing: false, content: "Edits applied. You can revert this change below." } 
+            : msg
+        )
+      );
+    }
+  };
+
+  const handleRevertLastEdit = () => {
+    if (lastAppliedEdit) {
+      onApplyEdit(lastAppliedEdit.originalContent);
+      const revertedFrom = lastAppliedEdit.appliedContent;
+      setLastAppliedEdit(null); 
       setMessages(prev => [
-        ...prev, 
+        ...prev,
         {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "✅ Note updated successfully!",
-          type: "question"
-        }
+          id: Date.now().toString() + "-revert",
+          role: "assistant" as const,
+          content: "The last applied edit has been reverted.",
+          type: "edit", 
+        },
       ]);
     }
-  }
+  };
 
   const toggleMode = () => {
     setIsEditMode(!isEditMode);
@@ -238,7 +256,9 @@ export function AIAssistantSidebar({
   return (
     <div className="fixed right-0 top-0 z-50 h-screen w-[400px] bg-neutral-900 border-l border-neutral-800 shadow-xl flex flex-col">
       <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-        <h3 className="font-semibold text-neutral-100">AI Assistant</h3>
+        <h3 className="font-semibold text-neutral-100">
+          {isEditMode ? "Edit Assistant" : "Q&A Assistant"}
+        </h3>
         <div className="flex gap-2">
           <Button
             onClick={toggleMode}
@@ -249,7 +269,7 @@ export function AIAssistantSidebar({
             {isEditMode ? <PencilLine size={18} /> : <HelpCircle size={18} />}
             <span className="ml-1">{isEditMode ? 'Edit Mode' : 'Question Mode'}</span>
           </Button>
-          <Button onClick={onClose} variant="ghost" size="sm" className="text-neutral-400 hover:text-neutral-100">
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-neutral-400 hover:text-neutral-100">
             <X size={18} />
           </Button>
         </div>
@@ -284,7 +304,7 @@ export function AIAssistantSidebar({
                     className={`max-w-[300px] p-3 rounded-lg ${
                       message.role === 'user'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-neutral-800 text-neutral-100'
+                        : (message.isEditing ? "bg-neutral-800" : "bg-neutral-700 text-neutral-100")
                     }`}
                   >
                     {message.isLoading ? (
@@ -294,56 +314,55 @@ export function AIAssistantSidebar({
                     ) : message.role === 'assistant' && message.isEditing ? (
                       <div className="space-y-3">
                         <div className="text-sm opacity-80">Suggested Edit Preview:</div>
-                        {message.content && !message.isEditing && <div className="text-xs italic opacity-70 pb-1">{message.content}</div>} {/* Shows 'Suggested N changes' etc. */}
-                        <div className="max-h-[200px] overflow-y-auto text-sm border border-neutral-600 rounded-md p-3 bg-neutral-800 shadow-sm">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.editContent || "No preview available."}</ReactMarkdown>
-                        </div>
-                        <div className="flex justify-end space-x-2 pt-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-xs px-2 py-1 h-auto"
-                            onClick={() => {
-                              // Copy to clipboard
-                              navigator.clipboard.writeText(message.editContent || "");
-                            }}
-                          >
-                            Copy
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-red-900/30 text-red-400 border-red-900/50 hover:bg-red-900/50 text-xs px-2 py-1 h-auto"
-                            onClick={() => {
-                              // Reject edit
-                              setMessages(prev =>
-                                prev.map(msg =>
-                                  msg.id === message.id
-                                    ? { ...msg, isEditing: false }
-                                    : msg
-                                )
-                              );
-                            }}
-                          >
-                            <XCircle size={14} className="mr-1" />
-                            Reject
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="bg-green-900/30 text-green-400 border-green-900/50 hover:bg-green-900/50 text-xs px-2 py-1 h-auto"
-                            onClick={() => handleApplyEdit(message.editContent || "")}
-                          >
-                            <CheckCircle size={14} className="mr-1" />
-                            Apply
-                          </Button>
+                        <div className="bg-neutral-850 p-3 rounded-md text-neutral-200">
+                          <p className="text-sm font-medium mb-2 text-neutral-300">{message.content}</p>
+                          <div className="text-xs max-h-60 overflow-y-auto border border-neutral-700 p-2 rounded bg-neutral-900">
+                            <DiffView
+                              oldValue={currentNote?.content || ""}
+                              newValue={message.editContent || ""}
+                            />
+                          </div>
+                          <div className="flex justify-end space-x-2 pt-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-xs px-2 py-1 h-auto"
+                              onClick={() => navigator.clipboard.writeText(message.editContent || "")}
+                            >
+                              Copy
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-red-900/30 text-red-400 border-red-900/50 hover:bg-red-900/50 text-xs px-2 py-1 h-auto"
+                              onClick={() => {
+                                setMessages(prev =>
+                                  prev.map(msg =>
+                                    msg.id === message.id ? { ...msg, isEditing: false } : msg
+                                  )
+                                );
+                              }}
+                            >
+                              <XCircle size={14} className="mr-1" />
+                              Reject
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-green-900/30 text-green-400 border-green-900/50 hover:bg-green-900/50 text-xs px-2 py-1 h-auto"
+                              onClick={() => handleApplyEdit(message.editContent || "")}
+                            >
+                              <CheckCircle size={14} className="mr-1" />
+                              Apply
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ) : (
                       <div className="text-sm break-words">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {message.content}
-                      </ReactMarkdown>
-                    </div>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -367,7 +386,7 @@ export function AIAssistantSidebar({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isEditMode ? "What edits would you like to make?" : "Ask a question about your notes..."}
+            placeholder={isEditMode ? "Describe changes (e.g., 'fix typos', 'summarize')" : "Ask a question about your notes..."}
             className="flex-1 bg-neutral-800 border-neutral-700 focus:border-blue-600 text-neutral-100"
             disabled={isLoading}
           />
@@ -381,9 +400,21 @@ export function AIAssistantSidebar({
           </Button>
         </form>
         <div className="mt-2 text-center">
-          <p className="text-neutral-500 text-xs">
-            Press <kbd className="px-1 py-0.5 bg-neutral-800 rounded text-neutral-400">Ctrl+E</kbd> to toggle the assistant
-          </p>
+          <div className="flex flex-col items-center space-y-2">
+            {lastAppliedEdit && (
+              <Button
+                variant="outline"
+                size="sm" // Standardized size, adjust if 'xs' was intended and defined
+                onClick={handleRevertLastEdit}
+                className="text-xs text-neutral-400 hover:text-neutral-100 border-neutral-700 hover:bg-neutral-700 px-2 py-1 h-auto w-full max-w-xs"
+              >
+                <Undo2 size={14} className="mr-1" /> Revert Last Applied Edit
+              </Button>
+            )}
+            <p className="text-neutral-500 text-xs">
+              Press <kbd className="px-1 py-0.5 bg-neutral-800 rounded text-neutral-400">Ctrl+E</kbd> to toggle mode
+            </p>
+          </div>
         </div>
       </div>
     </div>
