@@ -146,7 +146,14 @@ IMPORTANT:
 - Character indices are 0-based.
 - For 'replace' and 'delete', 'endIndex' marks the character *after* the last character to be affected.
 - For 'insert', the 'text' is inserted *before* the character at 'startIndex'.
-- If multiple changes are needed, return an array with multiple operation objects. Sort operations by startIndex in ascending order if possible, though the client will sort them in reverse for application.
+- If the request is to "format the entire note" or a similar broad request, you should aim to provide a SINGLE "replace" operation where 'startIndex' is 0 and 'endIndex' is the original_length_of_the_note. The "text" field should contain the ENTIRE reformatted note.
+- When asked to "format the entire note" or perform similar broad formatting without further specifics:
+    - Prioritize correcting markdown syntax (e.g., ensure consistent heading levels like ##, ###; ensure correct list formatting with '-', '*', or '1.'; ensure proper use of bold **text** or _italic_).
+    - Ensure paragraphs are well-separated (typically by a single empty line in markdown).
+    - Standardize list item markers (e.g., use '-' consistently for all unordered list items if mixed styles are present).
+    - Trim unnecessary leading/trailing whitespace from lines, but preserve intentional indentation for code blocks or nested lists.
+    - Do NOT significantly alter the content's meaning, rewrite sentences for clarity, or change the overall structure (like reordering sections) unless explicitly asked to do so (e.g., 'improve readability', 'summarize this section', 'reorganize for flow'). Your primary goal for a general 'format' request is to clean up the existing markdown structure and whitespace.
+    - If the note is very long (e.g., over 3000 characters) and the formatting request is still very general, focus on the most obvious structural markdown issues (headings, lists, paragraph separation) when generating the single "replace" operation for the whole note.
 - Ensure the JSON is strictly valid. For example, all strings must be in double quotes.
 - Do not use trailing commas in objects or arrays.`;
 
