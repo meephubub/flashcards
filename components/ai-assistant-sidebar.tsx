@@ -303,7 +303,7 @@ export function AIAssistantSidebar({
                   <div 
                     className={`max-w-[300px] p-3 rounded-lg ${
                       message.role === 'user'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-neutral-800 text-neutral-100'
                         : (message.isEditing ? "bg-neutral-800" : "bg-neutral-700 text-neutral-100")
                     }`}
                   >
@@ -314,7 +314,7 @@ export function AIAssistantSidebar({
                     ) : message.role === 'assistant' && message.isEditing ? (
                       <div className="space-y-3">
                         <div className="text-sm opacity-80">Suggested Edit Preview:</div>
-                        <div className="bg-neutral-850 p-3 rounded-md text-neutral-200">
+                        <div className="bg-neutral-800 p-3 rounded-md text-neutral-200"> {/* Themed from bg-neutral-850 */}
                           <p className="text-sm font-medium mb-2 text-neutral-300">{message.content}</p>
                           <div className="text-xs max-h-60 overflow-y-auto border border-neutral-700 p-2 rounded bg-neutral-900">
                             <DiffView
@@ -334,7 +334,7 @@ export function AIAssistantSidebar({
                             <Button
                               size="sm"
                               variant="outline"
-                              className="bg-red-900/30 text-red-400 border-red-900/50 hover:bg-red-900/50 text-xs px-2 py-1 h-auto"
+                              className="bg-neutral-800 text-red-400 border-neutral-700 hover:bg-neutral-700 text-xs px-2 py-1 h-auto"
                               onClick={() => {
                                 setMessages(prev =>
                                   prev.map(msg =>
@@ -348,7 +348,7 @@ export function AIAssistantSidebar({
                             </Button>
                             <Button
                               size="sm"
-                              className="bg-green-900/30 text-green-400 border-green-900/50 hover:bg-green-900/50 text-xs px-2 py-1 h-auto"
+                              className="bg-neutral-800 text-green-400 border-neutral-700 hover:bg-neutral-700 text-xs px-2 py-1 h-auto"
                               onClick={() => handleApplyEdit(message.editContent || "")}
                             >
                               <CheckCircle size={14} className="mr-1" />
@@ -387,14 +387,14 @@ export function AIAssistantSidebar({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={isEditMode ? "Describe changes (e.g., 'fix typos', 'summarize')" : "Ask a question about your notes..."}
-            className="flex-1 bg-neutral-800 border-neutral-700 focus:border-blue-600 text-neutral-100"
+            className="flex-1 bg-neutral-800 border-neutral-700 focus:border-neutral-500 text-neutral-100"
             disabled={isLoading}
           />
           <Button
             type="submit"
             size="sm"
             disabled={isLoading || !input.trim()}
-            className={`bg-blue-600 hover:bg-blue-700 text-white ${!input.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`bg-neutral-700 hover:bg-neutral-600 text-neutral-100 ${!input.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <SendIcon size={16} />
           </Button>
