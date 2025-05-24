@@ -43,11 +43,37 @@ import katex from "katex"
 import { useTheme } from "@/components/theme-provider"
 
 // Helper to generate slugs for IDs
+// Keep track of used slugs to avoid duplicates
+const usedSlugs = new Map<string, number>();
+
 const generateSlug = (text: string) => {
-  return text
+  console.log(`[SLUG] generateSlug input: '${text}'`);
+  let slug = text
     .toLowerCase()
     .replace(/\s+/g, "-") // Replace spaces with -
-    .replace(/[^\w-]+/g, "") // Remove all non-word chars
+    .replace(/[^\w-]+/g, ""); // Remove all non-word chars
+  
+  // If slug is empty, use a fallback
+  if (!slug) {
+    slug = "section";
+  }
+  
+  // Check if this slug has been used before
+  if (usedSlugs.has(slug)) {
+    // Increment the counter for this slug
+    const count = usedSlugs.get(slug)! + 1;
+    usedSlugs.set(slug, count);
+    // Append the counter to make the slug unique
+    slug = `${slug}-${count}`;
+  } else {
+    // Reset usedSlugs map when rendering a new note
+    usedSlugs.clear();
+    console.log('[RENDER] Starting to render note content');
+    usedSlugs.set(slug, 1);
+  }
+  
+  console.log(`[SLUG] generateSlug output: '${slug}' for input '${text}'`);
+  return slug;
 }
 
 // Helper function for inline Markdown parsing
@@ -146,53 +172,68 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
 }
 
 // Enhanced renderNoteContent function
-const renderNoteContent = (content: string) => {
-  const lines = content.split("\n")
-  const elements: React.ReactNode[] = []
-  let inList = false
-  let listType: "ul" | "ol" | null = null
-  let listItems: React.ReactNode[] = []
-  let inTable = false
-  let tableRows: string[][] = []
-  let tableHeaders: string[] = []
-  let inInfoBox = false
-  let infoBoxColor = ""
-  let infoBoxContent: string[] = []
-  let inMathBlock = false
-  let mathBlockContent: string[] = []
+const renderNoteContent = (content: string, mcqStates: Record<string, any>, handleMcqOptionClick: Function) => {
+  console.log('[RAW CONTENT]', JSON.stringify(content));
+  const lines = content.split("\n");
+  const elements: React.ReactNode[] = [];
 
+  // State variables for parsing
+  let inList = false;
+  let currentListItems: string[] = [];
+  let currentListType: "ul" | "ol" | null = null;
+  
+  let inTable = false;
+  let currentTableHeaders: string[] = [];
+  let currentTableRows: string[][] = [];
+  
+  let inInfoBox = false;
+  let infoBoxContent: string[] = [];
+  let infoBoxColor = "";
+  
+  let inMathBlock = false;
+  let mathBlockContent: string[] = [];
+  
+  let inMcqBlock = false;
+  let currentMcqQuestion = "";
+  let currentMcqOptions: {text: string, isCorrect: boolean}[] = [];
+
+  // Process functions
   const processList = () => {
-    if (inList && listItems.length > 0) {
-      if (listType === "ul") {
+    if (inList && currentListItems.length > 0) {
+      if (currentListType === "ul") {
         elements.push(
           <ul key={`list-${elements.length}`} className="list-disc list-outside pl-6 my-3 space-y-1.5 text-neutral-300">
-            {listItems}
+            {currentListItems.map((item, index) => (
+              <li key={index}>{parseInlineMarkdown(item)}</li>
+            ))}
           </ul>,
         )
-      } else if (listType === "ol") {
+      } else if (currentListType === "ol") {
         elements.push(
           <ol
             key={`list-${elements.length}`}
             className="list-decimal list-outside pl-6 my-3 space-y-1.5 text-neutral-300"
           >
-            {listItems}
+            {currentListItems.map((item, index) => (
+              <li key={index}>{parseInlineMarkdown(item)}</li>
+            ))}
           </ol>,
         )
       }
     }
-    inList = false
-    listItems = []
-    listType = null
+    inList = false;
+    currentListItems = [];
+    currentListType = null;
   }
 
   const processTable = () => {
-    if (tableRows.length > 0) {
+    if (currentTableRows.length > 0) {
       elements.push(
         <div key={`table-${elements.length}`} className="my-4 overflow-x-auto">
           <table className="min-w-full border-collapse border border-neutral-700">
             <thead>
               <tr>
-                {tableHeaders.map((header, index) => (
+                {currentTableHeaders.map((header, index) => (
                   <th
                     key={index}
                     className="border border-neutral-700 bg-neutral-800 px-4 py-2 text-left text-neutral-200 font-semibold"
@@ -203,10 +244,13 @@ const renderNoteContent = (content: string) => {
               </tr>
             </thead>
             <tbody>
-              {tableRows.map((row, rowIndex) => (
+              {currentTableRows.map((row, rowIndex) => (
                 <tr key={rowIndex} className={rowIndex % 2 === 0 ? "bg-neutral-900" : "bg-neutral-800/50"}>
-                  {row.map((cell, cellIndex) => (
-                    <td key={cellIndex} className="border border-neutral-700 px-4 py-2 text-neutral-300">
+                  {row.map((cell: string, cellIndex: number) => (
+                    <td
+                      key={cellIndex}
+                      className="border border-neutral-700 px-3 py-2.5 text-sm text-neutral-300 whitespace-pre-wrap break-words"
+                    >
                       {parseInlineMarkdown(cell.trim())}
                     </td>
                   ))}
@@ -215,12 +259,12 @@ const renderNoteContent = (content: string) => {
             </tbody>
           </table>
         </div>,
-      )
+      );
     }
-    inTable = false
-    tableRows = []
-    tableHeaders = []
-  }
+    inTable = false;
+    currentTableHeaders = [];
+    currentTableRows = [];
+  };
 
   const processInfoBox = () => {
     if (infoBoxContent.length > 0) {
@@ -292,8 +336,157 @@ const renderNoteContent = (content: string) => {
     mathBlockContent = []
   }
 
+  const processMcqBlock = () => {
+    if (currentMcqQuestion && currentMcqOptions.length > 0) {
+      console.log(`[PROCESS MCQ] Called for question: '${currentMcqQuestion}', Options count: ${currentMcqOptions.length}`, currentMcqOptions);
+      const mcqBlockIdentifier = elements.length.toString(); // Convert to string for consistent key
+      const blockKeySlugPart = generateSlug(currentMcqQuestion.substring(0,30));
+      const blockKey = `mcq-block-${mcqBlockIdentifier}-${blockKeySlugPart}`;
+      const mcqState = mcqStates[blockKey] || { showAnswers: false };
+      
+      elements.push(
+        <div key={blockKey} className="my-6 p-5 border border-neutral-700 rounded-lg bg-neutral-800/40 shadow-md">
+          <div className="flex items-start mb-4">
+            <HelpCircleIcon className="text-blue-400 mr-3 mt-1 flex-shrink-0" size={20} />
+            <div className="font-semibold text-neutral-100 text-lg">
+              {parseInlineMarkdown(currentMcqQuestion)}
+            </div>
+          </div>
+          
+          <div className="space-y-3 pl-2">
+            {currentMcqOptions.map((option, index) => {
+              const isSelected = mcqState.selectedIndex === index;
+              const showCorrect = mcqState.showAnswers && option.isCorrect;
+              const showIncorrect = mcqState.showAnswers && isSelected && !option.isCorrect;
+              
+              return (
+                <div 
+                  key={`${blockKey}-option-${index}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleMcqOptionClick(blockKey, index, option.isCorrect);
+                  }}
+                  className={`flex items-start p-3 rounded-md transition-colors cursor-pointer ${
+                    showCorrect ? 'bg-green-900/30 border border-green-700 text-green-100' :
+                    showIncorrect ? 'bg-red-900/30 border border-red-700 text-red-100' :
+                    isSelected ? 'bg-blue-900/30 border border-blue-700 text-blue-100' :
+                    'bg-neutral-800/60 border border-neutral-700/50 text-neutral-300 hover:bg-neutral-700/30'
+                  }`}
+                >
+                  <div className="flex-shrink-0 mr-3 mt-0.5">
+                    {showCorrect ? (
+                      <CheckCircle2 size={18} className="text-green-400" />
+                    ) : showIncorrect ? (
+                      <XCircle size={18} className="text-red-400" />
+                    ) : (
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border-2 border-neutral-600 text-xs font-medium text-neutral-400">
+                        {String.fromCharCode(65 + index)}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex-grow">
+                    {parseInlineMarkdown(option.text)}
+                    {showCorrect && (
+                      <div className="text-xs text-green-300 mt-1">
+                        Correct answer!
+                      </div>
+                    )}
+                    {showIncorrect && (
+                      <div className="text-xs text-red-300 mt-1">
+                        Incorrect - try again!
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          {mcqState.showAnswers && (
+            <div className="mt-4 text-sm text-neutral-400">
+              Click any option to try again
+            </div>
+          )}
+        </div>
+      );
+    }
+    inMcqBlock = false;
+    currentMcqQuestion = "";
+    currentMcqOptions = [];
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+
+    // Check for headings (# Heading 1, ## Heading 2, ### Heading 3)
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/)
+    if (headingMatch) {
+      processList() // Process any existing list
+      processTable() // Process any existing table
+      processInfoBox() // Process any existing info box
+      if (inMcqBlock) processMcqBlock() // Process any existing MCQ block
+
+      const level = headingMatch[1].length
+      const headingText = headingMatch[2].trim()
+      const headingId = generateSlug(headingText)
+      console.log(`[HEADING] Rendering heading: '${headingText}' with ID '${headingId}' and level ${level}`)
+
+      // Create appropriate heading element based on level
+      if (level === 1) {
+        elements.push(
+          <h1 
+            id={headingId}
+            key={`heading-${i}`} 
+            className="text-3xl font-bold text-neutral-100 mt-8 mb-4"
+          >
+            {parseInlineMarkdown(headingText)}
+          </h1>
+        )
+      } else if (level === 2) {
+        elements.push(
+          <h2 
+            id={headingId}
+            key={`heading-${i}`} 
+            className="text-2xl font-semibold text-neutral-200 mt-6 mb-3"
+          >
+            {parseInlineMarkdown(headingText)}
+          </h2>
+        )
+      } else if (level === 3) {
+        elements.push(
+          <h3 
+            id={headingId}
+            key={`heading-${i}`} 
+            className="text-xl font-medium text-neutral-300 mt-5 mb-2"
+          >
+            {parseInlineMarkdown(headingText)}
+          </h3>
+        )
+      } else if (level === 4) {
+        elements.push(
+          <h4 
+            id={headingId}
+            key={`heading-${i}`} 
+            className="text-lg font-medium text-neutral-300 mt-4 mb-2"
+          >
+            {parseInlineMarkdown(headingText)}
+          </h4>
+        )
+      } else {
+        elements.push(
+          <h5 
+            id={headingId}
+            key={`heading-${i}`} 
+            className="text-base font-medium text-neutral-300 mt-3 mb-2"
+          >
+            {parseInlineMarkdown(headingText)}
+          </h5>
+        )
+      }
+      continue
+    }
 
     // Check for math block start
     if (line.trim() === "$$") {
@@ -349,9 +542,9 @@ const renderNoteContent = (content: string) => {
 
       if (!inTable) {
         inTable = true
-        tableHeaders = cells
+        currentTableHeaders = cells // FIX: Was tableHeaders
       } else {
-        tableRows.push(cells)
+        currentTableRows.push(cells) // FIX: Was tableRows
       }
       continue
     } else if (inTable) {
@@ -364,133 +557,52 @@ const renderNoteContent = (content: string) => {
       continue
     }
 
-    // Check for list items first to handle them before paragraphing
-    const ulMatch = line.match(/^\s*[-*]\s+(.*)/)
-    const olMatch = line.match(/^\s*\d+\.\s+(.*)/)
+    // Check for MCQ block
+    if (line.startsWith("?? ")) {
+      console.log(`[MCQ PARSE] Detected question line: '${line}'`);
+      // Finalize any PENDING MCQ block first.
+      if (inMcqBlock) {
+        processMcqBlock();
+      }
+      // Then finalize other block types that might be pending.
+      processList();
+      processTable();
+      processInfoBox();
+      processMathBlock();
+      // (Ensure all other block types that can be 'pending' are processed here too)
 
-    if (ulMatch) {
-      if (listType !== "ul") {
-        processList() // Process any existing list
-        inList = true
-        listType = "ul"
-      }
-      listItems.push(<li key={`item-${i}`}>{parseInlineMarkdown(ulMatch[1])}</li>)
-      continue
-    } else if (olMatch) {
-      if (listType !== "ol") {
-        processList() // Process any existing list
-        inList = true
-        listType = "ol"
-      }
-      listItems.push(<li key={`item-${i}`}>{parseInlineMarkdown(olMatch[1])}</li>)
-      continue
-    } else {
-      processList() // If line is not a list item, process any existing list
+      inMcqBlock = true; // Now, set up for the NEW MCQ block
+      currentMcqQuestion = line.substring(3).trim(); // Get text after "?? "
+      console.log(`[MCQ PARSE] Set currentMcqQuestion: '${currentMcqQuestion}'`);
+      currentMcqOptions = []; // Reset options for the new question
+      continue; // Consumed line, move to next line
     }
 
-    // Headings (H1-H6)
-    const headingMatch = line.match(/^(#{1,6})\s+(.*)/)
-    if (headingMatch) {
-      const level = headingMatch[1].length
-      const text = parseInlineMarkdown(headingMatch[2])
-      const headingId = `heading-${generateSlug(headingMatch[2].trim())}`
-
-      switch (level) {
-        case 1:
-          elements.push(
-            <h1 id={headingId} key={i} className="text-4xl font-bold mt-10 mb-5 text-neutral-100 tracking-tight">
-              {text}
-            </h1>,
-          )
-          break
-        case 2:
-          elements.push(
-            <h2 id={headingId} key={i} className="text-3xl font-semibold mt-8 mb-4 text-neutral-100 tracking-tight">
-              {text}
-            </h2>,
-          )
-          break
-        case 3:
-          elements.push(
-            <h3 id={headingId} key={i} className="text-2xl font-semibold mt-7 mb-3 text-neutral-200">
-              {text}
-            </h3>,
-          )
-          break
-        case 4:
-          elements.push(
-            <h4 id={headingId} key={i} className="text-xl font-semibold mt-6 mb-2 text-neutral-200">
-              {text}
-            </h4>,
-          )
-          break
-        case 5:
-          elements.push(
-            <h5 id={headingId} key={i} className="text-lg font-semibold mt-5 mb-2 text-neutral-300">
-              {text}
-            </h5>,
-          )
-          break
-        case 6:
-          elements.push(
-            <h6 id={headingId} key={i} className="text-base font-semibold mt-4 mb-2 text-neutral-300">
-              {text}
-            </h6>,
-          )
-          break
-      }
-      continue
-    }
-
-    // Horizontal Rule
-    if (line.match(/^(\s*([-*_]){3,}\s*)$/)) {
-      elements.push(<hr key={i} className="my-8 border-neutral-700/50" />)
-      continue
-    }
-
-    // Blockquotes
-    const blockquoteMatch = line.match(/^>\s*(.*)/)
-    if (blockquoteMatch) {
-      elements.push(
-        <blockquote key={i} className="pl-4 italic border-l-2 border-neutral-600/70 text-neutral-400 my-4 py-0.5">
-          {parseInlineMarkdown(blockquoteMatch[1])}
-        </blockquote>,
-      )
-      continue
-    }
-
-    // Code blocks (triple backticks)
-    if (line.startsWith("```")) {
-      const codeLines = []
-      const lang = line.slice(3).trim()
-      i++
-
-      while (i < lines.length && !lines[i].startsWith("```")) {
-        codeLines.push(lines[i])
-        i++
-      }
-
-      if (i < lines.length) {
-        // Found closing \`\`\`
-        elements.push(
-          <pre key={`code-${i}`} className="bg-neutral-800 p-4 rounded-md my-4 overflow-x-auto">
-            <code className="text-sm font-mono text-neutral-200">{codeLines.join("\n")}</code>
-          </pre>,
-        )
-      }
-      continue
-    }
-
-    // Align center with ::
-    if (line.startsWith("::") && line.endsWith("::")) {
-      const centerText = line.slice(2, -2).trim()
-      if (centerText) {
-        elements.push(
-          <p key={i} className="text-center text-neutral-300 my-3">
-            {parseInlineMarkdown(centerText)}
-          </p>,
-        )
-        continue
+    // If currently in an MCQ block, process options
+    if (inMcqBlock) {
+      console.log(`[MCQ PARSE] In MCQ block (question: '${currentMcqQuestion}'), checking line for option: '${line}'`);
+      // Match both formats: '* [ ] Option' and '[ ] Option'
+      const optionMatch = line.match(/^(?:[-*]\s*)?\s*\[(x|X| )\]\s+(.*)/i); // matches:
+      // '* [x] Option'
+      // '- [ ] Option'
+      // '[X] Option'
+      // Case insensitive for x/X
+      if (optionMatch) {
+        const option = {
+          text: optionMatch[2].trim(),
+          isCorrect: optionMatch[1].toLowerCase() === "x",
+        };
+        currentMcqOptions.push(option);
+        console.log(`[MCQ PARSE] Added option to '${currentMcqQuestion}':`, option, `Current options count: ${currentMcqOptions.length}`);
+        continue; // Consumed line, move to next line
+      } else {
+        // Line is not an option, so current MCQ block ends.
+        // Process the collected MCQ.
+        console.log(`[MCQ PARSE] End of MCQ block detected (non-option line '${line}'). Processing MCQ for question: '${currentMcqQuestion}'`);
+        processMcqBlock();
+        // The current line was NOT consumed by MCQ option logic,
+        // so it will fall through to be processed by existing rules (e.g., as a paragraph).
+        // DO NOT 'continue' here. The current line needs to be re-evaluated by subsequent rules.
       }
     }
 
@@ -507,8 +619,12 @@ const renderNoteContent = (content: string) => {
   }
   processList() // Process any remaining list items after the loop
   processTable() // Process any remaining table after the loop
-  processInfoBox() // Process any remaining info box after the loop
-  processMathBlock() // Process any remaining math block after the loop
+  processInfoBox()
+  processMathBlock()
+  if (inMcqBlock || (currentMcqQuestion && currentMcqOptions.length > 0)) { // Only log if there's something to process
+    console.log(`[RENDER END] Processing any final MCQ block. Current Question: '${currentMcqQuestion}', Options: ${currentMcqOptions.length}`);
+  }
+  processMcqBlock(); // Add this line
 
   return <>{elements}</> // Return a fragment
 }
@@ -516,6 +632,7 @@ const renderNoteContent = (content: string) => {
 export default function NotesPage() {
   const { theme, setTheme } = useTheme()
   const [allNotes, setAllNotes] = useState<Note[]>([])
+  const [activeNote, setActiveNote] = useState<Note | null>(null)
   const [displayedNotes, setDisplayedNotes] = useState<Note[]>([])
   const [subheadings, setSubheadings] = useState<string[]>([])
   const [currentNoteHeadings, setCurrentNoteHeadings] = useState<{ text: string; level: number }[]>([])
@@ -529,6 +646,8 @@ export default function NotesPage() {
     category: "", // Default category to empty, user must select or create
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const [selectedSidebarCategory, setSelectedSidebarCategory] = useState("all")
@@ -555,6 +674,24 @@ export default function NotesPage() {
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
   const [isFlashcardsDialogOpen, setIsFlashcardsDialogOpen] = useState(false)
   const [noteForFlashcards, setNoteForFlashcards] = useState<Note | null>(null)
+  const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
+
+  const [mcqStates, setMcqStates] = useState<Record<string, {selectedIndex?: number, showAnswers: boolean}>>({});
+
+  const handleMcqOptionClick = (blockId: string, optionIndex: number, isCorrect: boolean) => {
+    console.log(`[MCQ CLICK] blockId: ${blockId}, optionIndex: ${optionIndex}, isCorrect: ${isCorrect}`);
+    setMcqStates(prev => {
+      const newState = {
+        ...prev,
+        [blockId]: {
+          selectedIndex: optionIndex,
+          showAnswers: true
+        }
+      };
+      console.log('[MCQ CLICK] New state:', newState);
+      return newState;
+    });
+  };
 
   const notesContainerRef = useRef<HTMLDivElement>(null)
   const activeNoteRef = useRef<HTMLDivElement>(null)
@@ -1320,6 +1457,51 @@ export default function NotesPage() {
     }
   }
 
+  const handleGenerateFlashcards = async () => {
+    if (!noteForFlashcards) return;
+    
+    setIsGeneratingFlashcards(true);
+    
+    try {
+      const response = await fetch('/api/generate-flashcards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          noteId: noteForFlashcards.id,
+          noteContent: noteForFlashcards.content
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate flashcards');
+      }
+      
+      const data = await response.json();
+      
+      // Update the note with the generated flashcards
+      const updatedNotes = allNotes.map(note => {
+        if (note.id === noteForFlashcards.id) {
+          return {
+            ...note,
+            flashcards: data.flashcards
+          };
+        }
+        return note;
+      });
+      
+      setAllNotes(updatedNotes);
+      setActiveNote(updatedNotes.find(note => note.id === noteForFlashcards.id) || null);
+    } catch (error) {
+      console.error('Error generating flashcards:', error);
+      // Handle error appropriately, e.g. show a toast notification
+    } finally {
+      setIsGeneratingFlashcards(false);
+      setIsFlashcardsDialogOpen(false);
+    }
+  };
+
   return (
     <div
       className={`flex h-screen ${theme === "dark" ? "bg-neutral-950 text-neutral-100" : "bg-gray-50 text-gray-900"}`}
@@ -1424,10 +1606,9 @@ export default function NotesPage() {
                 className="bg-neutral-900 border-neutral-800 border-[0.5px] rounded-xl shadow-xl p-5 md:p-8 transition-all duration-300 ease-in-out hover:shadow-2xl data-[focused='true']:ring-1 data-[focused='true']:ring-blue-500/60 data-[focused='true']:scale-[1.01] mx-0 w-full"
                 data-focused={focusedNoteId === note.id}
               >
-                <div className="flex justify-between items-start mb-4 md:mb-6 pb-3 md:pb-4 border-b border-neutral-700/50">
+                <div className="flex justify-between items-start mb-4 md:mb-6 pb-3 md:pb-4 border-b border-neutral-700">
                   <h3 className="text-2xl md:text-4xl font-bold text-neutral-50 mr-2">{note.title}</h3>
-                  <div className="flex gap-x-2">
-                    <div className="text-xs text-neutral-500">Actions:</div>
+                  <div className="flex items-center space-x-2 md:space-x-3">
                     <button
                       onClick={() => startEditingNote(note)}
                       className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
@@ -1485,10 +1666,10 @@ export default function NotesPage() {
                       </div>
                     </div>
                   ) : (
-                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content)}</div>
+                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick)}</div>
                   )}
                 </div>
-                <div className="text-xs text-neutral-500 mt-6 md:mt-8 pt-3 md:pt-4 border-t border-neutral-700/50">
+                <div className="text-xs text-neutral-500 mt-6 md:mt-8 pt-3 md:pt-4 border-t border-neutral-700">
                   Category:{" "}
                   <span className="font-medium text-neutral-400">
                     {note.category.charAt(0).toUpperCase() + note.category.slice(1)}
@@ -1577,7 +1758,7 @@ export default function NotesPage() {
                     size="sm"
                     onClick={() => {
                       const headingEl = document.getElementById(`heading-${generateSlug(heading.text)}`)
-                      if (headingEl) headingEl.scrollIntoView({ behavior: "smooth" })
+                      if (headingEl) headingEl.scrollIntoView({ behavior: "smooth", block: "start" })
                     }}
                     className={`text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white transition-all rounded-lg px-3 py-2 text-sm ${
                       heading.level === 1
@@ -1593,8 +1774,6 @@ export default function NotesPage() {
                     {heading.text}
                   </Button>
                 ))
-              ) : focusedNoteId ? (
-                <p className="text-sm text-neutral-500 px-3">No headings in this note. Add with # or ##.</p>
               ) : subheadings.length > 0 ? (
                 subheadings.map((sh) => (
                   <Button
@@ -1624,7 +1803,9 @@ export default function NotesPage() {
               className="flex-shrink-0 text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg px-4 py-2 transition-all duration-200"
             >
               {isGeneratingMcqs ? (
-                <SparklesIcon className="h-4 w-4 mr-2 animate-spin" />
+                <>
+                  <SparklesIcon className="h-4 w-4 mr-2 animate-spin" /> Generating...
+                </>
               ) : (
                 <>
                   <HelpCircleIcon className="h-4 w-4 mr-2" /> Quiz Me
@@ -1635,6 +1816,7 @@ export default function NotesPage() {
         </div>
       </div>
 
+      {/* Add Note Dialog */}
       <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
         <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0">
           <div className="p-6 sm:p-8">
@@ -1780,7 +1962,7 @@ export default function NotesPage() {
                 <div className="mt-4">
                   <p className="text-sm text-neutral-400 mb-2">AI Response:</p>
                   <div className="bg-neutral-800/80 border border-neutral-700 rounded-md p-4 max-h-[300px] overflow-y-auto">
-                    <div className="prose prose-invert prose-sm max-w-none">{renderNoteContent(aiResponse)}</div>
+                    <div className="prose prose-invert prose-sm max-w-none">{renderNoteContent(aiResponse, mcqStates, handleMcqOptionClick)}</div>
                   </div>
                 </div>
               )}
@@ -1888,9 +2070,9 @@ export default function NotesPage() {
                                       : userAnswers[index] === option && option !== mcq.correctAnswer
                                         ? "bg-red-500 border-red-400"
                                         : "border-neutral-600"
-                                    : userAnswers[index] === option
-                                      ? "bg-neutral-500 border-neutral-500"
-                                      : "border-neutral-600"
+                                  : userAnswers[index] === option
+                                    ? "bg-neutral-500 border-neutral-500"
+                                    : "border-neutral-600"
                                 }`}
                               >
                                 {showMcqResults && option === mcq.correctAnswer && (
