@@ -333,6 +333,11 @@ export async function generateNoteWithGroq(
 
   Links
   - Use [Link text](URL) syntax for citations, sources, or related reading
+  Multple choices questions
+  - ?? Your question here
+  - [x] Correct answer
+  - [ ] Incorrect answer
+  - [ ] Another incorrect answer
 
   Output Requirements:
   - Ensure content is detailed, accurate, and structured clearly.
