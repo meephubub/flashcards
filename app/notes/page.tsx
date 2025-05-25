@@ -336,6 +336,17 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
     mathBlockContent = []
   }
 
+  // Helper function to shuffle an array (Fisher-Yates shuffle)
+  function shuffleArray<T>(array: T[]): T[] {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
+  }
+
+
   const processMcqBlock = () => {
     if (currentMcqQuestion && currentMcqOptions.length > 0) {
       console.log(`[PROCESS MCQ] Called for question: '${currentMcqQuestion}', Options count: ${currentMcqOptions.length}`, currentMcqOptions);
@@ -343,6 +354,9 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
       const blockKeySlugPart = generateSlug(currentMcqQuestion.substring(0,30));
       const blockKey = `mcq-block-${mcqBlockIdentifier}-${blockKeySlugPart}`;
       const mcqState = mcqStates[blockKey] || { showAnswers: false };
+
+      // Shuffle the options before rendering
+      const shuffledOptions = shuffleArray(currentMcqOptions);
       
       elements.push(
         <div key={blockKey} className="my-6 p-5 border border-neutral-700 rounded-lg bg-neutral-800/40 shadow-md">
@@ -354,7 +368,7 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
           </div>
           
           <div className="space-y-3 pl-2">
-            {currentMcqOptions.map((option, index) => {
+            {shuffledOptions.map((option, index) => {
               const isSelected = mcqState.selectedIndex === index;
               const showCorrect = mcqState.showAnswers && option.isCorrect;
               const showIncorrect = mcqState.showAnswers && isSelected && !option.isCorrect;
