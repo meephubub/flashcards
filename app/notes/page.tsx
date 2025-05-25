@@ -172,7 +172,7 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
 }
 
 // Enhanced renderNoteContent function
-const renderNoteContent = (content: string, mcqStates: Record<string, any>, handleMcqOptionClick: Function) => {
+const renderNoteContent = (content: string, mcqStates: Record<string, any>, handleMcqOptionClick: Function, shuffledOptionsStorage?: Record<string, any>) => {
   console.log('[RAW CONTENT]', JSON.stringify(content));
   const lines = content.split("\n");
   const elements: React.ReactNode[] = [];
@@ -355,8 +355,14 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
       const blockKey = `mcq-block-${mcqBlockIdentifier}-${blockKeySlugPart}`;
       const mcqState = mcqStates[blockKey] || { showAnswers: false };
 
-      // Shuffle the options before rendering
-      const shuffledOptions = shuffleArray(currentMcqOptions);
+      // Determine where to store shuffled options
+      const storage = shuffledOptionsStorage || {};
+      
+      // Only shuffle the options if they haven't been shuffled before
+      if (!storage[blockKey]) {
+        storage[blockKey] = shuffleArray(currentMcqOptions);
+      }
+      const shuffledOptions = storage[blockKey];
       
       elements.push(
         <div key={blockKey} className="my-6 p-5 border border-neutral-700 rounded-lg bg-neutral-800/40 shadow-md">
@@ -653,6 +659,9 @@ export default function NotesPage() {
   const [availableCategories, setAvailableCategories] = useState<string[]>([])
   const [highlightedText, setHighlightedText] = useState<string>("")
   const [searchQuery, setSearchQuery] = useState<string>("")
+  
+  // Persistent storage for shuffled MCQ options that survives re-renders
+  const shuffledMcqOptionsRef = useRef<Record<string, any>>({})
 
   const [newNote, setNewNote] = useState({
     title: "",
@@ -1680,7 +1689,7 @@ export default function NotesPage() {
                       </div>
                     </div>
                   ) : (
-                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick)}</div>
+                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current)}</div>
                   )}
                 </div>
                 <div className="text-xs text-neutral-500 mt-6 md:mt-8 pt-3 md:pt-4 border-t border-neutral-700">
