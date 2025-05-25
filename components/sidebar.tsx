@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ModeToggle } from "@/components/mode-toggle"
-import { PlusCircle, Search, Settings, FileUp, Sparkles, BookText } from "lucide-react"
+import { PlusCircle, Search, Settings, FileUp, Sparkles, BookText, CombineIcon } from "lucide-react"
 import { CreateDeckDialog } from "@/components/create-deck-dialog"
 import { ImportMarkdownDialog } from "@/components/import-markdown-dialog"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
+import { MergeDecksDialog } from "@/components/merge-decks-dialog"
 import { useDecks } from "@/context/deck-context"
 import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,6 +19,7 @@ export function Sidebar() {
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isGenerateOpen, setIsGenerateOpen] = useState(false)
+  const [isMergeDecksOpen, setIsMergeDecksOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const { decks, loading } = useDecks()
   const pathname = usePathname()
@@ -75,7 +77,7 @@ export function Sidebar() {
                   <Link href={`/deck/${deck.id}`}>
                     <div className="flex flex-col items-start">
                       <span>{deck.name}</span>
-                      <span className="text-xs text-gray-500">{deck.cardCount} cards</span>
+                      <span className="text-xs text-gray-500">{deck.card_count || 0} cards</span>
                     </div>
                   </Link>
                 </Button>
@@ -103,6 +105,10 @@ export function Sidebar() {
             <FileUp className="h-4 w-4" />
             Import Markdown
           </Button>
+          <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => setIsMergeDecksOpen(true)}>
+            <CombineIcon className="h-4 w-4" />
+            Merge Decks
+          </Button>
           <Button
             variant="ghost"
             className={`w-full justify-start gap-2 ${pathname === "/settings" ? "bg-accent" : ""}`}
@@ -119,6 +125,7 @@ export function Sidebar() {
       <CreateDeckDialog open={isCreateDeckOpen} onOpenChange={setIsCreateDeckOpen} />
       <ImportMarkdownDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
       <GenerateFlashcardsDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} />
+      <MergeDecksDialog isOpen={isMergeDecksOpen} onOpenChange={setIsMergeDecksOpen} />
     </>
   )
 }

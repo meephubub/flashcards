@@ -11,6 +11,152 @@ export function initializeDataStorage() {
 }
 
 // Get all decks with their cards
+
+// Merge selected decks into a new deck
+export async function mergeDecks(
+  deckIdsToMerge: string[],
+  newDeckName: string,
+  newDeckDescription: string = "",
+  newDeckTag: string = "merged"
+): Promise<Deck | null> {
+  console.log("Starting merge with deck IDs:", deckIdsToMerge);
+  try {
+    // 1. Create the new deck
+    const { data: newDeckData, error: newDeckError } = await supabase
+      .from("decks")
+      .insert([
+        {
+          name: newDeckName,
+          description: newDeckDescription,
+          tag: newDeckTag,
+          // card_count will be updated later or handled by a trigger
+        },
+      ])
+      .select()
+      .single() // Assuming we want to get the new deck's details back
+
+    if (newDeckError || !newDeckData) {
+      console.error("Error creating new deck for merge:", newDeckError)
+      return null
+    }
+
+    const newDeckId = newDeckData.id
+
+    // 2. Move cards from old decks to the new deck
+    // We can do this by updating the deck_id of the cards in a loop or a single batch update if possible
+    // For Supabase, it's often more efficient to do it in a single call if the API supports it, or loop if not.
+    // Here, we'll update cards for each old deck.
+
+    let totalCardsMoved = 0
+
+    for (const oldDeckId of deckIdsToMerge) {
+      // Log for debugging
+      console.log(`Processing deck ID: ${oldDeckId}, type: ${typeof oldDeckId}`)
+      
+      const { data: cardsToMove, error: cardsError } = await supabase
+        .from("cards")
+        .select("*")
+        .eq("deck_id", oldDeckId)
+
+      if (cardsError) {
+        console.error(`Error fetching cards for deck ${oldDeckId}:`, cardsError)
+        // Decide if we should continue or rollback/error out
+        continue // For now, skip this deck and try others
+      }
+
+      if (cardsToMove && cardsToMove.length > 0) {
+        console.log(`Found ${cardsToMove.length} cards to move from deck ${oldDeckId}`)
+        
+        const cardIdsToUpdate = cardsToMove.map((card) => card.id)
+        console.log("Card IDs to update:", cardIdsToUpdate)
+        
+        const { error: updateError } = await supabase
+          .from("cards")
+          .update({ deck_id: newDeckId })
+          .in("id", cardIdsToUpdate)
+
+        if (updateError) {
+          console.error(
+            `Error moving cards from deck ${oldDeckId} to new deck ${newDeckId}:`,
+            updateError
+          )
+          // Potentially rollback deck creation or handle partial merge
+        } else {
+          totalCardsMoved += cardIdsToUpdate.length
+        }
+      }
+    }
+
+    // 3. Optionally, update the card_count of the new deck
+    // This could also be handled by a database trigger for accuracy
+    const { error: updateCountError } = await supabase
+      .from("decks")
+      .update({ card_count: totalCardsMoved })
+      .eq("id", newDeckId)
+
+    if (updateCountError) {
+      console.error("Error updating card count for new deck:", updateCountError)
+    }
+
+    // 4. Delete the old decks after merging
+    console.log(`Deleting source decks after successful merge: ${deckIdsToMerge.join(", ")}`)
+    const { error: deleteError } = await supabase
+      .from('decks')
+      .delete()
+      .in('id', deckIdsToMerge)
+    
+    if (deleteError) {
+      console.error("Error deleting source decks:", deleteError)
+    } else {
+      console.log(`Successfully deleted ${deckIdsToMerge.length} source decks`)
+    }
+
+    console.log(
+      `Successfully merged decks [${deckIdsToMerge.join(", ")}] into new deck '${newDeckName}' (ID: ${newDeckId}). Total cards moved: ${totalCardsMoved}.`
+    )
+    // Fetch the newly created deck with its cards to ensure we have accurate data
+    const { data: freshDeckData, error: freshDeckError } = await supabase
+      .from("decks")
+      .select("*")
+      .eq("id", newDeckId)
+      .single()
+      
+    if (freshDeckError) {
+      console.error("Error fetching fresh deck data:", freshDeckError)
+      return { ...newDeckData, card_count: totalCardsMoved, cards: [] }
+    }
+    
+    // Fetch cards for the new deck
+    const { data: newDeckCards, error: newDeckCardsError } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("deck_id", newDeckId)
+    
+    if (newDeckCardsError) {
+      console.error("Error fetching cards for new deck:", newDeckCardsError)
+      return { ...freshDeckData, card_count: totalCardsMoved, cards: [] }
+    }
+    
+    console.log(`New deck has ${newDeckCards.length} cards after merge`)
+    
+    // Update the card count in the database to ensure it's accurate
+    await supabase
+      .from("decks")
+      .update({ card_count: newDeckCards.length })
+      .eq("id", newDeckId)
+    
+    // Return the complete deck object with all required properties
+    return {
+      ...freshDeckData,  // This includes id, name, created_at, updated_at, etc.
+      card_count: newDeckCards.length  // Override with accurate count
+    }
+
+  } catch (error) {
+    console.error("An unexpected error occurred during mergeDecks:", error)
+    return null
+  }
+}
+
 export async function getDecks(): Promise<Deck[]> {
   try {
     // Fetch all decks
@@ -41,9 +187,11 @@ export async function getDecks(): Promise<Deck[]> {
             name: deck.name,
             description: deck.description || "",
             tag: deck.tag,
-            cardCount: deck.card_count || 0,
-            lastStudied: deck.last_studied || "Never",
+            card_count: deck.card_count || 0,
+            last_studied: deck.last_studied || "Never",
             cards: [],
+            created_at: deck.created_at,
+            updated_at: deck.updated_at
           }
         }
 
@@ -90,9 +238,12 @@ export async function getDecks(): Promise<Deck[]> {
           name: deck.name,
           description: deck.description || "",
           tag: deck.tag,
-          cardCount: cards.length,
-          lastStudied: deck.last_studied || "Never",
+          card_count: cards.length,
+          last_studied: deck.last_studied || "Never",
           cards,
+          // Include created_at and updated_at to satisfy the Deck type
+          created_at: deck.created_at,
+          updated_at: deck.updated_at
         }
       }),
     )

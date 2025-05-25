@@ -131,8 +131,8 @@ export function DeckGrid() {
                   </div>
                 </div>
                 <div className="mt-4 text-sm text-gray-500">
-                  <p>{deck.cardCount} cards</p>
-                  <p>Last studied: {deck.lastStudied}</p>
+                  <p>{deck.card_count || 0} cards</p>
+                  <p>Last studied: {deck.last_studied || 'Never'}</p>
                 </div>
               </CardContent>
             </Link>

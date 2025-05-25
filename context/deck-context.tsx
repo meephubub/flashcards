@@ -17,9 +17,11 @@ export interface Deck {
   name: string
   description: string
   tag: string | null
-  cardCount: number
-  lastStudied: string
+  card_count: number
+  last_studied: string
   cards: Card[]
+  created_at?: string
+  updated_at?: string
 }
 
 interface DeckContextType {
@@ -112,7 +114,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
           return {
             ...deck,
             cards: updatedCards,
-            cardCount: updatedCards.length,
+            card_count: updatedCards.length,
           }
         }
         return deck
@@ -170,7 +172,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
           return {
             ...deck,
             cards: updatedCards,
-            cardCount: updatedCards.length,
+            card_count: updatedCards.length,
           }
         }
         return deck
@@ -211,7 +213,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
             return {
               ...deck,
               cards: updatedCards,
-              lastStudied: new Date().toLocaleDateString("en-US", {
+              last_studied: new Date().toLocaleDateString("en-US", {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
