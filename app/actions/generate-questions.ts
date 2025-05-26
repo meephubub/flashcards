@@ -9,7 +9,6 @@ import { ExamQuestion } from "@/lib/exam-cache"
 export type QuestionType =
   | "multiple-choice"
   | "true-false"
-  | "fill-in-blank"
   | "short-answer"
   | "matching"
   | "sequence"
@@ -54,7 +53,7 @@ export async function generateQuestionsFromCards(
       return [options.type]
     }
 
-    const types: QuestionType[] = ["multiple-choice", "true-false", "fill-in-blank"]
+    const types: QuestionType[] = ["multiple-choice", "true-false", "short-answer"]
     
     if (options?.difficulty === "medium" || options?.difficulty === "hard") {
       types.push("short-answer", "matching")
@@ -110,7 +109,7 @@ export async function generateQuestionsFromCards(
 
 function getQuestionTypesByDifficulty(difficulty: ExamDifficulty): QuestionType[] {
   // Simplified to avoid API errors
-  return ["multiple-choice", "true-false", "fill-in-blank", "short-answer"]
+  return ["multiple-choice", "true-false", "short-answer"]
 }
 
 function selectRandomCards(cards: Card[], count: number): Card[] {
@@ -175,38 +174,7 @@ function fallbackTrueFalseQuestion(card: Card, difficulty: ExamDifficulty): Exam
   }
 }
 
-function fallbackFillInBlankQuestion(card: Card, difficulty: ExamDifficulty): ExamQuestion {
-  // Extract a key term from the answer to use as the blank
-  const answer = card.back
-  const words = answer.split(" ")
 
-  // Find a word with at least 4 characters to use as the blank
-  let blankWord = ""
-  for (const word of words) {
-    if (word.length >= 4 && !word.match(/^[.,;:!?()[\]{}'"]+$/)) {
-      blankWord = word
-      break
-    }
-  }
-
-  // If no suitable word found, use the first word
-  if (!blankWord && words.length > 0) {
-    blankWord = words[0]
-  }
-
-  // Create the fill-in-blank question
-  const question = `${card.front} - ${answer.replace(blankWord, "________")}`
-
-  return {
-    id: card.id,
-    type: "fill-in-blank",
-    question,
-    correctAnswer: blankWord,
-    originalCard: card,
-    difficulty,
-    explanation: `The missing word is "${blankWord}" which completes the answer to the question.`,
-  }
-}
 
 function fallbackQuestionGeneration(
   card: Card,
@@ -219,8 +187,7 @@ function fallbackQuestionGeneration(
       return fallbackMultipleChoiceQuestion(card, allCards, difficulty)
     case "true-false":
       return fallbackTrueFalseQuestion(card, difficulty)
-    case "fill-in-blank":
-      return fallbackFillInBlankQuestion(card, difficulty)
+
     default:
       return {
         id: card.id,

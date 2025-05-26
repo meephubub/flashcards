@@ -54,6 +54,16 @@ export function StudyMode({ deckId }: StudyModeProps) {
   // For rating button hover effect
   const [hoveredRating, setHoveredRating] = useState<ConfidenceRating | null>(null)
 
+  // Function to shuffle an array (Fisher-Yates algorithm)
+  const shuffleArray = (array: any[]) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   // Initialize cards based on spaced repetition setting
   useEffect(() => {
     if (deck) {
@@ -67,12 +77,14 @@ export function StudyMode({ deckId }: StudyModeProps) {
         selectedCards = deck.cards.slice(0, settings.studySettings.cardsPerSession);
       }
       
-      setCards(selectedCards);
+      // Shuffle the cards before setting them to state
+      const shuffledCards = shuffleArray(selectedCards);
+      setCards(shuffledCards);
       
       // Initialize statistics
       setStats(prev => ({
         ...prev,
-        totalCards: selectedCards.length,
+        totalCards: shuffledCards.length,
         cardsStudied: 0,
         knownCards: 0,
         unknownCards: 0,

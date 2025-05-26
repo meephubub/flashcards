@@ -11,6 +11,7 @@ import { useSettings } from '@/context/settings-context';
 import { ArrowLeft, ArrowRight, RotateCw, CheckCircle, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Skeleton } from './ui/skeleton';
+import { SessionSummary } from './session-summary';
 import { useToast } from '@/hooks/use-toast';
 import Confetti from 'react-confetti';
 import { useWindowSize } from '@uidotdev/usehooks'; // A common hook for window size
@@ -29,7 +30,7 @@ interface Flashcard {
   // Add other card properties if necessary
 }
 
-interface StudyCard extends Flashcard {
+export interface StudyCard extends Flashcard {
   incorrectAttempts: number;
   consecutiveCorrectAttempts: number;
 }
@@ -62,6 +63,7 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
   const [studyProgress, setStudyProgress] = useState(0);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const [longestSessionStreak, setLongestSessionStreak] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
   // Initialize with 1 since we're showing the first card
   const [questionsAnsweredThisSession, setQuestionsAnsweredThisSession] = useState(1);
@@ -228,6 +230,7 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
       setQuestionsAnsweredThisSession(1);
       setCorrectAnswers(0);
       setCurrentStreak(0);
+      setLongestSessionStreak(0);
       resetCardState();
 
       if (initialStudyCards.length > 0) {
@@ -280,6 +283,9 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
         setCorrectAnswers(prev => prev + 1);
         const newCalculatedStreak = currentStreak + 1;
         setCurrentStreak(newCalculatedStreak);
+        if (newCalculatedStreak > longestSessionStreak) {
+          setLongestSessionStreak(newCalculatedStreak);
+        }
         if (newCalculatedStreak > 0 && (newCalculatedStreak % 3 === 0 || newCalculatedStreak % 5 === 0)) {
           setShowConfetti(true);
           setTimeout(() => setShowConfetti(false), 4000);
@@ -366,6 +372,7 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
     resetCardState();
     setCorrectAnswers(0);
     setCurrentStreak(0);
+    setLongestSessionStreak(0);
     setSessionComplete(false);
     // Initialize to 1 since we're showing the first card
     setQuestionsAnsweredThisSession(1);
@@ -426,27 +433,18 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
   }
 
   if (sessionComplete) {
+    // Determine the number of cards the user actually went through
+    // questionsAnsweredThisSession is incremented before checking for session completion
+    const attemptedCardsCount = Math.min(questionsAnsweredThisSession -1 , settings.studySettings.cardsPerSession || cards.length);
+
     return (
-      <Card className="w-full max-w-lg mx-auto my-8">
-        <CardHeader>
-          <CardTitle>Session Complete!</CardTitle>
-          <CardDescription>
-            You answered {correctAnswers} out of {cards.length} questions correctly.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p>Your score: {((correctAnswers / cards.length) * 100).toFixed(0)}%</p>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          <Button variant="outline" onClick={restartSession}>
-            <RotateCw className="h-4 w-4 mr-2" />
-            Study Again
-          </Button>
-          <Button asChild>
-            <Link href={`/deck/${deckId}`}>Return to Deck</Link>
-          </Button>
-        </CardFooter>
-      </Card>
+      <SessionSummary 
+        totalCardsAnswered={attemptedCardsCount > 0 ? attemptedCardsCount : cards.length} // Fallback to cards.length if attempted is 0
+        correctAnswers={correctAnswers}
+        longestSessionStreak={longestSessionStreak}
+        allCardsInSession={cards} // Pass all cards that were part of this session's pool
+        onRestart={restartSession}
+      />
     );
   }
 
