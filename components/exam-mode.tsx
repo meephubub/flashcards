@@ -320,8 +320,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
               {
                 adaptiveScoring,
                 timePressure,
-                previousAnswers: Object.values(results),
-                questionType: currentQuestion.type
+                previousAnswers: Object.values(results)
               }
             );
             gradingResult = {
@@ -350,8 +349,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
             {
               adaptiveScoring,
               timePressure,
-              previousAnswers: Object.values(results),
-              questionType: currentQuestion.type
+              previousAnswers: Object.values(results)
             }
           );
         }
@@ -369,8 +367,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
           {
             adaptiveScoring,
             timePressure,
-            previousAnswers: Object.values(results),
-            questionType: currentQuestion.type
+            previousAnswers: Object.values(results)
           }
         );
       }
