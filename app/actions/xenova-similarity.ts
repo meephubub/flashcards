@@ -1,4 +1,7 @@
 import { pipeline } from "@xenova/transformers";
+
+// Import a lightweight spell checker
+import { distance as levenshteinDistance } from 'fastest-levenshtein';
 let extractor:
   | ((input: string | string[], options?: any) => Promise<any>)
   | null = null;
@@ -9,7 +12,7 @@ let extractor:
 export async function getFeatureExtractor() {
   if (!extractor) {
     console.log("[xenova-similarity] Initializing feature extractor...");
-    extractor = await pipeline("feature-extraction", "Xenova/bge-base-en-v1.5");
+    extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L12-v2");
 
     console.log(
       "[xenova-similarity] Feature extractor initialized:",
@@ -54,6 +57,62 @@ export async function getSentenceEmbedding(
   }
   // Fallback: If dims are not present, assume data is the embedding
   return output.data as Float32Array;
+}
+
+/**
+ * Spellcheck a string against a reference string.
+ * @param input - The input string to spellcheck
+ * @param reference - The reference string to check against
+ * @returns The corrected string if minor spelling errors were found, or the original input
+ */
+export function spellcheckAnswer(input: string, reference: string): string {
+  if (!input || !reference) return input;
+  
+  // Convert both strings to lowercase for comparison
+  const inputLower = input.toLowerCase().trim();
+  const referenceLower = reference.toLowerCase().trim();
+  
+  // If the strings are already identical (ignoring case), return the input
+  if (inputLower === referenceLower) return input;
+  
+  // Split the strings into words
+  const inputWords = inputLower.split(/\s+/);
+  const referenceWords = referenceLower.split(/\s+/);
+  
+  // If the word counts are very different, don't attempt correction
+  if (Math.abs(inputWords.length - referenceWords.length) > 2) return input;
+  
+  // Try to correct each word in the input
+  const correctedWords = inputWords.map(inputWord => {
+    // Find the closest word in the reference
+    let closestWord = inputWord;
+    let minDistance = Infinity;
+    
+    for (const refWord of referenceWords) {
+      // Use simple Levenshtein distance calculation
+      const dist = levenshteinDistance(inputWord, refWord);
+      
+      // If the distance is small enough (based on word length), consider it a spelling error
+      const maxAllowedDistance = Math.max(1, Math.floor(refWord.length / 4));
+      
+      if (dist < minDistance && dist <= maxAllowedDistance) {
+        minDistance = dist;
+        closestWord = refWord;
+      }
+    }
+    
+    return closestWord;
+  });
+  
+  // Join the corrected words back into a string
+  const correctedInput = correctedWords.join(' ');
+  
+  // Log the correction if it was made
+  if (correctedInput !== inputLower) {
+    console.log(`[spellcheck] Corrected "${inputLower}" to "${correctedInput}"`);
+  }
+  
+  return correctedInput;
 }
 
 /**
