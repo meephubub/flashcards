@@ -54,6 +54,7 @@
     "date-fns": "4.1.0",
     "diff": "^8.0.2",
     "embla-carousel-react": "8.5.1",
+    "fastest-levenshtein": "^1.0.16",
     "framer-motion": "^12.11.0",
     "fs": "latest",
     "input-otp": "1.4.1",

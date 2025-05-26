@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { LanguageCard } from "@/components/language-card";
-import { getSentenceEmbedding, cosineSimilarity } from "@/app/actions/xenova-similarity";
+import { getSentenceEmbedding, cosineSimilarity, spellcheckAnswer } from "@/app/actions/xenova-similarity";
 import { useDecks } from "@/context/deck-context";
 import { useSettings } from '@/context/settings-context';
 import { ArrowLeft, ArrowRight, RotateCw, CheckCircle, XCircle } from 'lucide-react';
@@ -31,6 +31,7 @@ interface Flashcard {
 
 interface StudyCard extends Flashcard {
   incorrectAttempts: number;
+  consecutiveCorrectAttempts: number;
 }
 
 // Helper function to shuffle an array (Fisher-Yates)
@@ -62,7 +63,8 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [questionsAnsweredThisSession, setQuestionsAnsweredThisSession] = useState(0);
+  // Initialize with 1 since we're showing the first card
+  const [questionsAnsweredThisSession, setQuestionsAnsweredThisSession] = useState(1);
 
   const currentCard = cards.find(card => card.id === currentCardId);
 
@@ -74,65 +76,128 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
     setIsSubmitting(false);
   }, []);
 
-  const selectAndSetNextCard = useCallback((currentCardsList: StudyCard[], previousCardId: string | number | null) => {
+  // Track recently seen cards to avoid repetition
+  const recentlySeenCards = useRef<(string | number)[]>([]);
+  
+  const selectAndSetNextCard = useCallback((currentCardsList: StudyCard[], previousCardId: string | number | null, answeredCount?: number) => {
     if (currentCardsList.length === 0) {
       setSessionComplete(true);
       return;
     }
-
+    
+    // Update recently seen cards list
+    if (previousCardId) {
+      // Add the previous card to recently seen
+      recentlySeenCards.current = [
+        previousCardId,
+        ...recentlySeenCards.current.filter((id: string | number) => id !== previousCardId)
+      ].slice(0, Math.min(5, Math.floor(currentCardsList.length / 2))); // Keep track of last N cards, where N depends on deck size
+    }
+    
+    // First, filter out the previous card and reduce probability of recently seen cards
     const eligibleCards = currentCardsList.filter(card => {
+      // Always filter out the immediately previous card if we have more than one card
       if (currentCardsList.length > 1 && card.id === previousCardId) {
         return false;
       }
       return true;
     });
 
-    const selectionPool: StudyCard[] = [];
-    const cardsToUseForPool = eligibleCards.length > 0 ? eligibleCards : currentCardsList;
+    // Constants for scoring
+    const INCORRECT_ATTEMPT_WEIGHT = 3; // Higher value = more weight for incorrect attempts
+    const RECENCY_PENALTY_DIVISOR_FACTOR = 2;   // Higher value = stronger penalty for recent cards (score is divided by this factor related term)
+    const NEW_CARD_BONUS_MULTIPLIER = 1.2;         // Multiplicative bonus for cards not in recency list
+    const CONSECUTIVE_CORRECT_TO_REDUCE_PRIORITY = 2; // After this many correct in a row, incorrectAttempts weight is ignored
 
-    cardsToUseForPool.forEach(card => {
-      const weight = (card.incorrectAttempts || 0) + 1;
-      for (let i = 0; i < weight; i++) {
-        selectionPool.push(card);
+    let weightedPool: StudyCard[] = [];
+
+    // Handle cases where no cards are eligible or the list is very small
+    if (eligibleCards.length === 0) {
+      if (currentCardsList.length === 1 && previousCardId && currentCardsList[0].id === previousCardId) {
+         // Only one card in the deck, and it was just seen.
+         setCurrentCardId(currentCardsList[0].id);
+      } else if (currentCardsList.length > 0) {
+        // Fallback if eligibleCards is empty but currentCardsList is not.
+        const fallbackCard = currentCardsList.find(c => c.id !== previousCardId) || currentCardsList[0];
+        if (fallbackCard) {
+            setCurrentCardId(fallbackCard.id);
+        } else { 
+            setSessionComplete(true);
+        }
+      } 
+      else { // currentCardsList is empty
+        setSessionComplete(true);
+      }
+      return;
+    }
+    
+    eligibleCards.forEach(card => {
+      let desirabilityScore = 10.0; // Base score, using float for precision before flooring
+
+      // Increase score for incorrect attempts, unless it's been answered correctly multiple times consecutively
+      if ((card.consecutiveCorrectAttempts || 0) < CONSECUTIVE_CORRECT_TO_REDUCE_PRIORITY) {
+        desirabilityScore += (card.incorrectAttempts || 0) * INCORRECT_ATTEMPT_WEIGHT;
+      }
+
+      // Apply recency penalty or new card bonus
+      const recencyIndex = recentlySeenCards.current.indexOf(card.id);
+      if (recencyIndex !== -1) {
+        // Penalize recently seen cards. Most recent (index 0) gets highest penalty factor.
+        const penaltyFactorBase = (recentlySeenCards.current.length - recencyIndex);
+        desirabilityScore /= Math.max(1, penaltyFactorBase * RECENCY_PENALTY_DIVISOR_FACTOR);
+      } else {
+        // Bonus for cards not in the recency list (considered "new" or not seen in a while)
+        desirabilityScore *= NEW_CARD_BONUS_MULTIPLIER;
+      }
+      
+      // Ensure final weight is at least 1, so every eligible card has a chance
+      const finalWeight = Math.max(1, Math.floor(desirabilityScore)); 
+      
+      for (let i = 0; i < finalWeight; i++) {
+        weightedPool.push(card);
       }
     });
 
-    if (selectionPool.length === 0) {
-      if (currentCardsList.length > 0) { // Fallback if filtering made pool empty
-         const fallbackRandomIndex = Math.floor(Math.random() * currentCardsList.length);
-         setCurrentCardId(currentCardsList[fallbackRandomIndex].id);
+    // Note: The original 'selectionPool' is now 'weightedPool'.
+    // The subsequent fallback logic and random selection will use 'weightedPool'.
+
+    // Fallback if our filtering made the pool empty
+    if (weightedPool.length === 0) {
+      if (currentCardsList.length > 0) {
+        const fallbackRandomIndex = Math.floor(Math.random() * currentCardsList.length);
+        setCurrentCardId(currentCardsList[fallbackRandomIndex].id);
       } else {
         setSessionComplete(true);
       }
       return;
     }
 
-    const randomIndex = Math.floor(Math.random() * selectionPool.length);
-    const nextCard = selectionPool[randomIndex];
+    // Select a random card from our weighted pool
+    const randomIndex = Math.floor(Math.random() * weightedPool.length);
+    const nextCard = weightedPool[randomIndex];
     setCurrentCardId(nextCard.id);
+    
+    console.log(`Selected next card: ${nextCard.id}, incorrect attempts: ${nextCard.incorrectAttempts || 0}, recently seen: ${recentlySeenCards.current.includes(nextCard.id)}`);
 
-    const totalQuestionsTarget = settings.studySettings.cardsPerSession || currentCardsList.length;
-    if (totalQuestionsTarget > 0) {
-        // questionsAnsweredThisSession is 0-indexed count of ALREADY answered questions.
-        // So for the NEXT card, progress is (questionsAnsweredThisSession + 1)
-        setStudyProgress(((questionsAnsweredThisSession + 1) / totalQuestionsTarget) * 100);
-    } else {
-        setStudyProgress(0);
-    }
-  }, [setSessionComplete, setCurrentCardId, settings.studySettings.cardsPerSession, questionsAnsweredThisSession, setStudyProgress]);
+    // We no longer update the progress bar here, as it's now handled in handleAnswerSubmit
+    // This prevents the progress bar from being updated twice and potentially resetting
+  }, [setSessionComplete, setCurrentCardId]);
 
-  // Memoize handleNextCard
+  // This function is now only used for manual navigation (e.g., skip button)
+  // It's no longer called automatically after answering a question
   const handleNextCard = useCallback(() => {
     resetCardState();
-    const nextQuestionNumber = questionsAnsweredThisSession + 1;
-    setQuestionsAnsweredThisSession(nextQuestionNumber);
-
+    
     const totalQuestionsTarget = settings.studySettings.cardsPerSession || cards.length;
 
-    if (nextQuestionNumber >= totalQuestionsTarget && totalQuestionsTarget > 0) {
+    console.log(`Manual next card, questionsAnsweredThisSession: ${questionsAnsweredThisSession}, target: ${totalQuestionsTarget}`);
+
+    if (questionsAnsweredThisSession >= totalQuestionsTarget && totalQuestionsTarget > 0) {
+      console.log('Session complete, all questions answered');
       setSessionComplete(true);
     } else if (cards.length > 0) {
-      selectAndSetNextCard(cards, currentCard?.id ?? null);
+      // Select the next card without incrementing questionsAnsweredThisSession
+      selectAndSetNextCard(cards, currentCard?.id ?? null, questionsAnsweredThisSession);
     } else {
       setSessionComplete(true); // No cards to select from
     }
@@ -142,24 +207,35 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
     if (deck) {
       const allCardsFromDeck = deck.cards as Flashcard[];
       const sessionSize = settings.studySettings.cardsPerSession || allCardsFromDeck.length;
-      // Take a slice, no need to shuffle here as selectAndSetNextCard handles weighted random picking
-      let initialSessionCardsRaw = allCardsFromDeck.slice(0, sessionSize);
+      
+      // Shuffle the cards first to ensure a random initial order
+      let shuffledCards = shuffleArray([...allCardsFromDeck]);
+      
+      // Take cards up to the session size
+      let initialSessionCardsRaw = shuffledCards.slice(0, sessionSize);
 
       const initialStudyCards: StudyCard[] = initialSessionCardsRaw.map(card => ({
         ...card,
         incorrectAttempts: 0,
+        consecutiveCorrectAttempts: 0,
       }));
       setCards(initialStudyCards);
       
-      setQuestionsAnsweredThisSession(0);
+      // Reset the recently seen cards list
+      recentlySeenCards.current = [];
+      
+      // Initialize to 1 since we're showing the first card
+      setQuestionsAnsweredThisSession(1);
       setCorrectAnswers(0);
       setCurrentStreak(0);
       resetCardState();
 
       if (initialStudyCards.length > 0) {
+        // First, set the progress bar
+        setStudyProgress(1 / (sessionSize || initialStudyCards.length) * 100);
+        // Then select the first card
         selectAndSetNextCard(initialStudyCards, null);
         setSessionComplete(false);
-        // Progress is set by selectAndSetNextCard
       } else {
         setSessionComplete(true);
         setStudyProgress(0);
@@ -174,9 +250,12 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
     setIsSubmitting(true);
     setUserAnswer(submittedAnswer);
 
+    // Spellcheck the answer before grading
+    const spellcheckedAnswer = spellcheckAnswer(submittedAnswer, currentCard.back);
+
     try {
       const [answerEmbedding, correctAnswerEmbedding] = await Promise.all([
-        getSentenceEmbedding(submittedAnswer.toLowerCase()),
+        getSentenceEmbedding(spellcheckedAnswer.toLowerCase()),
         getSentenceEmbedding(currentCard.back.toLowerCase()),
       ]);
       const score = cosineSimilarity(answerEmbedding, correctAnswerEmbedding);
@@ -188,7 +267,11 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
       setCards(prevCards =>
         prevCards.map(card =>
           card.id === currentCard.id
-            ? { ...card, incorrectAttempts: isCorrect ? card.incorrectAttempts : (card.incorrectAttempts || 0) + 1 }
+            ? { 
+                ...card, 
+                incorrectAttempts: isCorrect ? card.incorrectAttempts : (card.incorrectAttempts || 0) + 1,
+                consecutiveCorrectAttempts: isCorrect ? (card.consecutiveCorrectAttempts || 0) + 1 : 0
+              }
             : card
         )
       );
@@ -214,7 +297,47 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
           variant: "destructive",
         });
       }
-      // Study progress is updated by selectAndSetNextCard or when a card is first loaded
+      
+      // We're now incrementing the counter to the NEXT card number
+      const nextQuestionNumber = questionsAnsweredThisSession + 1;
+      
+      // Update progress bar based on the new count
+      const totalQuestionsTarget = settings.studySettings.cardsPerSession || cards.length;
+      
+      // Check if we've completed all questions
+      if (nextQuestionNumber > totalQuestionsTarget && totalQuestionsTarget > 0) {
+        console.log('Session complete, all questions answered');
+        setSessionComplete(true);
+        return; // Don't proceed to next card if session is complete
+      }
+      
+      // Calculate the new progress value
+      const newProgressValue = (nextQuestionNumber / totalQuestionsTarget) * 100;
+      console.log(`Setting progress to ${newProgressValue}%`);
+      
+      // Update the question counter and progress bar
+      setQuestionsAnsweredThisSession(nextQuestionNumber);
+      setStudyProgress(newProgressValue);
+      
+      console.log(`Answered question ${questionsAnsweredThisSession}, moving to question ${nextQuestionNumber}`);
+      
+      // Reset the card state and select the next card
+      setIsAnswerChecked(true);
+      setIsSubmitting(false);
+      
+      // Store the nextQuestionNumber in a ref or variable that won't be affected by React's state batching
+      const questionToUse = nextQuestionNumber;
+      
+      // Select the next card directly instead of using handleNextCard
+      // This avoids the double card switch issue
+      setTimeout(() => {
+        resetCardState();
+        if (cards.length > 0) {
+          // Use the stored question number to ensure we're using the correct value
+          selectAndSetNextCard(cards, currentCard?.id ?? null, questionToUse);
+        }
+      }, 500); // Brief delay to allow toast to be seen
+      
     } catch (error) {
       console.error("Error calculating similarity:", error);
       setSimilarityScore(0); // Treat error as incorrect
@@ -223,14 +346,10 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
         description: "Could not calculate similarity. Please try again.",
         variant: "destructive"
       });
+      setIsAnswerChecked(true);
+      setIsSubmitting(false);
     }
-    setIsAnswerChecked(true);
-    setIsSubmitting(false);
-    // Automatically move to the next card after a brief delay to allow toast to be seen
-    setTimeout(() => {
-      handleNextCard();
-    }, 500); // Adjust delay as needed, or remove if toast visibility isn't an issue
-  }, [currentCard, toast, handleNextCard]);
+  }, [currentCard, toast, questionsAnsweredThisSession, cards.length, settings.studySettings.cardsPerSession, SIMILARITY_THRESHOLD, currentStreak, resetCardState, selectAndSetNextCard, cards]);
 
   // useEffect for session completion confetti - MUST BE AT TOP LEVEL
   useEffect(() => {
@@ -248,7 +367,8 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
     setCorrectAnswers(0);
     setCurrentStreak(0);
     setSessionComplete(false);
-    setQuestionsAnsweredThisSession(0);
+    // Initialize to 1 since we're showing the first card
+    setQuestionsAnsweredThisSession(1);
 
     if (deck) {
       const allCardsFromDeck = deck.cards as Flashcard[];
@@ -258,11 +378,14 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
       const reinitializedStudyCards: StudyCard[] = initialSessionCardsRaw.map(card => ({
         ...card,
         incorrectAttempts: 0, // Reset attempts for a new session
+        consecutiveCorrectAttempts: 0,
       }));
       setCards(reinitializedStudyCards);
 
       if (reinitializedStudyCards.length > 0) {
-        selectAndSetNextCard(reinitializedStudyCards, null); // Select first card for new session
+        selectAndSetNextCard(reinitializedStudyCards, null, 1); // Pass 1 as the answeredCount
+        // Set initial progress
+        setStudyProgress(1 / (sessionSize || reinitializedStudyCards.length) * 100);
       } else {
         setSessionComplete(true); // No cards to study
         setStudyProgress(0);
@@ -344,7 +467,7 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
           Current Streak: {currentStreak} 🔥
         </div>
         <div className="text-sm text-muted-foreground">
-          Card {questionsAnsweredThisSession + 1} of {settings.studySettings.cardsPerSession || cards.length}
+          Card {questionsAnsweredThisSession} of {settings.studySettings.cardsPerSession || cards.length}
         </div>
       </div>
 
@@ -364,7 +487,29 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
             Restart Session
           </Button>
        </div>
-      {showConfetti && width && height && <Confetti width={width} height={height} recycle={false} numberOfPieces={200} />}
+      {showConfetti && width && height && (
+  <div
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      pointerEvents: 'none',
+      zIndex: 9999,
+      overflow: 'hidden',
+    }}
+    aria-hidden="true"
+  >
+    <Confetti
+      width={window.innerWidth || width}
+      height={window.innerHeight || height}
+      style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', pointerEvents: 'none' }}
+      numberOfPieces={200}
+      recycle={false}
+    />
+  </div>
+)}
     </div>
   );
 }
