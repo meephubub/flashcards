@@ -1,6 +1,13 @@
 // app/api/image-search/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
+const SEARXNG_INSTANCES = [
+  "https://search.mdosch.de",
+  "https://searx.namejeff.xyz",
+  "https://searx.sev.monster",
+  "https://searxng.hweeren.com"
+];
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get('query');
@@ -9,47 +16,53 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
   }
 
-  const searxngUrl = `https://searxng.site/search?q=!images%20${encodeURIComponent(query)}&format=json`;
-
-  try {
-    const response = await fetch(searxngUrl, {
-      headers: {
-        // Some instances might prefer or require an Accept header for JSON
-        // 'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      // Log the actual error from SearXNG for debugging
-      const errorText = await response.text();
-      console.error(`SearXNG request failed with status ${response.status}: ${errorText}`);
-      if (response.status === 429) {
-        return NextResponse.json({ error: 'SearXNG rate limit hit. Please try again later.' }, { status: 429 });
+  // Helper to try each instance in order
+  async function trySearxngInstances(query: string): Promise<string[] | null> {
+    for (const baseUrl of SEARXNG_INSTANCES) {
+      const url = `${baseUrl}/search?q=!images%20${encodeURIComponent(query)}&format=json`;
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        if (!response.ok) {
+          // Optionally log for debugging
+          // const errorText = await response.text();
+          // console.error(`SearXNG instance ${baseUrl} failed: ${response.status} - ${errorText}`);
+          continue; // Try next instance
+        }
+        const data = await response.json();
+        if (data && Array.isArray(data.results)) {
+          // Extract up to 10 absolute image URLs from img_src, url, or thumbnail_src
+          const imageUrls: string[] = [];
+          for (const result of data.results) {
+            let imgUrl = result.img_src || result.url || result.thumbnail_src;
+            if (imgUrl && typeof imgUrl === 'string') {
+              if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+              imageUrls.push(imgUrl);
+            }
+            if (imageUrls.length >= 10) break;
+          }
+          if (imageUrls.length > 0) {
+            return imageUrls;
+          }
+        }
+      } catch (err) {
+        // Network or parsing error, try next instance
+        continue;
       }
-      return NextResponse.json({ error: `Failed to fetch images from SearXNG. Status: ${response.status}`, details: errorText }, { status: response.status });
     }
+    return null;
+  }
 
-    const data = await response.json();
-
-    // TODO: Inspect the 'data' object to determine its structure and extract image URLs.
-    // This is a placeholder based on a common structure.
-    // You might need to adjust this based on the actual SearXNG JSON response.
-    // Example: data.results might be an array of objects, each with an 'img_src' or 'url' field.
-    let imageUrls: string[] = [];
-    if (data && data.results && Array.isArray(data.results)) {
-      imageUrls = data.results
-        .map((item: any) => item.img_src || item.url || item.thumbnail_src)
-        .filter(Boolean)
-        .map((url: string) => url.startsWith('//') ? `https:${url}` : url) // Ensure absolute URL
-        .slice(0, 10);
-      // We take various potential keys and filter out any null/undefined ones, then take the first 10.
-    } else {
-        // If the structure is different, log it for inspection
-        console.warn('Unexpected SearXNG response structure:', data);
-        // Attempt to find any URLs in the response as a fallback
-        const findUrls = (obj: any): string[] => {
-            let urls: string[] = [];
-            if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://') || obj.startsWith('//'))) {
+  const images = await trySearxngInstances(query);
+  if (images && images.length > 0) {
+    return NextResponse.json({ images }, { status: 200 });
+  } else {
+    return NextResponse.json({ error: 'All SearXNG instances failed or returned no images' }, { status: 502 });
+  }
+}
                 if (/\.(jpeg|jpg|gif|png)$/i.test(obj.split('?')[0])) { // Check extension before query params
                     urls.push(obj.startsWith('//') ? `https:${obj}` : obj); // Ensure absolute URL
                 }
