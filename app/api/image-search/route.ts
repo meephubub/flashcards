@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const SEARXNG_INSTANCES = [
-  "https://searxng.site",
-  "https://search.mdosch.de",
-  "https://searx.namejeff.xyz",
-  "https://searx.sev.monster",
-  "https://searxng.hweeren.com"
+  "https://searxng.site/searxng",
+  "https://search.mdosch.de/searxng",
+  "https://searx.namejeff.xyz/searxng",
+  "https://searx.sev.monster/searxng",
+  "https://searxng.hweeren.com/searxng"
 ];
 
 let healthyInstances: string[] = [];
