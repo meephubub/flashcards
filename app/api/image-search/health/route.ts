@@ -17,7 +17,7 @@ export async function GET() {
   const checks = await Promise.allSettled(
     SEARXNG_INSTANCES.map(async (baseUrl) => {
       const url = `${baseUrl}/search?q=cat&format=json&categories=images`;
-
+      console.log("trying ${url}")
       try {
         const response = await fetch(url, {
           method: 'GET',
