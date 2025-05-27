@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 
 const SEARXNG_INSTANCES = [
-  "https://searxng.site",
   "https://search.mdosch.de",
   "https://searx.namejeff.xyz",
   "https://searx.sev.monster",
-  "https://searxng.hweeren.com"
+  "https://searxng.hweeren.com",
+  "https://searxng.site"
 ];
 
 export async function GET() {
@@ -13,16 +13,31 @@ export async function GET() {
 
   const checks = await Promise.allSettled(
     SEARXNG_INSTANCES.map(async (baseUrl) => {
-      const healthUrl = `${baseUrl}/search?q=test&format=json`;
+      const url = `${baseUrl}/search?q=cat&format=json&categories=images`;
+
       try {
-        const response = await fetch(healthUrl, {
-          headers: { 'Accept': 'application/json' },
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; SearxngHealthBot/1.0; +https://example.com)'
+          },
         });
-        if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
-          return { url: baseUrl, healthy: true };
+
+        const contentType = response.headers.get('content-type') || '';
+        if (response.ok && contentType.includes('application/json')) {
+          const json = await response.json();
+          if (Array.isArray(json.results)) {
+            return { url: baseUrl, healthy: true };
+          }
         }
-      } catch (_) {}
-      return { url: baseUrl, healthy: false };
+
+        return { url: baseUrl, healthy: false };
+
+      } catch (err) {
+        console.warn(`❌ Failed to reach ${baseUrl}`, err);
+        return { url: baseUrl, healthy: false };
+      }
     })
   );
 
