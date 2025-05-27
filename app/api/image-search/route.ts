@@ -8,6 +8,11 @@ const SEARXNG_INSTANCES = [
   "https://searxng.hweeren.com"
 ];
 
+// Cache health info for ~5 minutes
+let healthyInstances: string[] = [];
+let lastChecked = 0;
+const HEALTH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get('query');
@@ -16,7 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
   }
 
-  // Recursive function to find image URLs in the response object
+  // Recursively extract image URLs from JSON
   function findUrls(obj: any): string[] {
     let urls: string[] = [];
 
@@ -37,37 +42,63 @@ export async function GET(request: NextRequest) {
     return urls;
   }
 
-  // Try querying each instance in order
+  // Check instance health with a quick test request
+  async function checkSearxngInstanceHealth(): Promise<string[]> {
+    if (Date.now() - lastChecked < HEALTH_CACHE_TTL && healthyInstances.length > 0) {
+      return healthyInstances;
+    }
+
+    const checks = await Promise.allSettled(
+      SEARXNG_INSTANCES.map(async (baseUrl) => {
+        const healthUrl = `${baseUrl}/search?q=test&format=json`;
+        try {
+          const response = await fetch(healthUrl, {
+            headers: { 'Accept': 'application/json' },
+            method: 'GET',
+          });
+          if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
+            return baseUrl;
+          }
+        } catch (_) {}
+        return null;
+      })
+    );
+
+    healthyInstances = checks
+      .map(r => (r.status === 'fulfilled' ? r.value : null))
+      .filter(Boolean) as string[];
+
+    lastChecked = Date.now();
+    return healthyInstances;
+  }
+
+  // Try querying each healthy instance in order
   async function trySearxngInstances(query: string): Promise<string[] | null> {
-    for (const baseUrl of SEARXNG_INSTANCES) {
+    const instances = await checkSearxngInstanceHealth();
+
+    for (const baseUrl of instances) {
       const url = `${baseUrl}/search?q=!images%20${encodeURIComponent(query)}&format=json`;
 
       try {
         const response = await fetch(url, {
-          headers: {
-            'Accept': 'application/json',
-          },
+          headers: { 'Accept': 'application/json' },
         });
 
-        if (!response.ok) continue;
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`SearXNG instance ${baseUrl} failed: ${response.status} - ${errorText}`);
+          continue;
+        }
 
         const data = await response.json();
-
-        let imageUrls: string[] = [];
-
-        // Extract up to 10 image URLs using the recursive helper
-        imageUrls = [...new Set(findUrls(data))].slice(0, 10);
-
-        if (imageUrls.length === 0) {
-          console.error('Could not extract image URLs from SearXNG response.');
-        }
+        const imageUrls = [...new Set(findUrls(data))].slice(0, 10);
 
         if (imageUrls.length > 0) {
           return imageUrls;
         }
-
-      } catch (error) {
-        continue; // Try next instance on error
+      } catch (err) {
+        console.error(`Error connecting to ${baseUrl}:`, err);
+        continue;
       }
     }
 
