@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const SEARXNG_INSTANCES = [
+  "https://searxng.site",
   "https://search.mdosch.de",
   "https://searx.namejeff.xyz",
   "https://searx.sev.monster",
