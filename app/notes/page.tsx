@@ -42,6 +42,13 @@ import "katex/dist/katex.min.css"
 import katex from "katex"
 import { useTheme } from "@/components/theme-provider"
 
+interface McqOption {
+  text: string;
+  isCorrect: boolean;
+  // Add other potential fields if necessary, e.g., explanation?: string;
+}
+import { ImageSearchDialog } from "@/components/image-search-dialog";
+
 // Helper to generate slugs for IDs
 // Keep track of used slugs to avoid duplicates
 const usedSlugs = new Map<string, number>();
@@ -195,7 +202,7 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
   
   let inMcqBlock = false;
   let currentMcqQuestion = "";
-  let currentMcqOptions: {text: string, isCorrect: boolean}[] = [];
+  let currentMcqOptions: McqOption[] = [];
 
   // Process functions
   const processList = () => {
@@ -374,7 +381,7 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
           </div>
           
           <div className="space-y-3 pl-2">
-            {shuffledOptions.map((option, index) => {
+            {shuffledOptions.map((option: McqOption, index: number) => {
               const isSelected = mcqState.selectedIndex === index;
               const showCorrect = mcqState.showAnswers && option.isCorrect;
               const showIncorrect = mcqState.showAnswers && isSelected && !option.isCorrect;
@@ -699,6 +706,19 @@ export default function NotesPage() {
   const [noteForFlashcards, setNoteForFlashcards] = useState<Note | null>(null)
   const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
 
+  // State for Image Search
+  const [isImageSearchDialogOpen, setIsImageSearchDialogOpen] = useState<boolean>(false);
+  const [imageSearchQuery, setImageSearchQuery] = useState<string>("");
+  const [imageSearchResults, setImageSearchResults] = useState<string[]>([]);
+  const [isLoadingImages, setIsLoadingImages] = useState<boolean>(false);
+  const [imageSearchError, setImageSearchError] = useState<string | null>(null);
+  const [activeEditorContext, setActiveEditorContext] = useState<{
+    type: 'newNote' | 'editNote';
+    originalTag: string; // The full "!(img)[query]" tag
+    // We'll use newNote.content or editingNote.content directly for current content
+    // and setNewNote or setEditingNote for updates.
+  } | null>(null);
+
   const [mcqStates, setMcqStates] = useState<Record<string, {selectedIndex?: number, showAnswers: boolean}>>({});
 
   const handleMcqOptionClick = (blockId: string, optionIndex: number, isCorrect: boolean) => {
@@ -722,6 +742,99 @@ export default function NotesPage() {
   useEffect(() => {
     fetchNotes()
   }, [])
+
+  const IMAGE_TAG_REGEX = /!\(img\)\[([^\]]+)\]$/;
+
+  // Effect to fetch images when dialog is opened and query is set
+  useEffect(() => {
+    if (isImageSearchDialogOpen && imageSearchQuery) {
+      const fetchImages = async () => {
+        setIsLoadingImages(true);
+        setImageSearchError(null);
+        setImageSearchResults([]);
+        try {
+          const response = await fetch(`/api/image-search?query=${encodeURIComponent(imageSearchQuery)}`);
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: `Failed to fetch images: ${response.status}` }));
+            throw new Error(errorData.error || `Failed to fetch images: ${response.status}`);
+          }
+          const data = await response.json();
+          setImageSearchResults(data.images || []);
+          if ((data.images || []).length === 0) {
+            // This case is handled by the dialog itself, but good to be aware of
+            // setImageSearchError(`No images found for "${imageSearchQuery}".`); 
+          }
+        } catch (err: any) {
+          console.error("Image search fetch error:", err);
+          setImageSearchError(err.message || "An unknown error occurred while searching for images.");
+        } finally {
+          setIsLoadingImages(false);
+        }
+      };
+      fetchImages();
+    }
+  }, [isImageSearchDialogOpen, imageSearchQuery]);
+
+  const handleImageSearchTrigger = (
+    currentTextValue: string, 
+    newTextValue: string,
+    contextType: 'newNote' | 'editNote'
+  ) => {
+    const match = newTextValue.match(IMAGE_TAG_REGEX);
+    if (match && match[1]) {
+      const query = match[1];
+      const originalTag = match[0];
+      
+      // Update content specific to context immediately (before opening dialog)
+      if (contextType === 'newNote') {
+        setNewNote(prev => ({ ...prev, content: newTextValue }));
+      } else if (contextType === 'editNote') {
+        setEditingNote(prev => prev ? ({ ...prev, content: newTextValue }) : null);
+      }
+
+      setActiveEditorContext({
+        type: contextType,
+        originalTag: originalTag,
+      });
+      setImageSearchQuery(query); // This will trigger the useEffect above to fetch images
+      setIsImageSearchDialogOpen(true);
+      return true; // Indicates that the image search was triggered
+    }
+    return false; // Indicates no image search trigger
+  };
+
+  const handleImageSelectedFromDialog = (imageUrl: string) => {
+    if (activeEditorContext) {
+      let currentTextareaContent = "";
+      if (activeEditorContext.type === 'newNote') {
+        currentTextareaContent = newNote.content;
+      } else if (activeEditorContext.type === 'editNote' && editingNote) {
+        currentTextareaContent = editingNote.content;
+      }
+      
+      const updatedContent = currentTextareaContent.replace(
+        activeEditorContext.originalTag,
+        `![${imageSearchQuery}](${imageUrl})`
+      );
+
+      if (activeEditorContext.type === 'newNote') {
+        setNewNote(prev => ({ ...prev, content: updatedContent }));
+      } else if (activeEditorContext.type === 'editNote') {
+        setEditingNote(prev => prev ? { ...prev, content: updatedContent } : null);
+      }
+    }
+    closeImageSearchDialog();
+  };
+
+  const closeImageSearchDialog = () => {
+    setIsImageSearchDialogOpen(false);
+    // Keep imageSearchQuery for the dialog title while it closes, then clear if needed
+    // setImageSearchQuery(""); 
+    setImageSearchResults([]);
+    setImageSearchError(null);
+    setActiveEditorContext(null);
+    setIsLoadingImages(false); // Ensure loading is reset
+  };
 
   // Derive available categories from all notes
   useEffect(() => {
@@ -792,6 +905,27 @@ export default function NotesPage() {
     }
   }, [focusedNoteId, displayedNotes])
 
+const fetchNotes = async () => {
+  setIsLoading(true)
+  try {
+    const { data, error } = await supabase.from("notes").select("*").order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Supabase error fetching notes:", error)
+      setErrorMessage(`Error fetching notes: ${error.message}`)
+      throw error
+    }
+    if (data) {
+      setAllNotes(data as Note[])
+      setErrorMessage(null)
+    }
+  } catch (error) {
+    // Error message already set or logged
+  } finally {
+    setIsLoading(false)
+  }
+}
+
   // State for inline editing
   const [inlineEditingNoteId, setInlineEditingNoteId] = useState<string | null>(null)
   const [inlineEditContent, setInlineEditContent] = useState<string>("")
@@ -799,35 +933,47 @@ export default function NotesPage() {
 
   // Handle saving inline edits
   const handleSaveInlineEdit = useCallback(async () => {
-    if (!inlineEditingNoteId) return
+    if (!inlineEditingNoteId || !inlineEditContent) {
+      setErrorMessage("Cannot save empty content or no note selected for inline edit.");
+      return;
+    }
 
+    setIsLoading(true);
     try {
-      setIsLoading(true)
       const { error } = await supabase
         .from("notes")
-        .update({ content: inlineEditContent })
-        .eq("id", inlineEditingNoteId)
+        .update({ content: inlineEditContent, updated_at: new Date().toISOString() })
+        .eq("id", inlineEditingNoteId);
 
       if (error) {
-        console.error("Error updating note:", error)
-        setErrorMessage(`Error updating note: ${error.message}`)
-        throw error
+        console.error("Error updating note:", error);
+        setErrorMessage(`Error updating note: ${error.message}`);
+        // Potentially throw error to be caught by the outer catch if needed for more complex scenarios
       } else {
-        // Show brief success message
-        setErrorMessage("Note updated successfully")
-        setTimeout(() => setErrorMessage(null), 1500)
+        setErrorMessage("Note updated successfully!");
+        setTimeout(() => setErrorMessage(null), 2000);
+        
+        // Update local state immediately for responsiveness
+        const updateNotesState = (prevNotes: Note[]) => prevNotes.map(note => 
+          note.id === inlineEditingNoteId 
+            ? { ...note, content: inlineEditContent, updated_at: new Date().toISOString() } 
+            : note
+        );
+        setAllNotes(updateNotesState);
+        setDisplayedNotes(updateNotesState); // Assuming displayedNotes should also reflect this change
 
-        // Clear inline editing state
-        setInlineEditingNoteId(null)
-        // Refresh notes
-        await fetchNotes()
+        setInlineEditingNoteId(null); // Clear editing state
+        // Optionally, call fetchNotes() if there's a need to re-sync completely from DB,
+        // but optimistic update above should suffice for UI.
+        // await fetchNotes(); 
       }
     } catch (error: any) {
-      setErrorMessage(`Error updating note: ${error.message}`)
+      console.error("Outer catch - Error updating note:", error);
+      setErrorMessage(`Failed to update note: ${error.message}`);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [inlineEditingNoteId, inlineEditContent])
+  }, [inlineEditingNoteId, inlineEditContent, supabase, fetchNotes, setIsLoading, setErrorMessage, setAllNotes, setDisplayedNotes, setInlineEditingNoteId]);
 
   // Handle text selection and Ctrl+K, Ctrl+B, and Ctrl+E
   useEffect(() => {
@@ -1092,26 +1238,7 @@ export default function NotesPage() {
     }
   }, [theme])
 
-  const fetchNotes = async () => {
-    setIsLoading(true)
-    try {
-      const { data, error } = await supabase.from("notes").select("*").order("created_at", { ascending: false })
 
-      if (error) {
-        console.error("Supabase error fetching notes:", error)
-        setErrorMessage(`Error fetching notes: ${error.message}`)
-        throw error
-      }
-      if (data) {
-        setAllNotes(data as Note[])
-        setErrorMessage(null)
-      }
-    } catch (error) {
-      // Error message already set or logged
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1434,48 +1561,43 @@ export default function NotesPage() {
   }
 
   // Handle AI note edit - apply edits from the AI Assistant
-  const handleAiNoteEdit = (newContent: string) => {
+  const handleAiNoteEdit = async (newContent: string) => {
     if (focusedNoteId) {
       const noteToEdit = allNotes.find(note => note.id === focusedNoteId);
       if (noteToEdit) {
         setIsLoading(true);
         setErrorMessage(null);
         
-        supabase
-          .from("notes")
-          .update({ content: newContent })
-          .eq("id", focusedNoteId)
-          .then(({ error }) => {
-            if (error) {
-              console.error("Error updating note:", error);
-              setErrorMessage(`Failed to update note: ${error.message}`);
-              return;
-            }
-            
-            // Update the notes in state
-            setAllNotes(prevNotes =>
-              prevNotes.map(note =>
-                note.id === focusedNoteId
-                  ? { ...note, content: newContent }
-                  : note
-              )
-            );
+        try {
+          // setIsLoading(true); // Assuming setIsLoading(true) is handled before this block or at the start of handleImageSelected
+          const { error: updateError } = await supabase
+            .from("notes")
+            .update({ content: newContent, updated_at: new Date().toISOString() })
+            .eq("id", focusedNoteId);
 
-            setDisplayedNotes(prevNotes =>
+          if (updateError) {
+            console.error("Error updating note after image selection:", updateError);
+            setErrorMessage(`Failed to update note: ${updateError.message}`);
+            // Consider if you need to throw updateError here for an outer catch block
+          } else {
+            // Update the notes in state optimistically or after confirmation
+            const updateNoteContent = (prevNotes: Note[]) =>
               prevNotes.map(note =>
                 note.id === focusedNoteId
-                  ? { ...note, content: newContent }
+                  ? { ...note, content: newContent, updated_at: new Date().toISOString() }
                   : note
-              )
-            );
-            
-            setIsLoading(false);
-          })
-          .catch((error: Error) => {
-            console.error("Error updating note:", error);
-            setErrorMessage(`Failed to update note: ${error.message}`);
-            setIsLoading(false);
-          });
+              );
+            setAllNotes(updateNoteContent);
+            setDisplayedNotes(updateNoteContent);
+            // setErrorMessage("Note updated with image!"); // Optional success message
+            // setTimeout(() => setErrorMessage(null), 2000);
+          }
+        } catch (error: any) {
+          console.error("Exception during note update after image selection:", error);
+          setErrorMessage(`An unexpected error occurred: ${error.message}`);
+        } finally {
+          setIsLoading(false); // Ensure this is managed correctly
+        }
       }
     }
   }
@@ -1894,7 +2016,12 @@ export default function NotesPage() {
                 <Textarea
                   placeholder="Note Content (use #, ##, *, -, 1., etc. for formatting)"
                   value={newNote.content}
-                  onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
+                  onChange={(e) => {
+                    const triggered = handleImageSearchTrigger(newNote.content, e.target.value, 'newNote');
+                    if (!triggered) {
+                      setNewNote({ ...newNote, content: e.target.value });
+                    }
+                  }}
                   className="min-h-[160px] bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500 font-mono text-sm"
                 />
               </div>
@@ -2308,6 +2435,17 @@ export default function NotesPage() {
         onClose={() => setIsAiAssistantOpen(false)}
         currentNote={allNotes.find(note => note.id === focusedNoteId) || null}
         onApplyEdit={handleAiNoteEdit}
+      />
+
+      {/* Image Search Dialog */}
+      <ImageSearchDialog
+        isOpen={isImageSearchDialogOpen}
+        onClose={closeImageSearchDialog}
+        query={imageSearchQuery}
+        images={imageSearchResults}
+        isLoading={isLoadingImages}
+        error={imageSearchError}
+        onImageSelect={handleImageSelectedFromDialog}
       />
     </div>
   )
