@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 
 const SEARXNG_INSTANCES = [
-  "https://search.mdosch.de",
-  "https://searx.namejeff.xyz",
-  "https://searx.sev.monster",
-  "https://searxng.hweeren.com",
-  "https://searxng.site"
+  "https://searxng.site/searxng",
+  "https://search.mdosch.de/searxng",
+  "https://searx.namejeff.xyz/searxng",
+  "https://searx.sev.monster/searxng",
+  "https://searxng.hweeren.com/searxng"
 ];
 
 export async function GET() {
