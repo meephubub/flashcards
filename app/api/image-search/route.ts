@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 
 // SearXNG instances to try - ordered by reliability
 const SEARXNG_INSTANCES = [
-  { url: "https://harmless-thoroughly-moth.ngrok-free.app", path: '/search' },
+  { url: "https://raspberrypi.unicorn-deneb.ts.net", path: '/search' },
 ];
 
 // Browser-like headers to avoid being detected as a bot
@@ -73,25 +73,32 @@ export async function GET(request: NextRequest) {
         signal: AbortSignal.timeout(10000) // 10 second timeout
       });
 
-      if (debug) {
-        console.log(`Status: ${response.status}`);
-        console.log(`Headers:`, Object.fromEntries(response.headers.entries()));
+      // Log status and headers always
+      console.log(`[SearXNG] Status: ${response.status}`);
+      console.log(`[SearXNG] Headers:`, Object.fromEntries(response.headers.entries()));
+
+      const contentType = response.headers.get('content-type') || '';
+      let responseBody: any = null;
+      try {
+        if (contentType.includes('application/json')) {
+          responseBody = await response.json();
+          console.log('[SearXNG] JSON body:', responseBody);
+        } else {
+          responseBody = await response.text();
+          console.log('[SearXNG] Non-JSON body:', responseBody);
+        }
+      } catch (parseErr) {
+        console.error('[SearXNG] Error parsing response body:', parseErr);
       }
 
-      if (response.ok) {
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const data = await response.json();
-          if (data && Array.isArray(data.results)) {
-            return {
-              query,
-              number_of_results: data.results.length,
-              results: data.results,
-            };
-          }
-        }
+      if (response.ok && responseBody && Array.isArray(responseBody.results)) {
+        return {
+          query,
+          number_of_results: responseBody.results.length,
+          results: responseBody.results,
+        };
       }
-      console.error(`Instance ${instance.url}${instance.path} failed with status ${response.status}`);
+      console.error(`[SearXNG] Instance ${instance.url}${instance.path} failed or unexpected format. Status: ${response.status}, Body:`, responseBody);
       return null;
     } catch (error: any) {
       console.error(`❌ Error with ${instance.url}${instance.path}:`, error);
@@ -103,13 +110,38 @@ export async function GET(request: NextRequest) {
     // Search for images
     const result = await searchForImages(query, debug);
 
-    if (result && result.results && result.results.length > 0) {
-      return NextResponse.json(result, { status: 200 });
+    if (result && Array.isArray(result.results) && result.results.length > 0) {
+      // Always set number_of_results to match results.length
+      const number_of_results = result.results.length;
+
+      // Extract up to 10 image URLs from img_src, url, or thumbnail_src fields
+      const images: string[] = [];
+      for (const item of result.results) {
+        if (item.img_src) {
+          images.push(item.img_src.startsWith('//') ? `https:${item.img_src}` : item.img_src);
+        } else if (item.url && /\.(jpeg|jpg|gif|png)$/i.test(item.url.split('?')[0])) {
+          images.push(item.url.startsWith('//') ? `https:${item.url}` : item.url);
+        } else if (item.thumbnail_src) {
+          images.push(item.thumbnail_src.startsWith('//') ? `https:${item.thumbnail_src}` : item.thumbnail_src);
+        }
+        if (images.length >= 10) break;
+      }
+
+      if (images.length > 0) {
+        return NextResponse.json({ images }, { status: 200 });
+      } else {
+        console.warn('No valid image URLs found in results:', result.results);
+        return NextResponse.json({
+          images: [],
+          error: 'No image URLs found in SearXNG results',
+          message: 'Try again later or use a different search query'
+        }, { status: 502 });
+      }
     } else {
+      // Log unexpected or empty result
+      console.warn('SearXNG instance returned no results or unexpected format:', result);
       return NextResponse.json({
-        query,
-        number_of_results: 0,
-        results: [],
+        images: [],
         error: 'SearXNG instance failed or returned no results',
         message: 'Try again later or use a different search query'
       }, { status: 502 });
@@ -117,6 +149,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Error in image-search API route:', error);
     return NextResponse.json({
+      images: [],
       error: 'Internal server error',
       details: error.message
     }, { status: 500 });
