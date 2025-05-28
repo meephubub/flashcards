@@ -1,157 +1,81 @@
+// app/api/image-search/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-// Force Next.js to use Node.js runtime (more reliable for external API calls)
-export const runtime = 'nodejs';
-
-// SearXNG instances to try - ordered by reliability
-const SEARXNG_INSTANCES = [
-  { url: "https://raspberrypi.unicorn-deneb.ts.net", path: '/search' },
-];
-
-// Browser-like headers to avoid being detected as a bot
-const BROWSER_HEADERS = {
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Cache-Control': 'no-cache',
-  'Connection': 'keep-alive',
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
-  'Upgrade-Insecure-Requests': '1',
-  'Pragma': 'no-cache',
-  'Sec-Fetch-Dest': 'document',
-  'Sec-Fetch-Mode': 'navigate',
-  'Sec-Fetch-Site': 'none',
-  'Sec-Fetch-User': '?1',
-};
-
 export async function GET(request: NextRequest) {
-  // Extract query parameter
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get('query');
-  const debug = searchParams.has('debug');
 
   if (!query) {
     return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
   }
 
-  /**
-   * Recursively find image URLs in any object
-   */
-  function findUrls(obj: any): string[] {
-    let urls: string[] = [];
-    if (typeof obj === 'string') {
-      if (/\.(jpeg|jpg|gif|png)$/i.test(obj.split('?')[0])) {
-        urls.push(obj.startsWith('//') ? `https:${obj}` : obj);
-      }
-    } else if (Array.isArray(obj)) {
-      obj.forEach(item => {
-        urls = urls.concat(findUrls(item));
-      });
-    } else if (typeof obj === 'object' && obj !== null) {
-      Object.values(obj).forEach(value => {
-        urls = urls.concat(findUrls(value));
-      });
-    }
-    return urls;
-  }
-
-  /**
-   * Search for images using SearXNG on the fixed single instance
-   */
-  async function searchForImages(query: string, debug = false): Promise<any> {
-    const instance = SEARXNG_INSTANCES[0];
-    try {
-      const searchUrl = `${instance.url}${instance.path}?q=!images+${encodeURIComponent(query)}&format=json&categories=images`;
-      if (debug) console.log(`🔍 Searching: ${searchUrl}`);
-
-      const response = await fetch(searchUrl, {
-        method: 'GET',
-        headers: {
-          ...BROWSER_HEADERS,
-          'Accept': 'application/json',
-          'Referer': `${instance.url}${instance.path}`
-        },
-        signal: AbortSignal.timeout(10000) // 10 second timeout
-      });
-
-      // Log status and headers always
-      console.log(`[SearXNG] Status: ${response.status}`);
-      console.log(`[SearXNG] Headers:`, Object.fromEntries(response.headers.entries()));
-
-      const contentType = response.headers.get('content-type') || '';
-      let responseBody: any = null;
-      try {
-        if (contentType.includes('application/json')) {
-          responseBody = await response.json();
-          console.log('[SearXNG] JSON body:', responseBody);
-        } else {
-          responseBody = await response.text();
-          console.log('[SearXNG] Non-JSON body:', responseBody);
-        }
-      } catch (parseErr) {
-        console.error('[SearXNG] Error parsing response body:', parseErr);
-      }
-
-      if (response.ok && responseBody && Array.isArray(responseBody.results)) {
-        return {
-          query,
-          number_of_results: responseBody.results.length,
-          results: responseBody.results,
-        };
-      }
-      console.error(`[SearXNG] Instance ${instance.url}${instance.path} failed or unexpected format. Status: ${response.status}, Body:`, responseBody);
-      return null;
-    } catch (error: any) {
-      console.error(`❌ Error with ${instance.url}${instance.path}:`, error);
-      return null;
-    }
-  }
+  const searxngUrl = `https://raspberrypi.unicorn-deneb.ts.net/search?q=!images%20${encodeURIComponent(query)}&format=json`;
 
   try {
-    // Search for images
-    const result = await searchForImages(query, debug);
+    const response = await fetch(searxngUrl, {
+      headers: {
+        // Some instances might prefer or require an Accept header for JSON
+        // 'Accept': 'application/json',
+      },
+    });
 
-    if (result && Array.isArray(result.results) && result.results.length > 0) {
-      // Always set number_of_results to match results.length
-      const number_of_results = result.results.length;
-
-      // Extract up to 10 image URLs from img_src, url, or thumbnail_src fields
-      const images: string[] = [];
-      for (const item of result.results) {
-        if (item.img_src) {
-          images.push(item.img_src.startsWith('//') ? `https:${item.img_src}` : item.img_src);
-        } else if (item.url && /\.(jpeg|jpg|gif|png)$/i.test(item.url.split('?')[0])) {
-          images.push(item.url.startsWith('//') ? `https:${item.url}` : item.url);
-        } else if (item.thumbnail_src) {
-          images.push(item.thumbnail_src.startsWith('//') ? `https:${item.thumbnail_src}` : item.thumbnail_src);
-        }
-        if (images.length >= 10) break;
+    if (!response.ok) {
+      // Log the actual error from SearXNG for debugging
+      const errorText = await response.text();
+      console.error(`SearXNG request failed with status ${response.status}: ${errorText}`);
+      if (response.status === 429) {
+        return NextResponse.json({ error: 'SearXNG rate limit hit. Please try again later.' }, { status: 429 });
       }
-
-      if (images.length > 0) {
-        return NextResponse.json({ images }, { status: 200 });
-      } else {
-        console.warn('No valid image URLs found in results:', result.results);
-        return NextResponse.json({
-          images: [],
-          error: 'No image URLs found in SearXNG results',
-          message: 'Try again later or use a different search query'
-        }, { status: 502 });
-      }
-    } else {
-      // Log unexpected or empty result
-      console.warn('SearXNG instance returned no results or unexpected format:', result);
-      return NextResponse.json({
-        images: [],
-        error: 'SearXNG instance failed or returned no results',
-        message: 'Try again later or use a different search query'
-      }, { status: 502 });
+      return NextResponse.json({ error: `Failed to fetch images from SearXNG. Status: ${response.status}`, details: errorText }, { status: response.status });
     }
+
+    const data = await response.json();
+
+    // TODO: Inspect the 'data' object to determine its structure and extract image URLs.
+    // This is a placeholder based on a common structure.
+    // You might need to adjust this based on the actual SearXNG JSON response.
+    // Example: data.results might be an array of objects, each with an 'img_src' or 'url' field.
+    let imageUrls: string[] = [];
+    if (data && data.results && Array.isArray(data.results)) {
+      imageUrls = data.results
+        .map((item: any) => item.img_src || item.url || item.thumbnail_src)
+        .filter(Boolean)
+        .map((url: string) => url.startsWith('//') ? `https:${url}` : url) // Ensure absolute URL
+        .slice(0, 10);
+      // We take various potential keys and filter out any null/undefined ones, then take the first 10.
+    } else {
+        // If the structure is different, log it for inspection
+        console.warn('Unexpected SearXNG response structure:', data);
+        // Attempt to find any URLs in the response as a fallback
+        const findUrls = (obj: any): string[] => {
+            let urls: string[] = [];
+            if (typeof obj === 'string' && (obj.startsWith('http://') || obj.startsWith('https://') || obj.startsWith('//'))) {
+                if (/\.(jpeg|jpg|gif|png)$/i.test(obj.split('?')[0])) { // Check extension before query params
+                    urls.push(obj.startsWith('//') ? `https:${obj}` : obj); // Ensure absolute URL
+                }
+            } else if (Array.isArray(obj)) {
+                obj.forEach(item => urls = urls.concat(findUrls(item)));
+            } else if (typeof obj === 'object' && obj !== null) {
+                Object.values(obj).forEach(value => urls = urls.concat(findUrls(value)));
+            }
+            return urls;
+        };
+        imageUrls = [...new Set(findUrls(data))].slice(0, 10); // Deduplicate and take first 10
+        if (imageUrls.length === 0) {
+            console.error('Could not extract image URLs from SearXNG response.');
+        }
+    }
+
+    if (imageUrls.length === 0) {
+        console.warn('No image URLs extracted from SearXNG response for query:', query, 'Response data:', data);
+        // It's possible no results were found, or parsing failed.
+        // Depending on desired behavior, you might return an empty array or an error.
+    }
+
+    return NextResponse.json({ images: imageUrls });
+
   } catch (error: any) {
     console.error('Error in image-search API route:', error);
-    return NextResponse.json({
-      images: [],
-      error: 'Internal server error',
-      details: error.message
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
