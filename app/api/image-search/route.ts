@@ -9,7 +9,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Query parameter is required' }, { status: 400 });
   }
 
-  const searxngUrl = `https://raspberrypi.unicorn-deneb.ts.net/search?q=!images%20${encodeURIComponent(query)}&format=json`;
+  // Temporarily using a public instance for testing Vercel connectivity
+  const searxngUrl = `https://searxng.site/search?q=!images%20${encodeURIComponent(query)}&format=json`;
+  // const searxngUrl = `https://raspberrypi.unicorn-deneb.ts.net/search?q=!images%20${encodeURIComponent(query)}&format=json`; // Original
 
   try {
     const response = await fetch(searxngUrl, {
