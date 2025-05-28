@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { DeckProvider } from "@/context/deck-context"
 import { SettingsProvider } from "@/context/settings-context"
 import { Toaster } from "@/components/ui/toaster"
+import { SpeedInsights } from "@vercel/speed-insights/next"
+import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({ subsets: ["latin"] })
 
