@@ -333,6 +333,10 @@ export async function generateNoteWithGroq(
 
   Links
   - Use [Link text](URL) syntax for citations, sources, or related reading
+  Images
+  - use !(img)[image name]
+  - the backend searches for the image name so write no more than what you want the image to be
+  - e.g !(img)[cat]
   Multple choices questions
   - ?? Your question here
   - [x] Correct answer
