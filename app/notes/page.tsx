@@ -234,16 +234,22 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
   }
 
   const processTable = () => {
+    // Get the current theme
+    const { theme } = useTheme();
+    const isDark = theme === "dark";
+  
     if (currentTableRows.length > 0) {
       elements.push(
         <div key={`table-${elements.length}`} className="my-4 overflow-x-auto">
-          <table className="min-w-full border-collapse border border-neutral-700">
+          <table className={`min-w-full border-collapse border ${isDark ? 'border-neutral-700' : 'border-gray-300'}`}>
             <thead>
               <tr>
                 {currentTableHeaders.map((header, index) => (
                   <th
                     key={index}
-                    className="border border-neutral-700 bg-neutral-800 px-4 py-2 text-left text-neutral-200 font-semibold"
+                    className={`border px-4 py-2 text-left font-semibold ${isDark 
+                      ? 'border-neutral-700 bg-neutral-800 text-neutral-200' 
+                      : 'border-gray-300 bg-gray-100 text-gray-800'}`}
                   >
                     {parseInlineMarkdown(header.trim())}
                   </th>
@@ -252,11 +258,15 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
             </thead>
             <tbody>
               {currentTableRows.map((row, rowIndex) => (
-                <tr key={rowIndex} className={rowIndex % 2 === 0 ? "bg-neutral-900" : "bg-neutral-800/50"}>
+                <tr key={rowIndex} className={isDark 
+                  ? (rowIndex % 2 === 0 ? "bg-neutral-900" : "bg-neutral-800/50")
+                  : (rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50")}>
                   {row.map((cell: string, cellIndex: number) => (
                     <td
                       key={cellIndex}
-                      className="border border-neutral-700 px-3 py-2.5 text-sm text-neutral-300 whitespace-pre-wrap break-words"
+                      className={`border px-3 py-2.5 text-sm whitespace-pre-wrap break-words ${isDark 
+                        ? 'border-neutral-700 text-neutral-300' 
+                        : 'border-gray-300 text-gray-700'}`}
                     >
                       {parseInlineMarkdown(cell.trim())}
                     </td>
@@ -274,22 +284,62 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
   };
 
   const processInfoBox = () => {
+    // Get the current theme
+    const { theme } = useTheme();
+    const isDark = theme === "dark";
+  
     if (infoBoxContent.length > 0) {
-      const colorClasses = {
-        blue: "bg-blue-900/30 border-blue-700/60 text-blue-200",
-        purple: "bg-purple-900/30 border-purple-700/60 text-purple-200",
-        green: "bg-green-900/30 border-green-700/60 text-green-200",
-        amber: "bg-amber-900/30 border-amber-700/60 text-amber-200",
-        rose: "bg-rose-900/30 border-rose-700/60 text-rose-200",
-      }
+      // Define color classes for both dark and light modes
+      const colorClasses = isDark ? {
+        // Dark mode colors
+        blue: "bg-blue-900/30 border-blue-700/60",
+        purple: "bg-purple-900/30 border-purple-700/60",
+        green: "bg-green-900/30 border-green-700/60",
+        amber: "bg-amber-900/30 border-amber-700/60",
+        rose: "bg-rose-900/30 border-rose-700/60",
+      } : {
+        // Light mode colors
+        blue: "bg-blue-100 border-blue-300",
+        purple: "bg-purple-100 border-purple-300",
+        green: "bg-green-100 border-green-300",
+        amber: "bg-amber-100 border-amber-300",
+        rose: "bg-rose-100 border-rose-300",
+      };
+      
+      // Text colors for the info box content
+      const textColorClasses = isDark ? {
+        blue: "text-blue-200",
+        purple: "text-purple-200",
+        green: "text-green-200",
+        amber: "text-amber-200",
+        rose: "text-rose-200",
+      } : {
+        blue: "text-blue-800",
+        purple: "text-purple-800",
+        green: "text-green-800",
+        amber: "text-amber-800",
+        rose: "text-rose-800",
+      };
 
-      const colorClass = colorClasses[infoBoxColor as keyof typeof colorClasses] || colorClasses.blue
+      const colorClass = colorClasses[infoBoxColor as keyof typeof colorClasses] || colorClasses.blue;
+      const textColorClass = textColorClasses[infoBoxColor as keyof typeof textColorClasses] || textColorClasses.blue;
+
+      // Create a modified parseInlineMarkdown function that ensures highlighted text has proper contrast
+      const parseInfoBoxContent = (text: string) => {
+        // Use a custom class for highlighted text in info boxes to ensure proper contrast
+        const highlightedText = text.replace(/==(.*?)==/g, (match, p1) => {
+          return `<span class="${isDark ? 'text-white' : 'text-black'} font-medium">${p1}</span>`;
+        });
+        
+        // Use the original parseInlineMarkdown for other formatting
+        return parseInlineMarkdown(highlightedText);
+      };
 
       elements.push(
         <div key={`infobox-${elements.length}`} className={`my-4 p-4 rounded-lg border ${colorClass}`}>
           {infoBoxContent.map((line, index) => (
-            <p key={index} className="mb-2 last:mb-0">
-              {parseInlineMarkdown(line)}
+            <p key={index} className={`mb-2 last:mb-0 ${textColorClass}`}>
+              {parseInfoBoxContent(line)}
             </p>
           ))}
         </div>,
@@ -355,6 +405,10 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
 
 
   const processMcqBlock = () => {
+    // Get the current theme
+    const { theme } = useTheme();
+    const isDark = theme === "dark";
+  
     if (currentMcqQuestion && currentMcqOptions.length > 0) {
       console.log(`[PROCESS MCQ] Called for question: '${currentMcqQuestion}', Options count: ${currentMcqOptions.length}`, currentMcqOptions);
       const mcqBlockIdentifier = elements.length.toString(); // Convert to string for consistent key
@@ -372,19 +426,45 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
       const shuffledOptions = storage[blockKey];
       
       elements.push(
-        <div key={blockKey} className="my-6 p-5 border border-neutral-700 rounded-lg bg-neutral-800/40 shadow-md">
-          <div className="flex items-start mb-4">
-            <HelpCircleIcon className="text-blue-400 mr-3 mt-1 flex-shrink-0" size={20} />
-            <div className="font-semibold text-neutral-100 text-lg">
+        <div key={blockKey} className={`my-6 ${isDark 
+          ? 'border border-neutral-700 bg-neutral-800/40 rounded-lg shadow-md p-5' 
+          : 'bg-white rounded-lg shadow-md p-6 border border-gray-200'}`}
+        >
+          <div className="flex items-start mb-5">
+            <div className="flex-shrink-0 mr-3">
+              <HelpCircleIcon className={`${isDark ? 'text-blue-400' : 'text-blue-500'} flex-shrink-0`} size={20} />
+            </div>
+            <div className={`font-semibold ${isDark ? 'text-lg text-neutral-100' : 'text-xl text-gray-800'}`}>
               {parseInlineMarkdown(currentMcqQuestion)}
             </div>
           </div>
           
-          <div className="space-y-3 pl-2">
+          <div className={`space-y-3 ${isDark ? 'pl-2' : 'pl-3 pr-1'}`}>
             {shuffledOptions.map((option: McqOption, index: number) => {
               const isSelected = mcqState.selectedIndex === index;
               const showCorrect = mcqState.showAnswers && option.isCorrect;
               const showIncorrect = mcqState.showAnswers && isSelected && !option.isCorrect;
+              
+              // Define styles for both themes
+              let optionClassName = '';
+              
+              if (showCorrect) {
+                optionClassName = isDark 
+                  ? 'bg-green-900/30 border border-green-700 text-green-100' 
+                  : 'bg-green-50 border border-green-200 text-green-700';
+              } else if (showIncorrect) {
+                optionClassName = isDark 
+                  ? 'bg-red-900/30 border border-red-700 text-red-100' 
+                  : 'bg-red-50 border border-red-200 text-red-700';
+              } else if (isSelected) {
+                optionClassName = isDark 
+                  ? 'bg-blue-900/30 border border-blue-700 text-blue-100' 
+                  : 'bg-blue-50 border border-blue-200 text-blue-700';
+              } else {
+                optionClassName = isDark 
+                  ? 'bg-neutral-800/60 border border-neutral-700/50 text-neutral-300 hover:bg-neutral-700/30' 
+                  : 'bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100';
+              }
               
               return (
                 <div 
@@ -394,34 +474,38 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
                     e.stopPropagation();
                     handleMcqOptionClick(blockKey, index, option.isCorrect);
                   }}
-                  className={`flex items-start p-3 rounded-md transition-colors cursor-pointer ${
-                    showCorrect ? 'bg-green-900/30 border border-green-700 text-green-100' :
-                    showIncorrect ? 'bg-red-900/30 border border-red-700 text-red-100' :
-                    isSelected ? 'bg-blue-900/30 border border-blue-700 text-blue-100' :
-                    'bg-neutral-800/60 border border-neutral-700/50 text-neutral-300 hover:bg-neutral-700/30'
-                  }`}
+                  className={`flex items-start transition-all duration-300 cursor-pointer ${optionClassName} ${isDark ? 'p-3 rounded-md' : 'p-3 rounded-md'} ${showCorrect ? 'animate-correct-answer' : showIncorrect ? 'animate-wrong-answer' : isSelected ? 'animate-pulse-once' : ''}`}
                 >
                   <div className="flex-shrink-0 mr-3 mt-0.5">
                     {showCorrect ? (
-                      <CheckCircle2 size={18} className="text-green-400" />
+                      <div className="animate-icon-appear">
+                        <CheckCircle2 size={isDark ? 18 : 20} className={`${isDark ? 'text-green-500' : 'text-green-600'}`} />
+                      </div>
                     ) : showIncorrect ? (
-                      <XCircle size={18} className="text-red-400" />
+                      <div className="animate-icon-appear">
+                        <XCircle size={isDark ? 18 : 20} className={`${isDark ? 'text-red-500' : 'text-red-600'}`} />
+                      </div>
                     ) : (
-                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border-2 border-neutral-600 text-xs font-medium text-neutral-400">
+                      <span className={`inline-flex items-center justify-center rounded-full text-xs font-medium ${isDark 
+                        ? 'w-5 h-5 border-2 border-neutral-600 text-neutral-400' 
+                        : 'w-5 h-5 border border-gray-300 text-gray-500'}`}
+                      >
                         {String.fromCharCode(65 + index)}
                       </span>
                     )}
                   </div>
                   
                   <div className="flex-grow">
-                    {parseInlineMarkdown(option.text)}
+                    <div className={`${!isDark && 'font-medium'}`}>
+                      {parseInlineMarkdown(option.text)}
+                    </div>
                     {showCorrect && (
-                      <div className="text-xs text-green-300 mt-1">
+                      <div className={`mt-1 animate-fade-in ${isDark ? 'text-xs text-green-300' : 'text-sm font-medium text-green-600'}`}>
                         Correct answer!
                       </div>
                     )}
                     {showIncorrect && (
-                      <div className="text-xs text-red-300 mt-1">
+                      <div className={`mt-1 animate-fade-in ${isDark ? 'text-xs text-red-300' : 'text-sm font-medium text-red-600'}`}>
                         Incorrect - try again!
                       </div>
                     )}
@@ -432,7 +516,7 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
           </div>
           
           {mcqState.showAnswers && (
-            <div className="mt-4 text-sm text-neutral-400">
+            <div className={`mt-5 ${isDark ? 'text-sm text-neutral-400' : 'text-sm font-medium text-gray-500 text-center'}`}>
               Click any option to try again
             </div>
           )}
@@ -1708,7 +1792,9 @@ const fetchNotes = async () => {
         />
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div 
+        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${isAiAssistantOpen ? 'md:pr-[350px]' : 'pr-0'}`}
+      >
         <div ref={notesContainerRef} className="flex-1 overflow-y-auto p-4 pt-14 md:pt-4 md:p-6 lg:p-8 pb-24 scroll-smooth">
           {/* Search results count - only shown when searching */}
           {searchQuery && (
@@ -1752,7 +1838,7 @@ const fetchNotes = async () => {
                 data-focused={focusedNoteId === note.id}
               >
                 <div className="flex justify-between items-start mb-4 md:mb-6 pb-3 md:pb-4 border-b border-neutral-700">
-                  <h3 className="text-2xl md:text-4xl font-bold text-neutral-50 mr-2">{note.title}</h3>
+                  <h3 className={`text-2xl md:text-4xl font-bold mr-2 ${theme === "dark" ? "text-neutral-50" : "text-gray-800"}`}>{note.title}</h3>
                   <div className="flex items-center space-x-2 md:space-x-3">
                     <button
                       onClick={() => startEditingNote(note)}
@@ -1828,13 +1914,13 @@ const fetchNotes = async () => {
         </div>
 
         {/* Floating Bottom Nav Bar */}
-        <div className="w-full p-3 md:p-4 border-t border-neutral-800/50 bg-neutral-950/90 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.4)] sticky bottom-0 z-20 flex items-center justify-between">
+        <div className={`w-full p-3 md:p-4 border-t ${theme === "dark" ? "border-neutral-800/50 bg-neutral-950/90" : "border-gray-200 bg-white/90"} backdrop-blur-xl ${theme === "dark" ? "shadow-[0_-8px_32px_rgba(0,0,0,0.4)]" : "shadow-[0_-8px_32px_rgba(0,0,0,0.1)]"} sticky bottom-0 z-20 flex items-center justify-between`}>
           <div className="flex items-center space-x-2 md:space-x-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsAddNoteDialogOpen(true)}
-              className="text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 p-2 md:p-2.5 rounded-lg backdrop-blur-sm border border-white/10 transition-all duration-200"
+              className={`p-2 md:p-2.5 rounded-lg backdrop-blur-sm border transition-all duration-200 ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 border-gray-200"}`}
               aria-label="Add new note"
             >
               <PlusCircleIcon className="h-5 w-5" />
@@ -1844,7 +1930,7 @@ const fetchNotes = async () => {
               variant="ghost"
               size="icon"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 p-2 md:p-2.5 rounded-lg backdrop-blur-sm border border-white/10 transition-all duration-200"
+              className={`p-2 md:p-2.5 rounded-lg backdrop-blur-sm border transition-all duration-200 ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 border-gray-200"}`}
               aria-label="Toggle theme"
             >
               {theme === "dark" ? (
@@ -1888,7 +1974,7 @@ const fetchNotes = async () => {
               )}
             </Button>
 
-            <span className="hidden md:inline-flex items-center text-xs text-neutral-400 border border-white/10 rounded-lg px-2 py-1 md:px-2.5 md:py-1.5 bg-neutral-800/30 backdrop-blur-sm">
+            <span className={`hidden md:inline-flex items-center text-xs rounded-lg px-2 py-1 md:px-2.5 md:py-1.5 backdrop-blur-sm ${theme === "dark" ? "text-neutral-400 border border-white/10 bg-neutral-800/30" : "text-gray-500 border border-gray-200 bg-gray-100/50"}`}>
               <SparklesIcon className="h-3 w-3 mr-1" /> <kbd className="font-mono text-[10px]">Ctrl+K</kbd>
             </span>
           </div>
@@ -1905,7 +1991,7 @@ const fetchNotes = async () => {
                       const headingEl = document.getElementById(`heading-${generateSlug(heading.text)}`)
                       if (headingEl) headingEl.scrollIntoView({ behavior: "smooth", block: "start" })
                     }}
-                    className={`text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white transition-all rounded-lg px-3 py-2 text-sm ${
+                    className={`transition-all rounded-lg px-3 py-2 text-sm ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"} ${
                       heading.level === 1
                         ? "font-semibold"
                         : heading.level === 2
@@ -1926,18 +2012,18 @@ const fetchNotes = async () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleSubheadingClick(sh)}
-                    className="text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white transition-all rounded-lg px-3 py-2 text-sm"
+                    className={`transition-all rounded-lg px-3 py-2 text-sm ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"}`}
                   >
                     {sh}
                   </Button>
                 ))
               ) : (
-                <p className="text-sm text-neutral-500 px-3">
+                <p className={`text-sm px-3 ${theme === "dark" ? "text-neutral-500" : "text-gray-500"}`}>
                   No H2 subheadings (##). Add notes with `## Your Subheading`.
                 </p>
               )}
             </div>
-            <ScrollBar orientation="horizontal" className="[&>div]:bg-neutral-700/50 hover:[&>div]:bg-neutral-600/60" />
+            <ScrollBar orientation="horizontal" className={theme === "dark" ? "[&>div]:bg-neutral-700/50 hover:[&>div]:bg-neutral-600/60" : "[&>div]:bg-gray-300/50 hover:[&>div]:bg-gray-400/60"} />
           </ScrollArea>
           {focusedNoteId && (
             <Button
@@ -1945,7 +2031,7 @@ const fetchNotes = async () => {
               size="sm"
               onClick={handleGenerateMcqs}
               disabled={isGeneratingMcqs}
-              className="flex-shrink-0 text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg px-4 py-2 transition-all duration-200"
+              className={`flex-shrink-0 backdrop-blur-sm border rounded-lg px-4 py-2 transition-all duration-200 ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 border-gray-200"}`}
             >
               {isGeneratingMcqs ? (
                 <>
