@@ -2,6 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom animations for MCQ answers */
+@keyframes correct-answer {
+  0% { transform: scale(1); }
+  20% { transform: scale(1.05); }
+  40% { transform: scale(1); }
+  60% { transform: scale(1.03); }
+  80% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes wrong-answer {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes pulse-once {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+@keyframes icon-appear {
+  0% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.animate-correct-answer {
+  animation: correct-answer 0.6s ease-in-out;
+}
+
+.animate-wrong-answer {
+  animation: wrong-answer 0.6s ease-in-out;
+}
+
+.animate-pulse-once {
+  animation: pulse-once 0.3s ease-in-out;
+}
+
+.animate-icon-appear {
+  animation: icon-appear 0.4s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

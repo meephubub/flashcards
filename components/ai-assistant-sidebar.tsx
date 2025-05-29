@@ -56,13 +56,19 @@ export function AIAssistantSidebar({
     appliedContent: string;
   } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
 
-  // Focus input when sidebar opens
+  // Handle animation states
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
+    if (isOpen) {
+      setIsAnimating(true);
+      // Focus input after animation completes
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 300); // Match the animation duration
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
@@ -78,8 +84,6 @@ export function AIAssistantSidebar({
     setIsEditMode(false);
     setLastAppliedEdit(null); // Reset revert state when note changes
   }, [currentNote?.id]);
-
-  if (!isOpen) return null;
 
   // Helper function to apply AI operations to note content
   function applyAiOperations(originalContent: string, operations: AIEditOperation[]): string {
@@ -254,22 +258,39 @@ export function AIAssistantSidebar({
   };
 
   return (
-    <div className="fixed right-0 top-0 z-50 h-screen w-[400px] bg-neutral-900 border-l border-neutral-800 shadow-xl flex flex-col">
+    <div 
+      className={`fixed top-0 right-0 h-full bg-neutral-900 border-l border-neutral-800 shadow-xl z-40 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}
+      style={{
+        width: isOpen ? 'min(350px, 85vw)' : '0',
+        maxWidth: '100vw'
+      }}
+    >
       <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-        <h3 className="font-semibold text-neutral-100">
-          {isEditMode ? "Edit Assistant" : "Q&A Assistant"}
-        </h3>
-        <div className="flex gap-2">
+        <div className="flex items-center space-x-2">
+          {isEditMode ? (
+            <PencilLine size={18} className="text-blue-400" />
+          ) : (
+            <HelpCircle size={18} className="text-blue-400" />
+          )}
+          <h2 className="text-lg font-semibold text-neutral-100">
+            {isEditMode ? "AI Note Editor" : "AI Assistant"}
+          </h2>
+        </div>
+        <div className="flex items-center space-x-2">
           <Button
-            onClick={toggleMode}
             variant="ghost"
             size="sm"
-            className={`text-xs p-2 ${isEditMode ? 'bg-blue-900/30 text-blue-400' : ''}`}
+            onClick={toggleMode}
+            className={`text-xs p-1.5 rounded-md ${isEditMode ? 'bg-blue-900/30 text-blue-400' : 'text-neutral-400 hover:text-neutral-100'}`}
           >
-            {isEditMode ? <PencilLine size={18} /> : <HelpCircle size={18} />}
-            <span className="ml-1">{isEditMode ? 'Edit Mode' : 'Question Mode'}</span>
+            {isEditMode ? 'Switch to Q&A' : 'Switch to Edit'}
           </Button>
-          <Button variant="ghost" size="sm" onClick={onClose} className="text-neutral-400 hover:text-neutral-100">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800"
+          >
             <X size={18} />
           </Button>
         </div>
