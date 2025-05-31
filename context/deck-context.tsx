@@ -1,19 +1,15 @@
 "use client"
 
-import { createContext, useState, useContext, useEffect, type ReactNode } from "react"
-import type { CardProgress } from "@/lib/spaced-repetition"
-import * as dataService from "@/lib/data"
-
-export interface Card {
-  id: number
-  front: string
-  back: string
-  img_url?: string | null
-  progress?: CardProgress
-}
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react'
+import { SupabaseClient, Session, User } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabase'
+import * as dataService from '../lib/data'
+import type { Card, CardProgressInput } from '../lib/supabase'
+import type { CardProgress as LocalCardProgress } from '../lib/spaced-repetition'
 
 export interface Deck {
   id: number
+  user_id: string | null; // Added to associate deck with a user
   name: string
   description: string
   tag: string | null
@@ -27,6 +23,7 @@ export interface Deck {
 interface DeckContextType {
   decks: Deck[]
   loading: boolean
+  user: User | null;
   addDeck: (name: string, description: string, tag?: string | null) => Promise<Deck>
   updateDeck: (deck: Deck) => Promise<Deck>
   deleteDeck: (id: number) => Promise<boolean>
@@ -35,8 +32,8 @@ interface DeckContextType {
   deleteCard: (deckId: number, cardId: number) => Promise<boolean>
   getDeck: (id: number) => Deck | undefined
   refreshDecks: () => Promise<void>
-  updateCardProgress: (deckId: number, cardId: number, progress: CardProgress) => Promise<boolean>
-  getDueCards: (deckId: number) => Card[]
+  updateCardProgress: (deckId: number, cardId: number, progress: LocalCardProgress) => Promise<boolean>
+  getDueCards: (deckId: number) => Promise<Card[]>
 }
 
 const DeckContext = createContext<DeckContextType | undefined>(undefined)
@@ -44,69 +41,139 @@ const DeckContext = createContext<DeckContextType | undefined>(undefined)
 export function DeckProvider({ children }: { children: ReactNode }) {
   const [decks, setDecks] = useState<Deck[]>([])
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [dueCardsCache, setDueCardsCache] = useState<Record<number, Card[]>>({})
 
-  // Fetch decks on initial load
   useEffect(() => {
-    refreshDecks()
-  }, [])
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUser(session?.user ?? null);
+      setSessionChecked(true);
+      if (!session?.user) {
+        setDecks([]);
+        setLoading(false);
+      }
+    });
+    const getCurrentUser = async () => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser && !user) {
+        setUser(currentUser);
+      }
+      if (!sessionChecked) {
+        setSessionChecked(true);
+      }
+    };
+    getCurrentUser();
+    return () => {
+      authListener?.unsubscribe();
+    };
+  }, []);
 
-  const refreshDecks = async () => {
+  useEffect(() => {
+    if (sessionChecked && user) {
+      refreshDecks();
+    } else if (sessionChecked && !user) {
+      setDecks([]);
+      setLoading(false);
+    }
+  }, [user, sessionChecked]);
+
+  const refreshDecks = useCallback(async () => {
+    if (!user) {
+      setDecks([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true)
-      const fetchedDecks = await dataService.getDecks()
-      setDecks(fetchedDecks)
-
-      // Clear due cards cache when refreshing decks
+      const fetchedSupabaseDecks = await dataService.getDecks(supabase)
+      const transformedDecks: Deck[] = fetchedSupabaseDecks.map(supabaseDeck => {
+        if (!supabaseDeck.user_id) {
+          return null;
+        }
+        return {
+          ...supabaseDeck,
+          user_id: supabaseDeck.user_id,
+          cards: [],
+          last_studied: supabaseDeck.last_studied || 'Never',
+          description: supabaseDeck.description || "",
+          card_count: supabaseDeck.card_count || 0,
+          created_at: supabaseDeck.created_at ?? undefined,
+          updated_at: supabaseDeck.updated_at ?? undefined,
+        };
+      }).filter(Boolean) as Deck[];
+      setDecks(transformedDecks)
       setDueCardsCache({})
     } catch (error) {
-      console.error("Error fetching decks:", error)
+      setDecks([]);
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, supabase]);
 
   const addDeck = async (name: string, description: string, tag: string | null = null): Promise<Deck> => {
-    const newDeck = await dataService.createDeck(name, description, tag)
-
-    if (!newDeck) {
-      throw new Error("Failed to create deck")
+    if (!user) throw new Error("User not authenticated");
+    const newSupabaseDeck = await dataService.createDeck(supabase, name, description, tag)
+    if (!newSupabaseDeck || !newSupabaseDeck.user_id) {
+      throw new Error("Failed to create deck or user_id missing")
     }
-
-    setDecks([...decks, newDeck])
-    return newDeck
+    const newAppContextDeck: Deck = {
+      ...newSupabaseDeck,
+      user_id: newSupabaseDeck.user_id,
+      cards: [],
+      last_studied: newSupabaseDeck.last_studied || 'Never',
+      description: newSupabaseDeck.description || "",
+      card_count: newSupabaseDeck.card_count || 0,
+      created_at: newSupabaseDeck.created_at ?? undefined,
+      updated_at: newSupabaseDeck.updated_at ?? undefined,
+    };
+    setDecks((prevDecks) => [...prevDecks, newAppContextDeck])
+    return newAppContextDeck
   }
 
   const updateDeck = async (updatedDeck: Deck): Promise<Deck> => {
-    const result = await dataService.updateDeck(updatedDeck)
-
-    if (!result) {
-      throw new Error("Failed to update deck")
+    if (!user) throw new Error("User not authenticated");
+    if (updatedDeck.user_id !== user.id) throw new Error("User not authorized to update this deck");
+    const returnedSupabaseDeck = await dataService.updateDeck(supabase, {
+        id: updatedDeck.id,
+        name: updatedDeck.name,
+        description: updatedDeck.description,
+        tag: updatedDeck.tag
+    });
+    if (!returnedSupabaseDeck || !returnedSupabaseDeck.user_id) {
+      throw new Error("Failed to update deck or user_id missing")
     }
-
-    setDecks(decks.map((deck) => (deck.id === result.id ? result : deck)))
-    return result
+    const newAppContextDeck: Deck = {
+        ...returnedSupabaseDeck,
+        user_id: returnedSupabaseDeck.user_id,
+        cards: updatedDeck.cards,
+        last_studied: returnedSupabaseDeck.last_studied || updatedDeck.last_studied || 'Never',
+        description: returnedSupabaseDeck.description || "",
+        card_count: returnedSupabaseDeck.card_count || updatedDeck.card_count || 0,
+        created_at: returnedSupabaseDeck.created_at ?? updatedDeck.created_at ?? undefined,
+        updated_at: returnedSupabaseDeck.updated_at ?? undefined,
+    };
+    setDecks(
+      decks.map((deck) => (deck.id === newAppContextDeck.id ? newAppContextDeck : deck)),
+    )
+    return newAppContextDeck
   }
 
   const deleteDeck = async (id: number): Promise<boolean> => {
-    const success = await dataService.deleteDeck(id)
-
-    if (!success) {
-      throw new Error("Failed to delete deck")
+    if (!user) throw new Error("User not authenticated");
+    const success = await dataService.deleteDeck(supabase, id)
+    if (success) {
+      setDecks(decks.filter((deck) => deck.id !== id))
     }
-
-    setDecks(decks.filter((deck) => deck.id !== id))
-    return true
+    return success
   }
 
   const addCard = async (deckId: number, front: string, back: string, img_url?: string | null): Promise<Card> => {
-    const newCard = await dataService.addCard(deckId, front, back, img_url)
-
+    if (!user) throw new Error("User not authenticated");
+    const newCard = await dataService.addCard(supabase, deckId, front, back, img_url)
     if (!newCard) {
       throw new Error("Failed to add card")
     }
-
-    // Update the local state
     setDecks(
       decks.map((deck) => {
         if (deck.id === deckId) {
@@ -120,51 +187,41 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         return deck
       }),
     )
-
-    // Clear due cards cache for this deck
-    setDueCardsCache({
-      ...dueCardsCache,
-      [deckId]: undefined,
-    })
-
+    const newDueCardsCache = { ...dueCardsCache };
+    delete newDueCardsCache[deckId];
+    setDueCardsCache(newDueCardsCache);
     return newCard
   }
 
   const updateCard = async (deckId: number, cardId: number, front: string, back: string, img_url?: string | null): Promise<Card> => {
-    const updatedCard = await dataService.updateCard(deckId, cardId, front, back, img_url)
-
+    if (!user) throw new Error("User not authenticated");
+    const updatedCard = await dataService.updateCard(supabase, deckId, cardId, front, back, img_url)
     if (!updatedCard) {
       throw new Error("Failed to update card")
     }
-
-    // Update the local state
     setDecks(
       decks.map((deck) => {
         if (deck.id === deckId) {
-          const updatedCards = deck.cards.map((card) => (card.id === cardId ? updatedCard : card))
+          const updatedCards = deck.cards.map((card) =>
+            card.id === cardId ? updatedCard : card,
+          )
           return { ...deck, cards: updatedCards }
         }
         return deck
       }),
     )
-
-    // Clear due cards cache for this deck
-    setDueCardsCache({
-      ...dueCardsCache,
-      [deckId]: undefined,
-    })
-
+    const newDueCardsCache = { ...dueCardsCache };
+    delete newDueCardsCache[deckId];
+    setDueCardsCache(newDueCardsCache);
     return updatedCard
   }
 
   const deleteCard = async (deckId: number, cardId: number): Promise<boolean> => {
-    const success = await dataService.deleteCard(deckId, cardId)
-
+    if (!user) throw new Error("User not authenticated");
+    const success = await dataService.deleteCard(supabase, deckId, cardId)
     if (!success) {
       throw new Error("Failed to delete card")
     }
-
-    // Update the local state
     setDecks(
       decks.map((deck) => {
         if (deck.id === deckId) {
@@ -178,13 +235,9 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         return deck
       }),
     )
-
-    // Clear due cards cache for this deck
-    setDueCardsCache({
-      ...dueCardsCache,
-      [deckId]: undefined,
-    })
-
+    const newDueCardsCache = { ...dueCardsCache };
+    delete newDueCardsCache[deckId];
+    setDueCardsCache(newDueCardsCache);
     return true
   }
 
@@ -192,82 +245,64 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     return decks.find((deck) => deck.id === id)
   }
 
-  const updateCardProgress = async (deckId: number, cardId: number, progress: CardProgress): Promise<boolean> => {
+  const updateCardProgress = async (deckId: number, cardId: number, progress: LocalCardProgress): Promise<boolean> => {
+    if (!user) throw new Error("User not authenticated");
     try {
-      const success = await dataService.updateCardProgress(deckId, cardId, progress)
-
+      const cardProgressInput: CardProgressInput = {
+        interval: progress.interval,
+        repetitions: progress.repetitions,
+        ease_factor: progress.easeFactor,
+        due_date: new Date(progress.dueDate).toISOString(),
+        last_reviewed: new Date(progress.lastReviewed).toISOString(),
+      };
+      const success = await dataService.updateCardProgress(supabase, deckId, cardId, cardProgressInput);
       if (!success) {
         throw new Error("Failed to update card progress")
       }
-
-      // Update the local state
       setDecks(
         decks.map((deck) => {
           if (deck.id === deckId) {
-            const updatedCards = deck.cards.map((card) => {
-              if (card.id === cardId) {
-                return { ...card, progress }
-              }
-              return card
-            })
             return {
               ...deck,
-              cards: updatedCards,
               last_studied: new Date().toLocaleDateString("en-US", {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
               }),
-            }
+            };
           }
-          return deck
+          return deck;
         }),
-      )
-
-      // Clear due cards cache for this deck
-      setDueCardsCache({
-        ...dueCardsCache,
-        [deckId]: undefined,
-      })
-
+      );
+      const newCache = { ...dueCardsCache };
+      delete newCache[deckId];
+      setDueCardsCache(newCache);
       return true
     } catch (error) {
-      console.error("Error updating card progress:", error)
       return false
     }
   }
 
-  const getDueCards = (deckId: number): Card[] => {
-    // Check if we have cached due cards for this deck
+  const getDueCards = useCallback(async (deckId: number): Promise<Card[]> => {
+    if (!user) return [];
     if (dueCardsCache[deckId]) {
-      return dueCardsCache[deckId]
+      return dueCardsCache[deckId];
     }
-
-    const deck = getDeck(deckId)
-    if (!deck) return []
-
-    const now = new Date()
-
-    const dueCards = deck.cards.filter((card) => {
-      if (!card.progress) return true // If no progress, it's due
-      const dueDate = new Date(card.progress.dueDate)
-      return now >= dueDate
-    })
-
-    // Cache the result
-    setDueCardsCache({
-      ...dueCardsCache,
-      [deckId]: dueCards,
-    })
-
-    return dueCards
-  }
+    try {
+      const fetchedDueCards = await dataService.getDueCards(supabase, deckId);
+      setDueCardsCache(prevCache => ({ ...prevCache, [deckId]: fetchedDueCards }));
+      return fetchedDueCards;
+    } catch (error) {
+      return [];
+    }
+  }, [user, dueCardsCache, supabase]);
 
   return (
     <DeckContext.Provider
       value={{
         decks,
         loading,
+        user,
         addDeck,
         updateDeck,
         deleteDeck,

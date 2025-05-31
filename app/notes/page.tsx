@@ -992,7 +992,21 @@ export default function NotesPage() {
 const fetchNotes = async () => {
   setIsLoading(true)
   try {
-    const { data, error } = await supabase.from("notes").select("*").order("created_at", { ascending: false })
+    // Get the current user's session
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      setErrorMessage("You must be logged in to view notes")
+      setAllNotes([])
+      return
+    }
+
+    // Fetch notes only for the current user
+    const { data, error } = await supabase
+      .from("notes")
+      .select("*")
+      .eq("user_id", user.id) // Filter by user ID
+      .order("created_at", { ascending: false })
 
     if (error) {
       console.error("Supabase error fetching notes:", error)
@@ -1325,47 +1339,61 @@ const fetchNotes = async () => {
 
 
   const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMessage(null)
+    e.preventDefault();
+    setErrorMessage(null);
 
     if (!newNote.title || !newNote.content) {
-      setErrorMessage("Title and content are required.")
-      return
+      setErrorMessage("Title and content are required.");
+      return;
     }
     if (!newNote.category.trim()) {
-      setErrorMessage("Category is required. Please select or create one.")
-      return
+      setErrorMessage("Category is required. Please select or create one.");
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
     try {
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        setErrorMessage("You must be logged in to add a note.");
+        setIsLoading(false);
+        // Optionally, redirect to login: router.push('/login');
+        return;
+      }
+
       const noteToInsert = {
         title: newNote.title,
         content: newNote.content,
         category: newNote.category.trim().toLowerCase(),
-      }
+        user_id: user.id, // Add the user_id here
+      };
 
-      const { data, error } = await supabase.from("notes").insert(noteToInsert).select().single()
+      const { data, error } = await supabase.from("notes").insert(noteToInsert).select().single();
 
       if (error) {
-        console.error("Supabase error adding note:", error)
-        setErrorMessage(`Error adding note: ${error.message}`)
-        throw error
+        console.error("Supabase error adding note:", error);
+        setErrorMessage(`Error adding note: ${error.message}`);
+        throw error;
       }
 
-      setNewNote({ title: "", content: "", category: "" })
-      await fetchNotes() // Refresh all notes
+      setNewNote({ title: "", content: "", category: "" });
+      await fetchNotes(); // Refresh all notes
       if (data) {
         if (selectedSidebarCategory === "all" || data.category === selectedSidebarCategory) {
-          setFocusedNoteId(data.id)
+          setFocusedNoteId(data.id);
         }
       }
     } catch (error: any) {
-      // Error message already set
+      // Error message already set or caught by general try-catch
+      if (!errorMessage) { // Ensure an error message is set if not already
+        setErrorMessage(error.message || "An unexpected error occurred.");
+      }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleNoteSelectInSidebar = (noteId: string) => {
     setFocusedNoteId(noteId)
