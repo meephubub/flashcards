@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/context/auth-context"
 import { SettingsContent } from "@/components/settings-content"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,41 +14,23 @@ import { LogOut, Trash2 } from "lucide-react"
 export default function SettingsPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { session, user, isLoading: authIsLoading, error: authError, signOut } = useAuth()
+  const [error, setError] = useState<string | null>(authError || null)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-
+  
+  // Protect route - redirect to login if not authenticated
   useEffect(() => {
-    const checkUser = async () => {
-      try {
-        setLoading(true)
-        const { data: { user }, error } = await supabase.auth.getUser()
-        
-        if (error) throw error
-        if (!user) {
-          router.push('/login')
-          return
-        }
-        
-        setUser(user)
-      } catch (error: any) {
-        setError(error.message)
-      } finally {
-        setLoading(false)
-      }
+    if (!authIsLoading && !session) {
+      router.push('/')
     }
-
-    checkUser()
-  }, [router, supabase])
+  }, [session, authIsLoading, router])
 
   const handleSignOut = async () => {
     try {
       setIsSigningOut(true)
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-      router.push('/login')
+      await signOut() // Use signOut from useAuth
+      router.push('/')
     } catch (error: any) {
       setError(error.message)
     } finally {
@@ -71,7 +54,7 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) {
+  if (authIsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card as UICard, CardContent } from "@/components/ui/card"
 import { ArrowLeft, Play, Plus, Edit, Trophy, BookText } from "lucide-react"
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SpacedRepetitionStats } from "@/components/spaced-repetition-stats"
 import { getCachedExamData } from "@/lib/exam-cache"
+import type { Card } from "@/lib/supabase"
 
 interface DeckViewProps {
   deckId: number
@@ -25,7 +26,23 @@ export function DeckView({ deckId }: DeckViewProps) {
 
   const deck = getDeck(deckId)
   const isSpacedRepetitionEnabled = settings.studySettings.enableSpacedRepetition
-  const dueCards = isSpacedRepetitionEnabled ? getDueCards(deckId) : []
+  const [dueCards, setDueCards] = useState<Card[]>([])
+  
+  // Fetch due cards when needed
+  useEffect(() => {
+    if (isSpacedRepetitionEnabled && deckId) {
+      const fetchDueCards = async () => {
+        try {
+          const cards = await getDueCards(deckId)
+          setDueCards(cards || [])
+        } catch (error) {
+          console.error(`Error fetching due cards for deck ${deckId}:`, error)
+          setDueCards([])
+        }
+      }
+      fetchDueCards()
+    }
+  }, [isSpacedRepetitionEnabled, deckId, getDueCards])
 
   const [hasInProgressExam, setHasInProgressExam] = useState(false)
 
@@ -58,12 +75,12 @@ export function DeckView({ deckId }: DeckViewProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="overflow-hidden">
+            <UICard key={i} className="overflow-hidden">
               <CardContent className="p-6">
                 <Skeleton className="h-6 w-full mb-4" />
                 <Skeleton className="h-20 w-full mt-4" />
               </CardContent>
-            </Card>
+            </UICard>
           ))}
         </div>
       </div>
@@ -92,7 +109,7 @@ export function DeckView({ deckId }: DeckViewProps) {
         </Button>
         <div>
           <h1 className="text-2xl font-semibold">{deck.name}</h1>
-          <p className="text-gray-500">{deck.cards.length} cards</p>
+          <p className="text-gray-500">{deck.cards?.length || deck.card_count || 0} cards</p>
         </div>
       </div>
 
@@ -140,20 +157,20 @@ export function DeckView({ deckId }: DeckViewProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {deck.cards.map((card) => (
-          <Card key={card.id} className="overflow-hidden hover:shadow-md transition-shadow">
+        {deck.cards?.map((card) => (
+          <UICard key={card.id} className="overflow-hidden hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="font-medium mb-4">{card.front}</div>
               <div className="text-sm text-gray-600 dark:text-gray-300 pt-4 border-t">{card.back}</div>
-              {isSpacedRepetitionEnabled && card.progress && (
+              {isSpacedRepetitionEnabled && (card as any).progress && (
                 <div className="mt-2 pt-2 border-t text-xs text-gray-500 flex justify-between">
-                  <span>Next review: {new Date(card.progress.dueDate).toLocaleDateString()}</span>
-                  <span>Ease: {card.progress.easeFactor.toFixed(2)}</span>
+                  <span>Next review: {new Date((card as any).progress.due_date).toLocaleDateString()}</span>
+                  <span>Ease: {(card as any).progress.ease_factor.toFixed(2)}</span>
                 </div>
               )}
             </CardContent>
-          </Card>
-        ))}
+          </UICard>
+        )) || []}
       </div>
 
       <CreateCardDialog open={isCreateCardOpen} onOpenChange={setIsCreateCardOpen} deckId={deckId} />

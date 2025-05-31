@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
 import type { Deck } from "@/lib/supabase"
 import { mergeDecks as mergeDecksAction, getDecks } from "@/lib/data"
+import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Combine, Search, Check, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -42,7 +43,7 @@ export function MergeDecksDialog({ isOpen, onOpenChange, onMergeSuccess }: Merge
       if (isOpen) {
         setIsFetchingDecks(true)
         try {
-          const decks = await getDecks()
+          const decks = await getDecks(supabase)
           console.log("Fetched decks for merge dialog:", decks)
           setAllDecks(decks)
         } catch (error) {
@@ -81,7 +82,7 @@ export function MergeDecksDialog({ isOpen, onOpenChange, onMergeSuccess }: Merge
     setIsLoading(true)
     const toastId = toast.loading("Merging decks...")
     try {
-      const newDeck = await mergeDecksAction(selectedDeckIds, newDeckName.trim())
+      const newDeck = await mergeDecksAction(supabase, selectedDeckIds, newDeckName.trim(), "Merged deck", "merged")
       console.log("Merge result:", newDeck)
       
       if (newDeck) {

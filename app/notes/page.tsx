@@ -6,11 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@/lib/supabase/client"
 import type { Note } from "@/lib/supabase"
 import type { MultipleChoiceQuestion, MCQGenerationResult } from "@/lib/groq"
 import { NotesSidebar } from "@/components/NotesSidebar"
-import { CategoryCombobox } from "@/components/ui/CategoryCombobox"
+import { CategoryCombobox } from "@/components/ui/CategoryCombobox";
+import { useAuth } from '@/context/auth-context';
+import { useRouter } from 'next/navigation';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
@@ -741,6 +743,36 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
 }
 
 export default function NotesPage() {
+  const { session, user, isLoading: authIsLoading, error: authError, signOut } = useAuth();
+  const router = useRouter();
+  
+  // Create an auth-aware Supabase client for data operations
+  const supabase = createClient();
+  
+  // Protect route - redirect to login if not authenticated
+  useEffect(() => {
+    if (!authIsLoading && !session) {
+      router.push('/');
+    }
+  }, [session, authIsLoading, router]);
+  
+  // Show loading spinner while authentication state is being determined
+  if (authIsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black/5">
+        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // Show redirect message if not authenticated
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Redirecting to login...</p>
+      </div>
+    );
+  }
   const { theme, setTheme } = useTheme()
   const [allNotes, setAllNotes] = useState<Note[]>([])
   const [activeNote, setActiveNote] = useState<Note | null>(null)
@@ -823,13 +855,17 @@ export default function NotesPage() {
   const notesContainerRef = useRef<HTMLDivElement>(null)
   const activeNoteRef = useRef<HTMLDivElement>(null)
 
+  // Fetch notes when authenticated
   useEffect(() => {
-    fetchNotes()
-  }, [])
+    if (session) {
+      fetchNotes();
+    }
+  }, [session])
 
   const IMAGE_TAG_REGEX = /!\(img\)\[([^\]]+)\]$/;
 
   // Effect to fetch images when dialog is opened and query is set
+    // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
     if (isImageSearchDialogOpen && imageSearchQuery) {
       const fetchImages = async () => {
@@ -921,6 +957,7 @@ export default function NotesPage() {
   };
 
   // Derive available categories from all notes
+    // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
     const categoriesFromNotes = Array.from(
       new Set(allNotes.map((note) => note.category.trim().toLowerCase()).filter((cat) => cat)),
@@ -931,6 +968,7 @@ export default function NotesPage() {
     // Or, more simply, let the Combobox handle new typed values directly.
   }, [allNotes])
 
+    // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
     let notesToDisplay = allNotes
     
@@ -965,6 +1003,7 @@ export default function NotesPage() {
     }
   }, [allNotes, selectedSidebarCategory, focusedNoteId, searchQuery])
 
+    // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
     const extracted: string[] = []
     allNotes.forEach((note) => {
@@ -983,6 +1022,7 @@ export default function NotesPage() {
     setSubheadings(extracted)
   }, [allNotes])
 
+    // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
     if (focusedNoteId && activeNoteRef.current) {
       activeNoteRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -992,10 +1032,8 @@ export default function NotesPage() {
 const fetchNotes = async () => {
   setIsLoading(true)
   try {
-    // Get the current user's session
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !user) {
+    // User is already authenticated through useAuth()
+    if (!user) {
       setErrorMessage("You must be logged in to view notes")
       setAllNotes([])
       return
@@ -1074,6 +1112,7 @@ const fetchNotes = async () => {
   }, [inlineEditingNoteId, inlineEditContent, supabase, fetchNotes, setIsLoading, setErrorMessage, setAllNotes, setDisplayedNotes, setInlineEditingNoteId]);
 
   // Handle text selection and Ctrl+K, Ctrl+B, and Ctrl+E
+    // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey) {
@@ -1253,6 +1292,7 @@ const fetchNotes = async () => {
   }, [allNotes, inlineEditingNoteId, handleSaveInlineEdit])
 
   // Apply text selection styles
+    // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
     // Create a style element
     const styleElement = document.createElement("style")
@@ -1275,6 +1315,7 @@ const fetchNotes = async () => {
     }
   }, [])
 
+    // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
     // Create a style element
     const styleElement = document.createElement("style")
@@ -2562,5 +2603,5 @@ const fetchNotes = async () => {
         onImageSelect={handleImageSelectedFromDialog}
       />
     </div>
-  )
+  );
 }

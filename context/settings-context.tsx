@@ -2,6 +2,8 @@
 
 import { createContext, useState, useContext, useEffect, type ReactNode } from "react"
 import type { AppSettings, StudySettings } from "@/lib/settings"
+import { getSettings, saveSettings, resetSettings as resetSettingsApi } from "@/lib/settings"
+import { supabase } from "@/lib/supabase"
 
 interface SettingsContextType {
   settings: AppSettings
@@ -15,6 +17,7 @@ const defaultSettings: AppSettings = {
   theme: "system",
   enableAnimations: true,
   enableSounds: false,
+  enableTTS: false,
   studySettings: {
     cardsPerSession: 20,
     showProgressBar: true,
@@ -36,10 +39,22 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const fetchSettings = async () => {
       try {
         setLoading(true)
-        const response = await fetch("/api/settings")
-        if (!response.ok) throw new Error("Failed to fetch settings")
-        const data = await response.json()
-        setSettings(data)
+        
+        // First try to get settings from the API
+        try {
+          const response = await fetch("/api/settings")
+          if (response.ok) {
+            const data = await response.json()
+            setSettings(data)
+            return
+          }
+        } catch (apiError) {
+          console.warn("API route not available, falling back to direct function call:", apiError)
+        }
+        
+        // Fallback: Get settings directly using the supabase client
+        const settings = await getSettings(supabase)
+        setSettings(settings)
       } catch (error) {
         console.error("Error fetching settings:", error)
       } finally {
@@ -67,16 +82,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = async (newSettings: AppSettings) => {
     try {
-      const response = await fetch("/api/settings", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newSettings),
-      })
+      // First try to update settings via the API
+      try {
+        const response = await fetch("/api/settings", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(newSettings),
+        })
 
-      if (!response.ok) throw new Error("Failed to update settings")
-
+        if (response.ok) {
+          setSettings(newSettings)
+          return
+        }
+      } catch (apiError) {
+        console.warn("API route not available, falling back to direct function call:", apiError)
+      }
+      
+      // Fallback: Update settings directly using the supabase client
+      await saveSettings(supabase, newSettings)
       setSettings(newSettings)
     } catch (error) {
       console.error("Error updating settings:", error)
@@ -95,18 +120,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const resetSettings = async () => {
     try {
-      const response = await fetch("/api/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action: "reset" }),
-      })
+      // First try to reset settings via the API
+      try {
+        const response = await fetch("/api/settings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ action: "reset" }),
+        })
 
-      if (!response.ok) throw new Error("Failed to reset settings")
-
-      const defaultSettings = await response.json()
-      setSettings(defaultSettings)
+        if (response.ok) {
+          const defaultSettings = await response.json()
+          setSettings(defaultSettings)
+          return
+        }
+      } catch (apiError) {
+        console.warn("API route not available, falling back to direct function call:", apiError)
+      }
+      
+      // Fallback: Reset settings directly using the supabase client
+      const defaults = await resetSettingsApi(supabase)
+      setSettings(defaults)
     } catch (error) {
       console.error("Error resetting settings:", error)
       throw error

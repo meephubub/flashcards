@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { DeckProvider } from "@/context/deck-context";
 import { SettingsProvider } from "@/context/settings-context";
+import { AuthProvider } from "@/context/auth-context";
 import { Toaster } from "@/components/ui/toaster";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
@@ -31,12 +32,14 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SettingsProvider>
-            <DeckProvider>
-              {children}
-              <Toaster />
-            </DeckProvider>
-          </SettingsProvider>
+          <AuthProvider>
+            <SettingsProvider>
+              <DeckProvider>
+                {children}
+                <Toaster />
+              </DeckProvider>
+            </SettingsProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
       <SpeedInsights />
