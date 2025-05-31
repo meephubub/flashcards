@@ -1,6 +1,6 @@
 // data-storage.ts
-import { supabase } from "./supabase"
-import type { Deck } from "./supabase"
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Deck, Card, CardProgressInput, CardProgress as SupabaseCardProgress, ParsedDeckImport } from "./supabase"
 import type { CardProgress } from "./spaced-repetition"
 import { generateFlashcards } from "./groq"
 
@@ -14,6 +14,7 @@ export function initializeDataStorage() {
 
 // Merge selected decks into a new deck
 export async function mergeDecks(
+  supabase: SupabaseClient,
   deckIdsToMerge: string[],
   newDeckName: string,
   newDeckDescription: string = "",
@@ -22,6 +23,7 @@ export async function mergeDecks(
   console.log("Starting merge with deck IDs:", deckIdsToMerge);
   try {
     // 1. Create the new deck
+    // Ensure the passed 'supabase' client is used here, which it will be if the function signature is updated.
     const { data: newDeckData, error: newDeckError } = await supabase
       .from("decks")
       .insert([
@@ -157,12 +159,22 @@ export async function mergeDecks(
   }
 }
 
-export async function getDecks(): Promise<Deck[]> {
+export async function getDecks(supabase: SupabaseClient): Promise<Deck[]> {
   try {
-    // Fetch all decks
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getDecks:", authError)
+      return []
+    }
+
     const { data: decksData, error: decksError } = await supabase
       .from("decks")
-      .select("*")
+      .select("*") // This will select all columns from the 'decks' table
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
 
     if (decksError) {
@@ -170,178 +182,64 @@ export async function getDecks(): Promise<Deck[]> {
       return []
     }
 
-    // Transform the data to match our application's expected format
-    const decks: Deck[] = await Promise.all(
-      decksData.map(async (deck) => {
-        // Fetch cards for this deck
-        const { data: cardsData, error: cardsError } = await supabase
-          .from("cards")
-          .select("*")
-          .eq("deck_id", deck.id)
-          .order("created_at", { ascending: true })
-
-        if (cardsError) {
-          console.error(`Error fetching cards for deck ${deck.id}:`, cardsError)
-          return {
-            id: deck.id,
-            name: deck.name,
-            description: deck.description || "",
-            tag: deck.tag,
-            card_count: deck.card_count || 0,
-            last_studied: deck.last_studied || "Never",
-            cards: [],
-            created_at: deck.created_at,
-            updated_at: deck.updated_at
-          }
-        }
-
-        // Fetch progress data for all cards in this deck
-        const cardIds = cardsData.map((card) => card.id)
-        let progressData: any[] = []
-
-        if (cardIds.length > 0) {
-          const { data: progress, error: progressError } = await supabase
-            .from("card_progress")
-            .select("*")
-            .in("card_id", cardIds)
-
-          if (!progressError) {
-            progressData = progress
-          } else {
-            console.error(`Error fetching progress for deck ${deck.id}:`, progressError)
-          }
-        }
-
-        // Map cards with their progress data
-        const cards = cardsData.map((card) => {
-          const cardProgress = progressData.find((p) => p.card_id === card.id)
-
-          return {
-            id: card.id,
-            front: card.front,
-            back: card.back,
-            img_url: card.img_url,
-            progress: cardProgress
-              ? {
-                  easeFactor: cardProgress.ease_factor,
-                  interval: cardProgress.interval,
-                  repetitions: cardProgress.repetitions,
-                  dueDate: cardProgress.due_date,
-                  lastReviewed: cardProgress.last_reviewed,
-                }
-              : undefined,
-          }
-        })
-
-        return {
-          id: deck.id,
-          name: deck.name,
-          description: deck.description || "",
-          tag: deck.tag,
-          card_count: cards.length,
-          last_studied: deck.last_studied || "Never",
-          cards,
-          // Include created_at and updated_at to satisfy the Deck type
-          created_at: deck.created_at,
-          updated_at: deck.updated_at
-        }
-      }),
-    )
-
-    return decks
+    // The data from Supabase, when selected with '*', should directly conform to the Deck type
+    // if the table schema matches the Deck type definition.
+    // Ensure that decksData is not null before returning.
+    return decksData || []
   } catch (error) {
-    console.error("Error in getDecks:", error)
+    console.error("Unexpected error in getDecks:", error)
     return []
   }
 }
 
 // Get a single deck by ID
-export async function getDeck(id: number): Promise<Deck | undefined> {
+export async function getDeck(supabase: SupabaseClient, deckId: number): Promise<Deck | undefined> {
   try {
-    // Fetch the deck
-    const { data: deck, error: deckError } = await supabase.from("decks").select("*").eq("id", id).single()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
 
-    if (deckError) {
-      console.error(`Error fetching deck ${id}:`, deckError)
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getDeck:", authError)
       return undefined
     }
 
-    // Fetch cards for this deck
-    const { data: cardsData, error: cardsError } = await supabase
-      .from("cards")
+    const { data: deck, error: deckError } = await supabase
+      .from("decks")
       .select("*")
-      .eq("deck_id", id)
-      .order("created_at", { ascending: true })
+      .eq("id", deckId)
+      .single()
 
-    if (cardsError) {
-      console.error(`Error fetching cards for deck ${id}:`, cardsError)
-      return {
-        id: deck.id,
-        name: deck.name,
-        description: deck.description || "",
-        tag: deck.tag,
-        cardCount: deck.card_count || 0,
-        lastStudied: deck.last_studied || "Never",
-        cards: [],
-      }
+    if (deckError) {
+      console.error(`Error fetching deck ${deckId}:`, deckError)
+      return undefined
     }
 
-    // Fetch progress data for all cards in this deck
-    const cardIds = cardsData.map((card) => card.id)
-    let progressData: any[] = []
-
-    if (cardIds.length > 0) {
-      const { data: progress, error: progressError } = await supabase
-        .from("card_progress")
-        .select("*")
-        .in("card_id", cardIds)
-
-      if (!progressError) {
-        progressData = progress
-      } else {
-        console.error(`Error fetching progress for deck ${id}:`, progressError)
-      }
+    // Verify that the fetched deck belongs to the authenticated user
+    if (deck && deck.user_id !== user.id) {
+      console.warn(`User ${user.id} attempted to access deck ${deckId} owned by ${deck.user_id}. Access denied.`)
+      return undefined // Or throw an error, depending on desired behavior
     }
 
-    // Map cards with their progress data
-    const cards = cardsData.map((card) => {
-      const cardProgress = progressData.find((p) => p.card_id === card.id)
-
-      return {
-        id: card.id,
-        front: card.front,
-        back: card.back,
-        img_url: card.img_url,
-        progress: cardProgress
-          ? {
-              easeFactor: cardProgress.ease_factor,
-              interval: cardProgress.interval,
-              repetitions: cardProgress.repetitions,
-              dueDate: cardProgress.due_date,
-              lastReviewed: cardProgress.last_reviewed,
-            }
-          : undefined,
-      }
-    })
-
-    return {
-      id: deck.id,
-      name: deck.name,
-      description: deck.description || "",
-      tag: deck.tag,
-      cardCount: cards.length,
-      lastStudied: deck.last_studied || "Never",
-      cards,
-    }
+    return deck // deck will be null if not found, or the Deck object if found and owned by user
   } catch (error) {
-    console.error(`Error in getDeck(${id}):`, error)
+    console.error(`Unexpected error in getDeck(${deckId}):`, error)
     return undefined
   }
 }
-
 // Create a new deck
-export async function createDeck(name: string, description: string, tag: string | null = null): Promise<Deck | undefined> {
+export async function createDeck(supabase: SupabaseClient, name: string, description: string | null, tag: string | null = null): Promise<Deck | undefined> {
   try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      console.error("Error fetching user or user not logged in:", userError);
+      // Optionally, throw an error or return a specific indicator
+      // For now, returning undefined as per original error handling for deck creation
+      return undefined; 
+    }
+
     const { data: deck, error } = await supabase
       .from("decks")
       .insert([
@@ -349,8 +247,9 @@ export async function createDeck(name: string, description: string, tag: string 
           name,
           description,
           tag,
-          card_count: 0,
-          last_studied: "Never",
+          user_id: user.id, // Add the user_id here
+          card_count: 0, // Initialize card count for a new deck
+          // last_studied can be null or omitted if DB allows/handles it
         },
       ])
       .select()
@@ -361,15 +260,7 @@ export async function createDeck(name: string, description: string, tag: string 
       return undefined
     }
 
-    return {
-      id: deck.id,
-      name: deck.name,
-      description: deck.description || "",
-      tag: deck.tag,
-      cardCount: 0,
-      lastStudied: "Never",
-      cards: [],
-    }
+    return deck; // Return the deck object directly from Supabase
   } catch (error) {
     console.error("Error in createDeck:", error)
     return undefined
@@ -377,306 +268,695 @@ export async function createDeck(name: string, description: string, tag: string 
 }
 
 // Update an existing deck
-export async function updateDeck(updatedDeck: Deck): Promise<Deck | undefined> {
+export async function updateDeck(
+  supabase: SupabaseClient,
+  payload: { id: number; name?: string; description?: string | null; tag?: string | null }
+): Promise<Deck | undefined> {
   try {
-    const { data: deck, error } = await supabase
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for updateDeck:", authError);
+      return undefined;
+    }
+
+    // 1. Fetch the existing deck to verify ownership
+    const { data: existingDeck, error: fetchError } = await supabase
       .from("decks")
-      .update({
-        name: updatedDeck.name,
-        description: updatedDeck.description,
-        tag: updatedDeck.tag,
-        card_count: updatedDeck.cardCount,
-        last_studied: updatedDeck.lastStudied,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", updatedDeck.id)
-      .select()
-      .single()
+      .select("id, user_id") // Only need user_id for verification
+      .eq("id", payload.id)
+      .single();
 
-    if (error) {
-      console.error(`Error updating deck ${updatedDeck.id}:`, error)
-      return undefined
+    if (fetchError) {
+      console.error(`Error fetching deck ${payload.id} for update:`, fetchError);
+      return undefined;
     }
 
-    // Update cards if they've changed
-    for (const card of updatedDeck.cards) {
-      await supabase
-        .from("cards")
-        .update({
-          front: card.front,
-          back: card.back,
-          img_url: card.img_url,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", card.id)
+    if (!existingDeck) {
+      console.error(`Deck ${payload.id} not found for update.`);
+      return undefined;
     }
 
-    return {
-      ...updatedDeck,
-      id: deck.id,
-      name: deck.name,
-      description: deck.description || "",
-      tag: deck.tag,
-      cardCount: deck.card_count,
-      lastStudied: deck.last_studied,
+    // 2. Verify ownership
+    if (existingDeck.user_id !== user.id) {
+      console.warn(
+        `User ${user.id} attempted to update deck ${payload.id} owned by ${existingDeck.user_id}. Access denied.`
+      );
+      return undefined;
     }
+
+    // 3. Prepare the update object with only allowed fields
+    const updateData: {
+      name?: string;
+      description?: string | null;
+      tag?: string | null;
+      updated_at?: string;
+    } = {};
+
+    let hasChanges = false;
+    if (payload.name !== undefined) {
+      updateData.name = payload.name;
+      hasChanges = true;
+    }
+    if (payload.description !== undefined) { // Allows setting description to null or a new string
+      updateData.description = payload.description;
+      hasChanges = true;
+    }
+    if (payload.tag !== undefined) { // Allows setting tag to null or a new string
+      updateData.tag = payload.tag;
+      hasChanges = true;
+    }
+    
+    if (!hasChanges) {
+        console.log(`No actual changes provided for deck ${payload.id}. Returning current deck data.`);
+        // Re-fetch the full deck to ensure the return type is complete and data is fresh.
+        const { data: currentDeckData, error: currentDeckError } = await supabase
+            .from("decks")
+            .select("*")
+            .eq("id", payload.id)
+            .single();
+        if (currentDeckError) {
+            console.error(`Error re-fetching deck ${payload.id} after no-op update:`, currentDeckError);
+            return undefined;
+        }
+        return currentDeckData;
+    }
+    
+    // Add updated_at timestamp for any actual change
+    updateData.updated_at = new Date().toISOString();
+
+    // 4. Perform the update
+    const { data: updatedDbDeck, error: updateError } = await supabase
+      .from("decks")
+      .update(updateData)
+      .eq("id", payload.id)
+      .select() // Select all columns of the updated deck
+      .single();
+
+    if (updateError) {
+      console.error(`Error updating deck ${payload.id}:`, updateError);
+      return undefined;
+    }
+
+    return updatedDbDeck; // This is the full Deck object from the DB
   } catch (error) {
-    console.error(`Error in updateDeck(${updatedDeck.id}):`, error)
-    return undefined
+    console.error(`Unexpected error in updateDeck for ID ${payload?.id}:`, error);
+    return undefined;
   }
 }
 
 // Delete a deck
-export async function deleteDeck(id: number): Promise<boolean> {
+export async function deleteDeck(supabase: SupabaseClient, deckId: number): Promise<boolean> {
   try {
-    const { error } = await supabase.from("decks").delete().eq("id", id)
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    if (error) {
-      console.error(`Error deleting deck ${id}:`, error)
-      return false
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for deleteDeck:", authError);
+      return false;
     }
 
-    return true
+    // 1. Fetch the existing deck to verify ownership
+    const { data: existingDeck, error: fetchError } = await supabase
+      .from("decks")
+      .select("id, user_id") // Only need user_id for verification
+      .eq("id", id)
+      .single();
+
+    if (fetchError) {
+      // If error is due to deck not found, it's not a system error but a valid case for delete to fail.
+      if (fetchError.code === 'PGRST116') { // PGRST116: Row to be deleted was not found
+        console.log(`Deck ${id} not found for deletion.`);
+      } else {
+        console.error(`Error fetching deck ${id} for deletion:`, fetchError);
+      }
+      return false;
+    }
+
+    if (!existingDeck) { // Should be caught by PGRST116, but as a safeguard
+      console.log(`Deck ${id} not found for deletion.`);
+      return false;
+    }
+
+    // 2. Verify ownership
+    if (existingDeck.user_id !== user.id) {
+      console.warn(
+        `User ${user.id} attempted to delete deck ${id} owned by ${existingDeck.user_id}. Access denied.`
+      );
+      return false;
+    }
+
+    // 3. Perform the deletion if owned
+    const { error: deleteError } = await supabase
+      .from("decks")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      console.error(`Error deleting deck ${id}:`, deleteError);
+      return false;
+    }
+
+    console.log(`Deck ${id} deleted successfully by user ${user.id}.`);
+    return true;
   } catch (error) {
-    console.error(`Error in deleteDeck(${id}):`, error)
-    return false
+    console.error(`Unexpected error in deleteDeck(${id}):`, error);
+    return false;
   }
 }
 
 // Add a card to a deck
-export async function addCard(deckId: number, front: string, back: string, img_url?: string | null): Promise<Card | undefined> {
+export async function addCard(supabase: SupabaseClient, deckId: number, front: string, back: string, img_url?: string | null): Promise<Card | undefined> {
   try {
-    // Insert the new card
-    const { data: card, error: cardError } = await supabase
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for addCard:", authError);
+      return undefined;
+    }
+
+    // 1. Verify deck ownership
+    const { data: deck, error: deckFetchError } = await supabase
+      .from("decks")
+      .select("id, user_id, card_count")
+      .eq("id", deckId)
+      .single();
+
+    if (deckFetchError) {
+      console.error(`Error fetching deck ${deckId} for addCard:`, deckFetchError);
+      return undefined;
+    }
+
+    if (!deck) {
+      console.error(`Deck ${deckId} not found for addCard.`);
+      return undefined;
+    }
+
+    if (deck.user_id !== user.id) {
+      console.warn(
+        `User ${user.id} attempted to add card to deck ${deckId} owned by ${deck.user_id}. Access denied.`
+      );
+      return undefined;
+    }
+
+    // 2. Insert the new card
+    const { data: newCard, error: cardInsertError } = await supabase
       .from("cards")
       .insert([
         {
           deck_id: deckId,
           front,
           back,
-          img_url,
+          img_url: img_url || null, // Ensure null is passed if undefined
         },
       ])
-      .select()
-      .single()
+      .select() // Select all columns of the new card
+      .single();
 
-    if (cardError) {
-      console.error(`Error adding card to deck ${deckId}:`, cardError)
-      return undefined
+    if (cardInsertError) {
+      console.error(`Error adding card to deck ${deckId}:`, cardInsertError);
+      return undefined;
     }
 
-    // Update the card count in the deck
-    const { data: deck, error: deckError } = await supabase.from("decks").select("card_count").eq("id", deckId).single()
-
-    if (!deckError) {
-      const newCardCount = (deck.card_count || 0) + 1
-      await supabase
-        .from("decks")
-        .update({
-          card_count: newCardCount,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", deckId)
+    if (!newCard) {
+        console.error(`Failed to retrieve new card details after insert into deck ${deckId}.`);
+        return undefined;
     }
 
-    return {
-      id: card.id,
-      front: card.front,
-      back: card.back,
-      img_url: card.img_url,
+    // 3. Update the card count in the deck
+    const newCardCount = (deck.card_count || 0) + 1;
+    const { error: deckUpdateError } = await supabase
+      .from("decks")
+      .update({
+        card_count: newCardCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", deckId);
+
+    if (deckUpdateError) {
+      console.error(`Error updating card count for deck ${deckId} after adding card:`, deckUpdateError);
+      // Non-critical error for the card creation itself, but log it.
+      // The card was created, so we still return it.
     }
+
+    return newCard; // This is the full Card object from the DB
   } catch (error) {
-    console.error(`Error in addCard(${deckId}):`, error)
-    return undefined
+    console.error(`Unexpected error in addCard (deckId: ${deckId}):`, error);
+    return undefined;
   }
 }
 
 // Update a card
 export async function updateCard(
-  deckId: number,
+  deckId: number, // Retained for explicit association, though cardId is primary for update
   cardId: number,
   front: string,
   back: string,
   img_url?: string | null,
 ): Promise<Card | undefined> {
   try {
-    const { data: card, error } = await supabase
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for updateCard:", authError);
+      return undefined;
+    }
+
+    // 1. Verify deck ownership
+    const { data: deck, error: deckFetchError } = await supabase
+      .from("decks")
+      .select("id, user_id")
+      .eq("id", deckId)
+      .single();
+
+    if (deckFetchError) {
+      console.error(`Error fetching deck ${deckId} for updateCard:`, deckFetchError);
+      return undefined;
+    }
+    if (!deck) {
+      console.error(`Deck ${deckId} not found for updateCard.`);
+      return undefined;
+    }
+    if (deck.user_id !== user.id) {
+      console.warn(
+        `User ${user.id} attempted to update card in deck ${deckId} not owned by them. Access denied.`
+      );
+      return undefined;
+    }
+
+    // 2. Verify card exists and belongs to the specified deck (redundant if RLS is perfect, but good for app-level check)
+    const { data: existingCard, error: cardFetchError } = await supabase
       .from("cards")
-      .update({
-        front,
-        back,
-        img_url,
-        updated_at: new Date().toISOString(),
-      })
+      .select("id, deck_id")
       .eq("id", cardId)
-      .eq("deck_id", deckId)
-      .select()
-      .single()
+      .single();
 
-    if (error) {
-      console.error(`Error updating card ${cardId} in deck ${deckId}:`, error)
-      return undefined
+    if (cardFetchError) {
+      console.error(`Error fetching card ${cardId} for update:`, cardFetchError);
+      return undefined;
+    }
+    if (!existingCard) {
+      console.error(`Card ${cardId} not found for update.`);
+      return undefined;
+    }
+    if (existingCard.deck_id !== deckId) {
+      console.warn(
+        `Card ${cardId} does not belong to deck ${deckId}. Update denied.`
+      );
+      return undefined;
     }
 
-    return {
-      id: card.id,
-      front: card.front,
-      back: card.back,
-      img_url: card.img_url,
+    // 3. Perform the update
+    const updatePayload: { front: string; back: string; img_url?: string | null; updated_at: string } = {
+      front,
+      back,
+      updated_at: new Date().toISOString(),
+    };
+    if (img_url !== undefined) { // Only include img_url if provided, allows setting to null
+      updatePayload.img_url = img_url;
     }
+
+    const { data: updatedDbCard, error: updateError } = await supabase
+      .from("cards")
+      .update(updatePayload)
+      .eq("id", cardId) // Primary key for update
+      .select() // Select all columns of the updated card
+      .single();
+
+    if (updateError) {
+      console.error(`Error updating card ${cardId} in deck ${deckId}:`, updateError);
+      return undefined;
+    }
+
+    return updatedDbCard; // This is the full Card object from the DB
   } catch (error) {
-    console.error(`Error in updateCard(${deckId}, ${cardId}):`, error)
-    return undefined
+    console.error(`Unexpected error in updateCard (deckId: ${deckId}, cardId: ${cardId}):`, error);
+    return undefined;
   }
 }
 
 // Delete a card
-export async function deleteCard(deckId: number, cardId: number): Promise<boolean> {
+export async function deleteCard(supabase: SupabaseClient, deckId: number, cardId: number): Promise<boolean> {
   try {
-    // Delete the card
-    const { error: cardError } = await supabase.from("cards").delete().eq("id", cardId).eq("deck_id", deckId)
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    if (cardError) {
-      console.error(`Error deleting card ${cardId} from deck ${deckId}:`, cardError)
-      return false
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for deleteCard:", authError);
+      return false;
     }
 
-    // Update the card count in the deck
-    const { data: deck, error: deckError } = await supabase.from("decks").select("card_count").eq("id", deckId).single()
+    // 1. Verify deck ownership and get current card_count
+    const { data: deck, error: deckFetchError } = await supabase
+      .from("decks")
+      .select("id, user_id, card_count")
+      .eq("id", deckId)
+      .single();
 
-    if (!deckError) {
-      const newCardCount = Math.max(0, (deck.card_count || 0) - 1)
-      await supabase
-        .from("decks")
-        .update({
-          card_count: newCardCount,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", deckId)
+    if (deckFetchError) {
+      console.error(`Error fetching deck ${deckId} for deleteCard:`, deckFetchError);
+      return false;
+    }
+    if (!deck) {
+      console.error(`Deck ${deckId} not found for deleteCard.`);
+      return false;
+    }
+    if (deck.user_id !== user.id) {
+      console.warn(
+        `User ${user.id} attempted to delete card from deck ${deckId} not owned by them. Access denied.`
+      );
+      return false;
     }
 
-    return true
+    // 2. Verify card exists and belongs to the specified deck
+    const { data: existingCard, error: cardFetchError } = await supabase
+      .from("cards")
+      .select("id, deck_id")
+      .eq("id", cardId)
+      .single();
+
+    if (cardFetchError) {
+      console.error(`Error fetching card ${cardId} for delete:`, cardFetchError);
+      // This could also mean card not found, which is fine for a delete operation if we proceed directly to delete.
+      // However, checking deck_id is crucial if card is found.
+    }
+    if (existingCard && existingCard.deck_id !== deckId) {
+      console.warn(
+        `Card ${cardId} does not belong to deck ${deckId}. Delete operation denied.`
+      );
+      return false;
+    }
+    // If existingCard is null and cardFetchError is null, it means the card doesn't exist. 
+    // Depending on desired behavior, one might return true (idempotency) or false.
+    // For now, we proceed to attempt deletion; Supabase will handle non-existent deletes gracefully (no error, 0 count).
+
+    // 3. Delete the card
+    // The .eq("deck_id", deckId) here is a safeguard, primary check was above.
+    const { error: cardDeleteError, count: deleteCount } = await supabase
+      .from("cards")
+      .delete()
+      .eq("id", cardId)
+      .eq("deck_id", deckId); // Ensures we only delete if it's in the correct deck as a final check
+
+    if (cardDeleteError) {
+      console.error(`Error deleting card ${cardId} from deck ${deckId}:`, cardDeleteError);
+      return false;
+    }
+
+    // If deleteCount is 0, the card might not have existed or didn't match both conditions.
+    // We only update card_count if a card was actually deleted from this deck.
+    if (deleteCount === null || deleteCount === 0) {
+        // This can happen if the card was already deleted or didn't belong to the deck (despite earlier checks)
+        // Consider if this scenario should return true (as card is gone) or false (as no action by this call)
+        // For now, if no error, and card is gone, consider it a success for the client.
+        // However, we should not decrement card_count if nothing was deleted.
+        console.warn(`Card ${cardId} not found in deck ${deckId} for deletion, or already deleted. No count update.`);
+        return true; // Card is not there, so operation is 'successful' in that sense.
+    }
+
+    // 4. Update the card count in the deck
+    const newCardCount = Math.max(0, (deck.card_count || 0) - 1);
+    const { error: deckUpdateError } = await supabase
+      .from("decks")
+      .update({
+        card_count: newCardCount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", deckId);
+
+    if (deckUpdateError) {
+      console.error(
+        `Error updating card count for deck ${deckId} after deleting card ${cardId}:`, 
+        deckUpdateError
+      );
+      // Non-critical for the card deletion itself, but log it.
+    }
+
+    return true;
   } catch (error) {
-    console.error(`Error in deleteCard(${deckId}, ${cardId}):`, error)
-    return false
+    console.error(`Unexpected error in deleteCard (deckId: ${deckId}, cardId: ${cardId}):`, error);
+    return false;
   }
 }
 
 // Update card progress
-export async function updateCardProgress(deckId: number, cardId: number, progress: CardProgress): Promise<boolean> {
+export async function updateCardProgress(
+  supabase: SupabaseClient,
+  deckId: number, 
+  cardId: number, 
+  progressInput: CardProgressInput
+): Promise<boolean> {
   try {
-    // Check if progress record exists
-    const { data: existingProgress, error: checkError } = await supabase
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for updateCardProgress:", authError);
+      return false;
+    }
+
+    // 1. Verify deck ownership
+    const { data: deck, error: deckFetchError } = await supabase
+      .from("decks")
+      .select("id, user_id")
+      .eq("id", deckId)
+      .single();
+
+    if (deckFetchError) {
+      console.error(`Error fetching deck ${deckId} for updateCardProgress:`, deckFetchError);
+      return false;
+    }
+    if (!deck) {
+      console.error(`Deck ${deckId} not found for updateCardProgress.`);
+      return false;
+    }
+    if (deck.user_id !== user.id) {
+      console.warn(
+        `User ${user.id} attempted to update progress for card in deck ${deckId} not owned by them. Access denied.`
+      );
+      return false;
+    }
+
+    // 2. Verify card exists and belongs to the specified deck
+    const { data: existingCard, error: cardFetchError } = await supabase
+      .from("cards")
+      .select("id, deck_id")
+      .eq("id", cardId)
+      .single();
+
+    if (cardFetchError) {
+      console.error(`Error fetching card ${cardId} for updateCardProgress:`, cardFetchError);
+      return false;
+    }
+    if (!existingCard) {
+      console.error(`Card ${cardId} not found for updateCardProgress.`);
+      return false;
+    }
+    if (existingCard.deck_id !== deckId) {
+      console.warn(
+        `Card ${cardId} does not belong to deck ${deckId}. Update progress denied.`
+      );
+      return false;
+    }
+
+    // 3. Upsert card progress
+    // Assumes a unique constraint on (card_id, user_id) in card_progress table for correct upsert behavior.
+    // If not, this will insert a new row or update based on primary key 'id' if it's part of progressInput (which it shouldn't be for upsert).
+    const upsertData = {
+      card_id: cardId,
+      user_id: user.id, // Crucial for user-specific progress
+      ...progressInput, // Spreads ease_factor, interval, repetitions, due_date, last_reviewed
+      updated_at: new Date().toISOString(), // Ensure updated_at is always set
+    };
+
+    const { error: progressError } = await supabase
       .from("card_progress")
-      .select("id")
-      .eq("card_id", cardId)
-      .maybeSingle()
-
-    if (checkError) {
-      console.error(`Error checking progress for card ${cardId}:`, checkError)
-      return false
-    }
-
-    let progressError
-    if (existingProgress) {
-      // Update existing progress
-      const { error } = await supabase
-        .from("card_progress")
-        .update({
-          ease_factor: progress.easeFactor,
-          interval: progress.interval,
-          repetitions: progress.repetitions,
-          due_date: progress.dueDate,
-          last_reviewed: progress.lastReviewed,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingProgress.id)
-
-      progressError = error
-    } else {
-      // Insert new progress
-      const { error } = await supabase.from("card_progress").insert([
-        {
-          card_id: cardId,
-          ease_factor: progress.easeFactor,
-          interval: progress.interval,
-          repetitions: progress.repetitions,
-          due_date: progress.dueDate,
-          last_reviewed: progress.lastReviewed,
-        },
-      ])
-
-      progressError = error
-    }
+      .upsert(upsertData, { 
+        onConflict: 'card_id,user_id', // Specify conflict target for true upsert on these keys
+        // if your primary key is 'id' and it's auto-generated, and you don't have a card_id,user_id unique constraint,
+        // then upsert might not behave as expected without an explicit 'id' in upsertData for updates.
+        // Consider adding the unique constraint to the DB: ALTER TABLE card_progress ADD CONSTRAINT card_progress_card_id_user_id_key UNIQUE (card_id, user_id);
+      });
 
     if (progressError) {
-      console.error(`Error updating progress for card ${cardId}:`, progressError)
-      return false
+      console.error(`Error upserting progress for card ${cardId} (user ${user.id}):`, progressError);
+      return false;
     }
 
-    // Update the last studied date in the deck
-    const now = new Date()
-    const formattedDate = now.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
-
-    const { error: deckError } = await supabase
+    // 4. Update the last studied date and updated_at in the deck
+    const now = new Date().toISOString();
+    const { error: deckUpdateError } = await supabase
       .from("decks")
       .update({
-        last_studied: formattedDate,
-        updated_at: now.toISOString(),
+        last_studied: now, // Store as ISO string
+        updated_at: now,
       })
-      .eq("id", deckId)
+      .eq("id", deckId);
 
-    if (deckError) {
-      console.error(`Error updating last studied date for deck ${deckId}:`, deckError)
-      // We still return true because the progress was updated successfully
+    if (deckUpdateError) {
+      console.error(`Error updating last_studied for deck ${deckId}:`, deckUpdateError);
+      // Non-critical for the progress update itself, but log it.
     }
 
-    return true
+    return true;
   } catch (error) {
-    console.error(`Error in updateCardProgress(${deckId}, ${cardId}):`, error)
-    return false
+    console.error(`Unexpected error in updateCardProgress (deckId: ${deckId}, cardId: ${cardId}):`, error);
+    return false;
   }
 }
 
 // Get due cards for a deck
-export async function getDueCards(deckId: number): Promise<Card[]> {
+export async function getDueCards(supabase: SupabaseClient, deckId: number): Promise<Card[]> {
   try {
-    const deck = await getDeck(deckId)
-    if (!deck) return []
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    const now = new Date()
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getDueCards:", authError);
+      return [];
+    }
 
-    return deck.cards.filter((card) => {
-      if (!card.progress) return true // If no progress, it's due
-      const dueDate = new Date(card.progress.dueDate)
-      return now >= dueDate
-    })
+    // 1. Fetch the deck (getDeck already verifies ownership for the current user)
+    const deck = await getDeck(deckId);
+    if (!deck) {
+      // getDeck logs errors if any, or if deck not found/not owned
+      return [];
+    }
+
+    // 2. Fetch all cards for this deck
+    const { data: cards, error: cardsError } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("deck_id", deckId);
+
+    if (cardsError) {
+      console.error(`Error fetching cards for deck ${deckId}:`, cardsError);
+      return [];
+    }
+    if (!cards || cards.length === 0) {
+      return []; // No cards in the deck
+    }
+
+    // 3. Fetch progress for these cards for the current user
+    const cardIds = cards.map((card) => card.id);
+    const { data: progressRecords, error: progressError } = await supabase
+      .from("card_progress")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("card_id", cardIds);
+
+    if (progressError) {
+      console.error(`Error fetching card progress for user ${user.id} and deck ${deckId}:`, progressError);
+      // Proceed with cards, assuming no progress means they are due
+    }
+
+    const progressMap = new Map<number, SupabaseCardProgress>();
+    if (progressRecords) {
+      for (const record of progressRecords) {
+        if (record.card_id === null || record.card_id === undefined) {
+          console.warn("Skipping progress record with null card_id:", record);
+          continue;
+        }
+        // Ensure all fields expected by SupabaseCardProgress are present and correctly typed.
+        // Supabase returns snake_case, which matches SupabaseCardProgress.
+        progressMap.set(record.card_id, {
+          id: record.id, 
+          user_id: record.user_id, 
+          card_id: record.card_id, 
+          ease_factor: record.ease_factor,
+          interval: record.interval,
+          repetitions: record.repetitions,
+          due_date: record.due_date,
+          last_reviewed: record.last_reviewed,
+          created_at: record.created_at,
+          updated_at: record.updated_at,
+        } as SupabaseCardProgress); 
+      }
+    }
+
+    const now = new Date();
+    const dueCards: Card[] = [];
+
+    for (const card of cards) {
+      const typedCard = card as Card; 
+      const progress = progressMap.get(typedCard.id); // progress is now SupabaseCardProgress | undefined
+
+      if (!progress) {
+        dueCards.push(typedCard); 
+        continue;
+      }
+
+      // progress.due_date should now correctly resolve to the snake_case property
+      const dueDate = new Date(progress.due_date);
+      if (now >= dueDate) {
+        dueCards.push(typedCard);
+      }
+    }
+
+    return dueCards;
   } catch (error) {
-    console.error(`Error in getDueCards(${deckId}):`, error)
-    return []
+    console.error(`Unexpected error in getDueCards for deck ${deckId}:`, error);
+    return [];
   }
 }
 
 // Import cards from markdown - this now directly adds to the database
-export async function importCardsFromMarkdown(parsedDeck: any): Promise<Deck | undefined> {
+export async function importCardsFromMarkdown(supabase: SupabaseClient, parsedDeck: ParsedDeckImport): Promise<Deck | undefined> {
   try {
     // Create a new deck
-    const newDeck = await createDeck(parsedDeck.name, parsedDeck.description)
+    const deckName = parsedDeck.name;
+    // Ensure deckName is a non-empty string
+    if (typeof deckName !== 'string' || !deckName.trim()) {
+      console.error("Deck name is missing, null, undefined, or empty in parsedDeck. Cannot import.");
+      throw new Error("Deck import failed: Deck name is required and must be a non-empty string.");
+    }
+    
+    const deckDescription = parsedDeck.description ?? null;
+
+    // Create a new deck
+    const newDeck = await createDeck(supabase, deckName.trim(), deckDescription);
     if (!newDeck) {
       throw new Error("Failed to create deck")
     }
 
     // Add cards to the deck
     for (const card of parsedDeck.cards) {
-      await addCard(newDeck.id, card.front, card.back)
+      const frontContent = typeof card.front === 'string' ? card.front.trim() : '';
+      const backContent = typeof card.back === 'string' ? card.back.trim() : '';
+
+      if (!frontContent || !backContent) {
+        console.warn(`Skipping card due to empty front or back content: {front: "${String(card.front || '').substring(0,20)}...", back: "${String(card.back || '').substring(0,20)}..."} for deck ${newDeck.id}`);
+        continue; // Skip this card if front or back is empty
+      }
+
+      // addCard has been refactored and returns a Card object or undefined
+      const addedCard = await addCard(supabase, newDeck.id, frontContent, backContent, card.img_url || null);
+      if (!addedCard) {
+        // Potentially log an error or collect failures if some cards couldn't be added
+        console.warn(`Failed to add card: {front: "${frontContent.substring(0,20)}..."} to deck ${newDeck.id}`);
+        // Depending on desired behavior, you might want to throw an error here or continue
+      }
     }
 
     // Return the updated deck
-    return getDeck(newDeck.id)
+    return getDeck(supabase, newDeck.id)
   } catch (error) {
     console.error("Error importing cards from markdown:", error)
     return undefined
@@ -684,52 +964,129 @@ export async function importCardsFromMarkdown(parsedDeck: any): Promise<Deck | u
 }
 
 // Generate AI flashcards
-export async function generateAIFlashcards(topic: string, numberOfCards: number, deckId?: number, noteContent?: string): Promise<any> {
+export async function generateAIFlashcards(
+  supabase: SupabaseClient,
+  topic: string, 
+  numberOfCards: number, 
+  deckId?: number, 
+  noteContent?: string
+): Promise<{ success: boolean; message: string; deckId?: number; cardsAdded: number; newDeck?: Deck; error?: string }> {
   try {
-    // Generate flashcards using Groq
-    const result = await generateFlashcards(topic, numberOfCards, noteContent)
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    if (deckId) {
+    if (authError || !user) {
+      console.error("User not authenticated for generateAIFlashcards:", authError);
+      return {
+        success: false,
+        message: "User not authenticated",
+        cardsAdded: 0,
+        error: authError?.message || "Authentication failed",
+      };
+    }
+
+    let targetDeckId = deckId;
+    let existingDeckVerified = false;
+
+    if (targetDeckId) {
+      const { data: deckData, error: deckFetchError } = await supabase
+        .from("decks")
+        .select("id, user_id")
+        .eq("id", targetDeckId)
+        .single();
+
+      if (deckFetchError || !deckData) {
+        console.error(`Error fetching target deck ${targetDeckId} or deck not found:`, deckFetchError);
+        return {
+          success: false,
+          message: `Target deck ${targetDeckId} not found.`,
+          cardsAdded: 0,
+          deckId: targetDeckId,
+          error: deckFetchError?.message || "Deck fetch failed",
+        };
+      }
+      if (deckData.user_id !== user.id) {
+        console.warn(`User ${user.id} attempted to generate AI cards for deck ${targetDeckId} not owned by them.`);
+        return {
+          success: false,
+          message: "Access denied to target deck.",
+          cardsAdded: 0,
+          deckId: targetDeckId,
+          error: "Ownership verification failed",
+        };
+      }
+      existingDeckVerified = true;
+    }
+
+    // Generate flashcards using Groq
+    let generatedResult;
+    try {
+      generatedResult = await generateFlashcards(topic, numberOfCards, noteContent);
+      if (!generatedResult || !generatedResult.cards || !Array.isArray(generatedResult.cards)) {
+        console.error("Invalid response from flashcard generation service:", generatedResult);
+        throw new Error('Invalid response structure from flashcard generation service');
+      }
+    } catch (genError: any) {
+      console.error("Error from generateFlashcards service:", genError);
+      return {
+        success: false,
+        message: "Failed to generate flashcards from AI service.",
+        cardsAdded: 0,
+        deckId: targetDeckId,
+        error: genError.message || genError.toString(),
+      };
+    }
+
+    let cardsSuccessfullyAdded = 0;
+    let finalDeck: Deck | undefined = undefined;
+
+    if (targetDeckId && existingDeckVerified) {
       // Add cards to existing deck
-      for (const card of result.cards) {
-        await addCard(deckId, card.front, card.back)
+      for (const card of generatedResult.cards) {
+        const added = await addCard(supabase, targetDeckId, card.front, card.back, null); // AI-generated cards don't have img_url from groq.ts
+        if (added) cardsSuccessfullyAdded++;
       }
       return {
         success: true,
-        message: `Added ${result.cards.length} cards to existing deck`,
-        deckId,
-      }
+        message: `Added ${cardsSuccessfullyAdded} of ${generatedResult.cards.length} cards to deck ${targetDeckId}.`,
+        deckId: targetDeckId,
+        cardsAdded: cardsSuccessfullyAdded,
+      };
     } else {
       // Create a new deck
-      const newDeck = await createDeck(topic, `AI-generated flashcards about ${topic}`)
-      if (!newDeck) {
-        throw new Error("Failed to create deck")
+      const newDeckData = await createDeck(supabase, topic, `AI-generated flashcards about ${topic}`);
+      if (!newDeckData) {
+        return {
+          success: false,
+          message: "Failed to create a new deck for AI flashcards.",
+          cardsAdded: 0,
+          error: "Deck creation failed after AI generation.",
+        };
       }
-
+      targetDeckId = newDeckData.id; // Assign the new deck's ID
       // Add cards to the new deck
-      for (const card of result.cards) {
-        await addCard(newDeck.id, card.front, card.back)
+      for (const card of generatedResult.cards) {
+        const added = await addCard(supabase, targetDeckId, card.front, card.back, null); // AI-generated cards don't have img_url from groq.ts
+        if (added) cardsSuccessfullyAdded++;
       }
-
+      finalDeck = await getDeck(supabase, targetDeckId); 
       return {
         success: true,
-        message: `Created new deck with ${result.cards.length} cards`,
-        deckId: newDeck.id,
-      }
+        message: `Created new deck '${topic}' with ${cardsSuccessfullyAdded} of ${generatedResult.cards.length} AI-generated cards.`,
+        deckId: targetDeckId,
+        cardsAdded: cardsSuccessfullyAdded,
+        newDeck: finalDeck,
+      };
     }
-  } catch (error) {
-    console.error("Error generating AI flashcards:", error)
+  } catch (error: any) {
+    console.error("Error in generateAIFlashcards:", error);
     return {
       success: false,
-      message: "Failed to generate flashcards",
-    }
+      message: error.message || "An unknown error occurred during AI flashcard generation.",
+      cardsAdded: 0,
+      error: error.toString(),
+    };
   }
-}
-
-export type Card = {
-  id: number
-  front: string
-  back: string
-  img_url?: string | null
-  progress?: CardProgress
 }

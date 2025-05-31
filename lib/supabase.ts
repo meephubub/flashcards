@@ -32,14 +32,15 @@ export const createClient_component = () => {
 
 // Types for our database tables
 export type Deck = {
-  id: number
-  name: string
-  description: string
-  tag: string | null
-  card_count: number
-  last_studied: string
-  created_at: string
-  updated_at: string
+  id: number;
+  user_id: string | null;
+  name: string;
+  description: string | null;
+  tag: string | null;
+  card_count: number | null;
+  last_studied: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export type Card = {
@@ -53,16 +54,39 @@ export type Card = {
 }
 
 export type CardProgress = {
-  id: number
-  card_id: number
-  ease_factor: number
-  interval: number
-  repetitions: number
-  due_date: string
-  last_reviewed: string
-  created_at: string
-  updated_at: string
-}
+  id: number;
+  user_id: string; // Added: Assumes progress is always tied to a user
+  card_id: number;
+  ease_factor: number;
+  interval: number;
+  repetitions: number;
+  due_date: string; // Should be ISO string format
+  last_reviewed: string; // Should be ISO string format
+  created_at: string; // Should be ISO string format
+  updated_at: string; // Should be ISO string format
+};
+
+// Type for the input payload when updating/creating card progress
+export type CardProgressInput = {
+  ease_factor: number;
+  interval: number;
+  repetitions: number;
+  due_date: string;      // ISO string e.g., new Date().toISOString()
+  last_reviewed: string; // ISO string e.g., new Date().toISOString()
+};
+
+// Structure for data imported from Markdown
+export type ParsedDeckCardImport = {
+  front: string;
+  back: string;
+  img_url?: string | null; // Optional image URL
+};
+
+export type ParsedDeckImport = {
+  name: string;
+  description?: string | null;
+  cards: ParsedDeckCardImport[];
+};
 
 export type Note = {
   id: string

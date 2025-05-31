@@ -14,7 +14,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Flashcard App",
   description: "A modern flashcard app with an Obsidian-like interface",
-  generator: "v0.dev",
+  generator: "me - sam",
 };
 
 export default function RootLayout({
