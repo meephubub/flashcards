@@ -1,65 +1,36 @@
 "use client"
 
-import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { useState, FormEvent, useEffect } from 'react';
+import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/sidebar"
 import { DeckGrid } from "@/components/deck-grid"
 
 export default function Home() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { session, isLoading, error: authError, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
-  const supabase = createClient();
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setIsLoggedIn(!!session);
-      } catch (error) {
-        console.error('Error checking auth status:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      setIsLoggedIn(event === 'SIGNED_IN');
-      if (event === 'SIGNED_OUT') {
-        setIsLoggedIn(false);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
-    
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-      
-      router.refresh();
-    } catch (error: any) {
-      setError(error.message || 'An error occurred during sign in');
-    }
+    setFormError(null);
+    await signIn(email, password);
+    // The router.refresh() might not be needed here if onAuthStateChange handles UI updates sufficiently.
+    // However, if you have server components that need to re-fetch data based on auth state, it can be useful.
+    // For now, let's keep it to ensure immediate refresh of any server-side data.
+    router.refresh(); 
   };
 
-  if (isLoading) {
+  // Use authError from context if it's relevant to the form, or manage form-specific errors with setFormError
+  useEffect(() => {
+    if (authError) {
+      setFormError(authError);
+    }
+  }, [authError]);
+
+  if (isLoading) { // isLoading from useAuth()
     return (
       <div className="flex items-center justify-center min-h-screen bg-black/5">
         <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
@@ -69,7 +40,7 @@ export default function Home() {
 
   return (
     <div className="relative flex h-screen bg-[#f5f5f7]">
-      {!isLoggedIn && (
+      {!session && !isLoading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md p-8 mx-4 bg-white rounded-lg shadow-xl">
             <div className="text-center">
@@ -77,9 +48,9 @@ export default function Home() {
               <p className="mt-2 text-sm text-gray-600">Sign in to access your flashcard decks</p>
             </div>
             
-            {error && (
+            {(formError || authError) && (
               <div className="p-3 mt-4 text-sm text-red-700 bg-red-100 rounded-md">
-                {error}
+                {formError || authError}
               </div>
             )}
 
@@ -140,7 +111,7 @@ export default function Home() {
       )}
 
       <Sidebar />
-      <main className={`flex-1 p-6 overflow-auto ${!isLoggedIn ? 'opacity-30 pointer-events-none' : ''}`}>
+      <main className={`flex-1 p-6 overflow-auto ${!session ? 'opacity-30 pointer-events-none' : ''}`}>
         <DeckGrid />
       </main>
     </div>

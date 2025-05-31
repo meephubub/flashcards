@@ -46,28 +46,43 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   const [dueCardsCache, setDueCardsCache] = useState<Record<number, Card[]>>({})
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    console.log("DeckProvider: Setting up onAuthStateChange listener");
+    // Supabase v2 returns a subscription directly
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log(`DeckProvider: onAuthStateChange event: ${event}, user ID: ${session?.user?.id}`);
       setUser(session?.user ?? null);
-      setSessionChecked(true);
-      if (!session?.user) {
+      setSessionChecked(true); // Indicate that initial auth check has been performed
+
+      if (event === "SIGNED_OUT" || !session?.user) {
+        console.log("DeckProvider: User signed out or no session, clearing decks.");
         setDecks([]);
         setLoading(false);
+      } else if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        // User is signed in or initial session loaded, refreshDecks will be triggered by the other useEffect
+        console.log(`DeckProvider: User signed in or initial session for ${session?.user?.id}. Waiting for refreshDecks trigger.`);
       }
     });
-    const getCurrentUser = async () => {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser && !user) {
-        setUser(currentUser);
-      }
-      if (!sessionChecked) {
-        setSessionChecked(true);
-      }
-    };
-    getCurrentUser();
+
+    // Check initial session state, onAuthStateChange with INITIAL_SESSION should handle this
+    // but a manual check can be a fallback if needed for very first load.
+    // For now, relying on onAuthStateChange for simplicity and to avoid race conditions.
+    // async function checkInitialUser() {
+    //   const { data: { session } } = await supabase.auth.getSession();
+    //   if (session && !user) {
+    //     console.log("DeckProvider: Setting initial user from getSession", session.user.id);
+    //     setUser(session.user);
+    //   }
+    //   if (!sessionChecked) {
+    //      setSessionChecked(true);
+    //   }
+    // }
+    // checkInitialUser();
+
     return () => {
-      authListener?.unsubscribe();
+      console.log("DeckProvider: Unsubscribing from onAuthStateChange");
+      authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Empty dependency array ensures this runs only on mount and unmount
 
   useEffect(() => {
     if (sessionChecked && user) {
@@ -86,15 +101,28 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     }
     try {
       setLoading(true)
+      console.log("Fetching decks for user:", user.id)
       const fetchedSupabaseDecks = await dataService.getDecks(supabase)
-      const transformedDecks: Deck[] = fetchedSupabaseDecks.map(supabaseDeck => {
+      console.log("Fetched decks count:", fetchedSupabaseDecks.length)
+      
+      // First create deck objects with empty card arrays to show something to the user quickly
+      const initialDecks: Deck[] = fetchedSupabaseDecks.map(supabaseDeck => {
+        // Ensure the deck has valid user_id
         if (!supabaseDeck.user_id) {
+          console.warn(`Deck ${supabaseDeck.id} has no user_id, skipping`)
           return null;
         }
+        
+        // Verify the deck belongs to the current user
+        if (supabaseDeck.user_id !== user.id) {
+          console.warn(`Deck ${supabaseDeck.id} belongs to ${supabaseDeck.user_id}, not current user ${user.id}, skipping`)
+          return null;
+        }
+        
         return {
           ...supabaseDeck,
           user_id: supabaseDeck.user_id,
-          cards: [],
+          cards: [], // Initialize with empty cards array
           last_studied: supabaseDeck.last_studied || 'Never',
           description: supabaseDeck.description || "",
           card_count: supabaseDeck.card_count || 0,
@@ -102,9 +130,48 @@ export function DeckProvider({ children }: { children: ReactNode }) {
           updated_at: supabaseDeck.updated_at ?? undefined,
         };
       }).filter(Boolean) as Deck[];
-      setDecks(transformedDecks)
+      
+      // Set initial decks to show something quickly
+      setDecks(initialDecks)
+      console.log("Set initial decks:", initialDecks.length)
+      
+      // Then fetch cards separately for each deck
+      // This avoids issues with the progress relationship
+      const completedDecks = await Promise.all(
+        initialDecks.map(async (deck) => {
+          try {
+            console.log(`Fetching full deck data for deck ${deck.id}`)
+            const fullDeck = await dataService.getDeck(supabase, deck.id);
+            
+            if (fullDeck) {
+              // Use optional chaining with type assertion since we know the structure
+              console.log(`Successfully fetched deck ${deck.id} with ${(fullDeck as any).cards?.length || 0} cards`)
+              return fullDeck;
+            } else {
+              console.warn(`Could not fetch full deck ${deck.id}, falling back to basic deck info`)
+              return deck; // Fall back to deck without cards if fetch fails
+            }
+          } catch (error) {
+            console.error(`Error fetching cards for deck ${deck.id}:`, error);
+            // Maintain the initial deck object with its id and metadata,
+            // but ensure it has an empty cards array to prevent rendering errors
+            return {
+              ...deck,
+              cards: [] // Ensure there's always a cards array even on error
+            };
+          }
+        })
+      );
+      
+      // Filter out any null results and update state with completed decks
+      const validCompletedDecks = completedDecks.filter(Boolean) as Deck[];
+      console.log("Setting completed decks:", validCompletedDecks.length)
+      
+      // Update with complete deck data including cards
+      setDecks(validCompletedDecks)
       setDueCardsCache({})
     } catch (error) {
+      console.error("Error refreshing decks:", error);
       setDecks([]);
     } finally {
       setLoading(false)
