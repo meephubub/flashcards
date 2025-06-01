@@ -170,27 +170,21 @@ export async function mergeDecks(
   }
 }
 
-export async function getDecks(supabase: SupabaseClient): Promise<Deck[]> {
+export async function getDecks(supabase: SupabaseClient, userId: string): Promise<Deck[]> {
   try {
-    // Check if supabase client is properly initialized
-    if (!supabase || !supabase.auth) {
-      console.error("Supabase client is not properly initialized in getDecks")
-      return []
+    if (!supabase) {
+      console.error("Supabase client is not properly initialized in getDecks");
+      return [];
     }
-
-    const { data, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !data || !data.user) {
-      console.error("Error fetching user or no user logged in for getDecks:", authError)
-      return []
+    if (!userId) {
+      console.error("No user ID provided to getDecks");
+      return [];
     }
-
-    const user = data.user
 
     const { data: decksData, error: decksError } = await supabase
       .from("decks")
       .select("*") // This will select all columns from the 'decks' table
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
 
     if (decksError) {
@@ -209,22 +203,16 @@ export async function getDecks(supabase: SupabaseClient): Promise<Deck[]> {
 }
 
 // Get a single deck by ID
-export async function getDeck(supabase: SupabaseClient, deckId: number): Promise<Deck | undefined> {
+export async function getDeck(supabase: SupabaseClient, deckId: number, userId: string): Promise<Deck | undefined> {
   try {
-    // Check if supabase client is properly initialized
-    if (!supabase || !supabase.auth) {
-      console.error("Supabase client is not properly initialized in getDeck")
-      return undefined
+    if (!supabase) {
+      console.error("Supabase client is not properly initialized in getDeck");
+      return undefined;
     }
-
-    const { data, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !data || !data.user) {
-      console.error("Error fetching user or no user logged in for getDeck:", authError)
-      return undefined
+    if (!userId) {
+      console.error("No user ID provided to getDeck");
+      return undefined;
     }
-
-    const user = data.user
 
     // Check if deckId is valid
     if (!deckId || isNaN(Number(deckId))) {
@@ -249,8 +237,8 @@ export async function getDeck(supabase: SupabaseClient, deckId: number): Promise
     }
 
     // Verify that the fetched deck belongs to the authenticated user
-    if (deck.user_id !== user.id) {
-      console.warn(`User ${user.id} attempted to access deck ${deckId} owned by ${deck.user_id}. Access denied.`)
+    if (deck.user_id !== userId) {
+      console.warn(`User ${userId} attempted to access deck ${deckId} owned by ${deck.user_id}. Access denied.`)
       return undefined
     }
 
@@ -263,13 +251,13 @@ export async function getDeck(supabase: SupabaseClient, deckId: number): Promise
         .from("cards")
         .select("*")
         .eq("deck_id", deckId)
-        // .eq("user_id", user.id) // Temporarily removed user_id filter as per user request
+        // .eq("user_id", userId) // Temporarily removed user_id filter as per user request, RLS should handle this
 
       if (cardsError) {
-        console.error(`Error fetching cards for deck ${deckId} (user ${user.id}):`, cardsError)
+        console.error(`Error fetching cards for deck ${deckId} (user ${userId}):`, cardsError)
         // We'll still return the deck, just with empty cards array
       } else {
-        console.log(`For deck ${deckId} (user ${user.id}), received ${cards?.length || 0} cards from DB query:`, cards);
+        console.log(`For deck ${deckId} (user ${userId}), received ${cards?.length || 0} cards from DB query:`, cards);
         // Attach cards to the deck
         deck.cards = cards || []
 
@@ -916,7 +904,7 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
     }
 
     // 1. Fetch the deck (getDeck already verifies ownership for the current user)
-    const deck = await getDeck(supabase, deckId);
+    const deck = await getDeck(supabase, deckId, user.id);
     if (!deck) {
       // getDeck logs errors if any, or if deck not found/not owned
       return [];
@@ -1002,6 +990,16 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
 // Import cards from markdown - this now directly adds to the database
 export async function importCardsFromMarkdown(supabase: SupabaseClient, parsedDeck: ParsedDeckImport): Promise<Deck | undefined> {
   try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for importCardsFromMarkdown:", authError);
+      throw new Error("User authentication failed");
+    }
+
     // Create a new deck
     const deckName = parsedDeck.name;
     // Ensure deckName is a non-empty string
@@ -1038,7 +1036,7 @@ export async function importCardsFromMarkdown(supabase: SupabaseClient, parsedDe
     }
 
     // Return the updated deck
-    return getDeck(supabase, newDeck.id)
+    return getDeck(supabase, newDeck.id, user.id)
   } catch (error) {
     console.error("Error importing cards from markdown:", error)
     return undefined
@@ -1153,7 +1151,7 @@ export async function generateAIFlashcards(
         const added = await addCard(supabase, targetDeckId, card.front, card.back, null); // AI-generated cards don't have img_url from groq.ts
         if (added) cardsSuccessfullyAdded++;
       }
-      finalDeck = await getDeck(supabase, targetDeckId); 
+      finalDeck = await getDeck(supabase, targetDeckId, user.id); 
       return {
         success: true,
         message: `Created new deck '${topic}' with ${cardsSuccessfullyAdded} of ${generatedResult.cards.length} AI-generated cards.`,

@@ -102,23 +102,21 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true)
       console.log("Fetching decks for user:", user.id)
-      const fetchedSupabaseDecks = await dataService.getDecks(supabase)
+      const fetchedSupabaseDecks = await dataService.getDecks(supabase, user.id) // Pass user.id
       console.log("Fetched decks count:", fetchedSupabaseDecks.length)
       
       // First create deck objects with empty card arrays to show something to the user quickly
       const initialDecks: Deck[] = fetchedSupabaseDecks.map(supabaseDeck => {
-        // Ensure the deck has valid user_id
+        // Ensure the deck has valid user_id, which it should if RLS is working correctly
         if (!supabaseDeck.user_id) {
-          console.warn(`Deck ${supabaseDeck.id} has no user_id, skipping`)
+          console.warn(`Deck ${supabaseDeck.id} has no user_id, skipping. This might indicate an issue with data or RLS.`)
           return null;
         }
         
-        // Verify the deck belongs to the current user
-        if (supabaseDeck.user_id !== user.id) {
-          console.warn(`Deck ${supabaseDeck.id} belongs to ${supabaseDeck.user_id}, not current user ${user.id}, skipping`)
-          return null;
-        }
-        
+        // The check for supabaseDeck.user_id !== user.id is now redundant 
+        // as the dataService.getDecks should only return decks for the current user.
+        // We keep the null check for user_id as a basic data integrity check.
+
         return {
           ...supabaseDeck,
           user_id: supabaseDeck.user_id,
@@ -141,7 +139,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         initialDecks.map(async (deck) => {
           try {
             console.log(`Fetching full deck data for deck ${deck.id}`)
-            const fullDeck = await dataService.getDeck(supabase, deck.id);
+            const fullDeck = await dataService.getDeck(supabase, deck.id, user.id);
             
             if (fullDeck) {
               // Use optional chaining with type assertion since we know the structure
