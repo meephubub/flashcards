@@ -92,3 +92,11 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* KaTeX color override for theme support */
+.katex, .katex * {
+  color: #000 !important; /* default: black for light mode */
+}
+.dark .katex, .dark .katex * {
+  color: #fff !important; /* white for dark mode */
+}

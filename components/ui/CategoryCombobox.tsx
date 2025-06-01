@@ -36,6 +36,7 @@ interface CategoryComboboxProps {
   inputPlaceholder?: string;
   emptyPlaceholder?: string;
   buttonClassName?: string;
+  theme?: "dark" | "light";
 }
 
 export function CategoryCombobox({
@@ -46,7 +47,8 @@ export function CategoryCombobox({
   placeholder = "Select category...",
   inputPlaceholder = "Search or create...",
   emptyPlaceholder = "No category found.",
-  buttonClassName
+  buttonClassName,
+  theme = "dark"
 }: CategoryComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [inputValue, setInputValue] = React.useState("")
@@ -77,8 +79,16 @@ export function CategoryCombobox({
             role="combobox"
             aria-expanded={open}
             className={cn(
-              "w-full justify-between bg-neutral-900/70 border border-neutral-700 text-neutral-100 hover:bg-neutral-800 hover:text-neutral-50 hover:border-neutral-600 focus:border-neutral-500 focus:ring-1 focus:ring-neutral-600 shadow-sm transition-all duration-150",
-              open && "bg-neutral-800 border-neutral-600 ring-1 ring-neutral-500",
+              "w-full justify-between shadow-sm transition-all duration-150",
+              theme === "dark" 
+                ? [
+                    "bg-neutral-900/70 border border-neutral-700 text-neutral-100 hover:bg-neutral-800 hover:text-neutral-50 hover:border-neutral-600 focus:border-neutral-500 focus:ring-1 focus:ring-neutral-600",
+                    open && "bg-neutral-800 border-neutral-600 ring-1 ring-neutral-500"
+                  ]
+                : [
+                    "bg-white border border-gray-300 text-gray-900 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 focus:border-gray-400 focus:ring-1 focus:ring-gray-400",
+                    open && "bg-gray-50 border-gray-400 ring-1 ring-gray-400"
+                  ],
               buttonClassName
             )}
           >
@@ -88,38 +98,39 @@ export function CategoryCombobox({
             />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-neutral-900 border-neutral-700 rounded-md shadow-xl overflow-hidden">
-          <Command className="bg-neutral-900 border-neutral-700 rounded-none">
-            <div className="flex items-center px-3 py-2 border-b border-neutral-700">
-              <Search className="mr-2 h-4 w-4 shrink-0 text-neutral-100" />
+        <PopoverContent className={`w-[--radix-popover-trigger-width] p-0 rounded-md shadow-xl overflow-hidden ${theme === "dark" ? "bg-neutral-900 border-neutral-700" : "bg-white border-gray-200"}`}>
+          <Command className={`rounded-none ${theme === "dark" ? "bg-neutral-900 border-neutral-700" : "bg-white border-gray-200"}`}>
+            <div className={`flex items-center px-3 py-2 border-b ${theme === "dark" ? "border-neutral-700" : "border-gray-200"}`}>
+              <Search className={`mr-2 h-4 w-4 shrink-0 ${theme === "dark" ? "text-neutral-100" : "text-gray-600"}`} />
               <CommandInput 
                 placeholder={inputPlaceholder} 
                 value={inputValue}
                 onValueChange={setInputValue}
-                className="bg-neutral-900 text-neutral-100 border-0 shadow-none outline-none px-0 py-1"
+                className={`border-0 shadow-none outline-none px-0 py-1 ${theme === "dark" ? "bg-neutral-900 text-neutral-100" : "bg-white text-gray-900"}`}
               />
             </div>
-            <CommandList className="bg-neutral-900 text-neutral-100 max-h-[300px] py-2">
-              <CommandEmpty className="bg-neutral-900 text-neutral-500 py-3 px-2">
+            <CommandList className={`max-h-[300px] py-2 ${theme === "dark" ? "bg-neutral-900 text-neutral-100" : "bg-white text-gray-900"}`}>
+              <CommandEmpty className={`py-3 px-2 ${theme === "dark" ? "bg-neutral-900 text-neutral-500" : "bg-white text-gray-500"}`}>
                 {inputValue.trim() ? (
-                  <Button variant="ghost" className="w-full justify-start text-left h-auto bg-transparent text-sky-400 hover:bg-neutral-800 hover:text-sky-300 transition-colors duration-150 rounded-md px-3 py-2" onClick={handleCreateNew}>
+                  <Button variant="ghost" className={`w-full justify-start text-left h-auto bg-transparent transition-colors duration-150 rounded-md px-3 py-2 ${theme === "dark" ? "text-sky-400 hover:bg-neutral-800 hover:text-sky-300" : "text-blue-600 hover:bg-gray-100 hover:text-blue-700"}`} onClick={handleCreateNew}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Create "{inputValue.trim()}"
                   </Button>
                 ) : (
                   <p className="text-center px-2">{emptyPlaceholder}</p>
                 )}
               </CommandEmpty>
-              <CommandGroup className="bg-neutral-900">
+              <CommandGroup className={theme === "dark" ? "bg-neutral-900" : "bg-white"}>
                 {categories.map((category) => (
                   <CommandItem
                     key={category}
                     value={category}
                     onSelect={handleSelect}
-                    className="hover:bg-neutral-800 aria-selected:bg-neutral-700 data-[selected=true]:bg-neutral-700 text-neutral-200 py-2 px-3 mx-1 rounded-md transition-colors duration-150 cursor-pointer"
+                    className={`py-2 px-3 mx-1 rounded-md transition-colors duration-150 cursor-pointer ${theme === "dark" ? "hover:bg-neutral-800 aria-selected:bg-neutral-700 data-[selected=true]:bg-neutral-700 text-neutral-200" : "hover:bg-gray-100 aria-selected:bg-gray-200 data-[selected=true]:bg-gray-200 text-gray-700"}`}
                   >
                     <Check
                       className={cn(
-                        "mr-2 h-4 w-4 text-sky-400 transition-opacity duration-150",
+                        "mr-2 h-4 w-4 transition-opacity duration-150",
+                        theme === "dark" ? "text-sky-400" : "text-blue-600",
                         value?.toLowerCase() === category.toLowerCase() ? "opacity-100" : "opacity-0"
                       )}
                     />
@@ -129,11 +140,11 @@ export function CategoryCombobox({
               </CommandGroup>
               {inputValue.trim() && !categories.find(cat => cat.toLowerCase() === inputValue.toLowerCase()) && (
                 <>
-                  <CommandSeparator className="bg-neutral-600 my-2 h-px mx-3" />
-                  <CommandGroup className="bg-neutral-900">
+                  <CommandSeparator className={`my-2 h-px mx-3 ${theme === "dark" ? "bg-neutral-600" : "bg-gray-200"}`} />
+                  <CommandGroup className={theme === "dark" ? "bg-neutral-900" : "bg-white"}>
                       <CommandItem 
                           onSelect={handleCreateNew}
-                          className="hover:bg-neutral-800 text-sky-400 hover:text-sky-300 py-2 px-3 mx-1 rounded-md transition-colors duration-150 cursor-pointer"
+                          className={`py-2 px-3 mx-1 rounded-md transition-colors duration-150 cursor-pointer ${theme === "dark" ? "hover:bg-neutral-800 text-sky-400 hover:text-sky-300" : "hover:bg-gray-100 text-blue-600 hover:text-blue-700"}`}
                           value={inputValue.trim()}
                       >
                           <PlusCircle className="mr-2 h-4 w-4" /> Create new category: "{inputValue.trim()}"
