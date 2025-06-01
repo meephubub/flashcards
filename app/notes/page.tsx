@@ -87,6 +87,11 @@ const generateSlug = (text: string) => {
 
 // Helper function for inline Markdown parsing
 const parseInlineMarkdown = (text: string): React.ReactNode => {
+  // Get the current theme
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const mathTextColor = isDark ? "text-white" : "text-black";
+
   // Process LaTeX math first
   let processedText = text
 
@@ -99,7 +104,7 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
       if (p1.includes("#") || p1.includes("---")) {
         return match // Skip rendering if it contains Markdown syntax
       }
-      return `<div class="text-white">${katex.renderToString(p1, { displayMode: true })}</div>`
+      return `<div class="${mathTextColor}">${katex.renderToString(p1, { displayMode: true })}</div>`
     } catch (error) {
       console.error("KaTeX error:", error)
       return match
@@ -111,10 +116,10 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
   processedText = processedText.replace(/(?<!\\)\$([^$\n#]+?)(?<!\\)\$/g, (match, p1) => {
     try {
       // Skip if it contains Markdown syntax
-      if (p1.includes("#") || p1.includes("---") || p1.includes("![")) {
+      if (p1.includes("#") || p1.includes("---") || p1.includes("!")) {
         return match
       }
-      return `<span class="text-white">${katex.renderToString(p1, { displayMode: false })}</span>`
+      return `<span class="${mathTextColor}">${katex.renderToString(p1, { displayMode: false })}</span>`
     } catch (error) {
       console.error("KaTeX error:", error)
       return match
@@ -353,12 +358,17 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
   }
 
   const processMathBlock = () => {
+    // Get the current theme
+    const { theme } = useTheme();
+    const isDark = theme === "dark";
+    const mathTextColor = isDark ? "text-white" : "text-black";
+    
     if (mathBlockContent.length > 0) {
       try {
         const mathContent = mathBlockContent.join("\n")
 
         // Check for Markdown syntax that would cause KaTeX errors
-        if (mathContent.includes("#") || mathContent.includes("---") || mathContent.includes("![")) {
+        if (mathContent.includes("#") || mathContent.includes("---") || mathContent.includes("!")) {
           // If problematic content is found, display it as code instead of trying to render as math
           elements.push(
             <div
@@ -374,7 +384,7 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
           elements.push(
             <div
               key={`math-${elements.length}`}
-              className="my-4 overflow-x-auto text-white"
+              className={`my-4 overflow-x-auto ${mathTextColor}`}
               dangerouslySetInnerHTML={{ __html: renderedMath }}
             />,
           )
@@ -745,40 +755,13 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
 export default function NotesPage() {
   const { session, user, isLoading: authIsLoading, error: authError, signOut } = useAuth();
   const router = useRouter();
-  
-  // Create an auth-aware Supabase client for data operations
   const supabase = createClient();
-  
-  // Protect route - redirect to login if not authenticated
-  useEffect(() => {
-    if (!authIsLoading && !session) {
-      router.push('/');
-    }
-  }, [session, authIsLoading, router]);
-  
-  // Show loading spinner while authentication state is being determined
-  if (authIsLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black/5">
-        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  // Show redirect message if not authenticated
-  if (!session) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Redirecting to login...</p>
-      </div>
-    );
-  }
-  const { theme, setTheme } = useTheme()
-  const [allNotes, setAllNotes] = useState<Note[]>([])
-  const [activeNote, setActiveNote] = useState<Note | null>(null)
-  const [displayedNotes, setDisplayedNotes] = useState<Note[]>([])
-  const [subheadings, setSubheadings] = useState<string[]>([])
-  const [currentNoteHeadings, setCurrentNoteHeadings] = useState<{ text: string; level: number }[]>([])
+  const { theme, setTheme } = useTheme();
+  const [allNotes, setAllNotes] = useState<Note[]>([]);
+  const [activeNote, setActiveNote] = useState<Note | null>(null);
+  const [displayedNotes, setDisplayedNotes] = useState<Note[]>([]);
+  const [subheadings, setSubheadings] = useState<string[]>([]);
+  const [currentNoteHeadings, setCurrentNoteHeadings] = useState<{ text: string; level: number }[]>([]);
   const [availableCategories, setAvailableCategories] = useState<string[]>([])
   const [highlightedText, setHighlightedText] = useState<string>("")
   const [searchQuery, setSearchQuery] = useState<string>("")
@@ -791,6 +774,7 @@ export default function NotesPage() {
     content: "",
     category: "", // Default category to empty, user must select or create
   })
+
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -799,6 +783,8 @@ export default function NotesPage() {
   const [selectedSidebarCategory, setSelectedSidebarCategory] = useState("all")
   const [focusedNoteId, setFocusedNoteId] = useState<string | null>(null)
   const [generationTopic, setGenerationTopic] = useState<string>("")
+  
+  // Move all hooks that were after the conditional returns to here
   const [isGeneratingNote, setIsGeneratingNote] = useState<boolean>(false)
   const [isAddNoteDialogOpen, setIsAddNoteDialogOpen] = useState<boolean>(false)
   const [isAiChatDialogOpen, setIsAiChatDialogOpen] = useState<boolean>(false)
@@ -836,6 +822,31 @@ export default function NotesPage() {
   } | null>(null);
 
   const [mcqStates, setMcqStates] = useState<Record<string, {selectedIndex?: number, showAnswers: boolean}>>({});
+
+  // Protect route - redirect to login if not authenticated
+  useEffect(() => {
+    if (!authIsLoading && !session) {
+      router.push('/');
+    }
+  }, [session, authIsLoading, router]);
+
+  // Show loading spinner while authentication state is being determined
+  if (authIsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black/5">
+        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // Show redirect message if not authenticated
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Redirecting to login...</p>
+      </div>
+    );
+  }
 
   const handleMcqOptionClick = (blockId: string, optionIndex: number, isCorrect: boolean) => {
     console.log(`[MCQ CLICK] blockId: ${blockId}, optionIndex: ${optionIndex}, isCorrect: ${isCorrect}`);
@@ -1953,13 +1964,13 @@ const fetchNotes = async () => {
                         <Button
                           onClick={() => setInlineEditingNoteId(null)}
                           variant="outline"
-                          className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                          className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
                         >
                           Cancel
                         </Button>
                         <Button
                           onClick={handleSaveInlineEdit}
-                          className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700"
+                          className="bg-neutral-900 dark:bg-neutral-800 hover:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 dark:focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 dark:focus:ring-offset-neutral-900 border border-neutral-200 dark:border-neutral-700"
                         >
                           Save Changes
                         </Button>
@@ -2118,26 +2129,26 @@ const fetchNotes = async () => {
 
       {/* Add Note Dialog */}
       <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
-        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0">
+        <DialogContent className={`max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0 ${theme === "dark" ? "bg-neutral-900 border-neutral-800 text-neutral-100" : "bg-white border-gray-200 text-gray-900"}`}>
           <div className="p-6 sm:p-8">
             <DialogHeader className="mb-6">
-              <ShadDialogTitle className="text-2xl font-bold text-neutral-100">Add New Note</ShadDialogTitle>
+              <ShadDialogTitle className={`text-2xl font-bold ${theme === "dark" ? "text-neutral-100" : "text-gray-900"}`}>Add New Note</ShadDialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 mb-6 p-4 border border-neutral-700 rounded-lg bg-neutral-800/50">
-              <p className="text-sm text-neutral-300 font-medium">Generate with AI ✨</p>
+            <div className={`space-y-4 mb-6 p-4 border rounded-lg ${theme === "dark" ? "border-neutral-700 bg-neutral-800/50" : "border-gray-200 bg-gray-50"}`}>
+              <p className={`text-sm font-medium ${theme === "dark" ? "text-neutral-300" : "text-gray-700"}`}>Generate with AI ✨</p>
               <div className="flex space-x-2">
                 <Input
                   placeholder="Enter a topic for AI note generation..."
                   value={generationTopic}
                   onChange={(e) => setGenerationTopic(e.target.value)}
-                  className="bg-neutral-700 border-neutral-600 text-neutral-100 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-neutral-500 flex-grow"
+                  className={`flex-grow ${theme === "dark" ? "bg-neutral-700 border-neutral-600 text-neutral-100 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-neutral-500" : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"}`}
                   disabled={isGeneratingNote}
                 />
                 <Button
                   onClick={handleGenerateNote}
                   disabled={isGeneratingNote || !generationTopic.trim()}
-                  className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-semibold transition-all duration-150 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 whitespace-nowrap border border-neutral-700"
+                  className={`font-semibold transition-all duration-150 whitespace-nowrap ${theme === "dark" ? "bg-neutral-800 hover:bg-neutral-700 text-neutral-100 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700" : "bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 focus:ring-offset-white border border-gray-300"}`}
                 >
                   {isGeneratingNote ? (
                     <>
@@ -2164,7 +2175,7 @@ const fetchNotes = async () => {
                   placeholder="Note Title"
                   value={newNote.title}
                   onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
-                  className="bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500"
+                  className={`${theme === "dark" ? "bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500" : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"}`}
                 />
               </div>
               <div>
@@ -2177,7 +2188,7 @@ const fetchNotes = async () => {
                       setNewNote({ ...newNote, content: e.target.value });
                     }
                   }}
-                  className="min-h-[160px] bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500 font-mono text-sm"
+                  className={`min-h-[160px] font-mono text-sm ${theme === "dark" ? "bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500" : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"}`}
                 />
               </div>
               <div>
@@ -2188,31 +2199,32 @@ const fetchNotes = async () => {
                   placeholder="Select or create category..."
                   inputPlaceholder="Search/Create category..."
                   emptyPlaceholder="Type to create new category."
+                  theme={theme}
                 />
               </div>
 
               {errorMessage && (
-                <div className="text-red-400 text-sm p-3 bg-red-900/40 border border-red-700/60 rounded-md">
+                <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-red-900/30 border border-red-700/60 text-red-200" : "bg-red-100 border border-red-300 text-red-800"}`}>
                   {errorMessage}
                 </div>
               )}
-              <div className="flex justify-end space-x-3 pt-2">
+              <DialogFooter className="flex justify-between mt-8">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setIsAddNoteDialogOpen(false)}
-                  className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                  className={`${theme === "dark" ? "bg-transparent border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100" : "bg-transparent border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"}`}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all duration-150"
                 >
-                  {isLoading ? "Adding Note..." : "Add Note"}
+                  {isLoading ? "Adding..." : "Add Note"}
                 </Button>
-              </div>
+              </DialogFooter>
             </form>
           </div>
         </DialogContent>
@@ -2509,14 +2521,14 @@ const fetchNotes = async () => {
                   type="button"
                   variant="outline"
                   onClick={() => setIsEditNoteDialogOpen(false)}
-                  className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                  className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700"
+                  className="bg-neutral-900 dark:bg-neutral-800 hover:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 dark:focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 dark:focus:ring-offset-neutral-900 border border-neutral-200 dark:border-neutral-700"
                 >
                   {isLoading ? "Updating Note..." : "Update Note"}
                 </Button>
@@ -2547,7 +2559,7 @@ const fetchNotes = async () => {
           }
         }}
       >
-        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-md rounded-xl shadow-2xl p-0 sm:p-0">
+        <DialogContent className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 max-w-md rounded-xl shadow-2xl p-0 sm:p-0">
           <div className="p-6 sm:p-8">
             <DialogHeader className="mb-6">
               <ShadDialogTitle className="text-2xl font-bold text-neutral-100">Delete Note</ShadDialogTitle>
@@ -2567,7 +2579,7 @@ const fetchNotes = async () => {
                 type="button"
                 variant="outline"
                 onClick={() => setIsDeleteDialogOpen(false)}
-                className="bg-neutral-900 border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
               >
                 Cancel
               </Button>
