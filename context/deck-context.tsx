@@ -1,6 +1,7 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { useAuth } from './auth-context'; // Assuming auth-context.tsx is in the same directory
 import { SupabaseClient, Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import * as dataService from '../lib/data'
@@ -39,59 +40,10 @@ interface DeckContextType {
 const DeckContext = createContext<DeckContextType | undefined>(undefined)
 
 export function DeckProvider({ children }: { children: ReactNode }) {
+  const { user, isLoading: authIsLoading, session } = useAuth();
   const [decks, setDecks] = useState<Deck[]>([])
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<User | null>(null);
-  const [sessionChecked, setSessionChecked] = useState(false);
+  const [loading, setLoading] = useState(true) // This loading is for decks data
   const [dueCardsCache, setDueCardsCache] = useState<Record<number, Card[]>>({})
-
-  useEffect(() => {
-    console.log("DeckProvider: Setting up onAuthStateChange listener");
-    // Supabase v2 returns a subscription directly
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log(`DeckProvider: onAuthStateChange event: ${event}, user ID: ${session?.user?.id}`);
-      setUser(session?.user ?? null);
-      setSessionChecked(true); // Indicate that initial auth check has been performed
-
-      if (event === "SIGNED_OUT" || !session?.user) {
-        console.log("DeckProvider: User signed out or no session, clearing decks.");
-        setDecks([]);
-        setLoading(false);
-      } else if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-        // User is signed in or initial session loaded, refreshDecks will be triggered by the other useEffect
-        console.log(`DeckProvider: User signed in or initial session for ${session?.user?.id}. Waiting for refreshDecks trigger.`);
-      }
-    });
-
-    // Check initial session state, onAuthStateChange with INITIAL_SESSION should handle this
-    // but a manual check can be a fallback if needed for very first load.
-    // For now, relying on onAuthStateChange for simplicity and to avoid race conditions.
-    // async function checkInitialUser() {
-    //   const { data: { session } } = await supabase.auth.getSession();
-    //   if (session && !user) {
-    //     console.log("DeckProvider: Setting initial user from getSession", session.user.id);
-    //     setUser(session.user);
-    //   }
-    //   if (!sessionChecked) {
-    //      setSessionChecked(true);
-    //   }
-    // }
-    // checkInitialUser();
-
-    return () => {
-      console.log("DeckProvider: Unsubscribing from onAuthStateChange");
-      authListener.subscription.unsubscribe();
-    };
-  }, []); // Empty dependency array ensures this runs only on mount and unmount
-
-  useEffect(() => {
-    if (sessionChecked && user) {
-      refreshDecks();
-    } else if (sessionChecked && !user) {
-      setDecks([]);
-      setLoading(false);
-    }
-  }, [user, sessionChecked]);
 
   const refreshDecks = useCallback(async () => {
     if (!user) {
@@ -175,6 +127,22 @@ export function DeckProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     }
   }, [user, supabase]);
+
+
+  useEffect(() => {
+    // Refresh decks when the user state from AuthContext changes and auth is no longer loading.
+    if (!authIsLoading && user && session) {
+      console.log("DeckProvider: Auth state confirmed (user present), refreshing decks.");
+      refreshDecks();
+    } else if (!authIsLoading && !user) {
+      // If auth is resolved and there's no user, clear decks and set loading to false.
+      console.log("DeckProvider: Auth state confirmed (no user), clearing decks.");
+      setDecks([]);
+      setLoading(false);
+    }
+    // Intentionally not reacting to `session` directly if `user` is the primary gate for data fetching.
+    // If session presence without a user object means something, adjust logic.
+  }, [user, authIsLoading, session, refreshDecks]);
 
   const addDeck = async (name: string, description: string, tag: string | null = null): Promise<Deck> => {
     if (!user) throw new Error("User not authenticated");
