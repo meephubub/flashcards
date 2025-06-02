@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server"
 import { generateAIFlashcards } from "@/lib/data"
+import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: Request) {
+  let topic: string | undefined;
+  let numberOfCards: number | undefined;
+  let deckId: number | undefined;
+  let noteContent: string | undefined;
+
   try {
-    const { topic, numberOfCards, deckId, noteContent } = await request.json()
+    // Assign to the outer-scoped variables
+    ({ topic, numberOfCards, deckId, noteContent } = await request.json());
 
     if (!topic) {
       return NextResponse.json({ error: "Topic is required" }, { status: 400 })
     }
 
-    const result = await generateAIFlashcards(topic, numberOfCards || 5, deckId, noteContent)
+    const supabase = await createClient()
+    const result = await generateAIFlashcards(supabase, topic, numberOfCards || 5, deckId, noteContent)
 
     return NextResponse.json(result)
   } catch (error: any) {
@@ -23,11 +31,11 @@ export async function POST(request: Request) {
         fallback: {
           cards: [
             {
-              front: `What is the main concept of ${request.json().topic || "this topic"}?`,
+              front: `What is the main concept of ${topic || "this topic"}?`,
               back: "This is a fallback card. The AI generation service is currently unavailable.",
             },
           ],
-          topic: request.json().topic || "Fallback Topic",
+          topic: topic || "Fallback Topic",
         },
       },
       { status: 500 },

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -49,11 +49,27 @@ export function SettingsContent() {
   })
 
   // Update local state when settings are loaded
-  useState(() => {
+  useEffect(() => {
     if (!loading) {
-      setLocalSettings(settings)
+      // Ensure settings and studySettings are defined before accessing them
+      if (settings && settings.studySettings) {
+        setLocalSettings({
+          theme: settings.theme,
+          enableAnimations: settings.enableAnimations,
+          enableSounds: settings.enableSounds,
+          enableTTS: settings.enableTTS,
+          studySettings: {
+            cardsPerSession: settings.studySettings.cardsPerSession,
+            showProgressBar: settings.studySettings.showProgressBar,
+            enableSpacedRepetition: settings.studySettings.enableSpacedRepetition,
+            autoFlip: settings.studySettings.autoFlip,
+            autoFlipDelay: settings.studySettings.autoFlipDelay,
+            languageSimilarityThreshold: settings.studySettings.languageSimilarityThreshold ?? 0.75,
+          },
+        });
+      }
     }
-  })
+  }, [settings, loading]); // Add settings and loading as dependencies
 
   const handleSaveSettings = async () => {
     try {

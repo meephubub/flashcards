@@ -159,7 +159,7 @@ export async function saveSettings(supabase: any, settings: AppSettings): Promis
         enable_sounds: settings.enableSounds,
         // Don't save enable_tts to database until schema is updated
         study_settings: studySettingsJson
-      })
+      }, { onConflict: 'user_id' })
       .select()
 
     if (error) {
@@ -208,7 +208,7 @@ export async function resetSettings(supabase: any): Promise<AppSettings> {
         enable_sounds: defaultSettings.enableSounds,
         // Don't save enable_tts to database until schema is updated
         study_settings: studySettingsJson
-      })
+      }, { onConflict: 'user_id' })
       .select()
 
     if (error) {
