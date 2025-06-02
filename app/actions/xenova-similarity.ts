@@ -2,40 +2,43 @@ import { pipeline } from "@xenova/transformers";
 
 // Import a lightweight spell checker
 import { distance as levenshteinDistance } from 'fastest-levenshtein';
-let extractor:
-  | ((input: string | string[], options?: any) => Promise<any>)
-  | null = null;
+const extractorCache: {
+  [model: string]: ((input: string | string[], options?: any) => Promise<any>) | null;
+} = {};
 
 /**
- * Get or initialize the feature extractor pipeline.
+ * Get or initialize the feature extractor pipeline for a specific model.
+ * @param modelName - The name of the model to use (defaults to 'Xenova/all-MiniLM-L3-v2').
  */
-export async function getFeatureExtractor() {
-  if (!extractor) {
-    console.log("[xenova-similarity] Initializing feature extractor...");
-    extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L12-v2");
-
+export async function getFeatureExtractor(modelName: string = "Xenova/all-MiniLM-L12-v2") {
+  if (!extractorCache[modelName]) {
+    console.log(`[xenova-similarity] Initializing feature extractor for model: ${modelName}...`);
+    extractorCache[modelName] = await pipeline("feature-extraction", modelName);
     console.log(
-      "[xenova-similarity] Feature extractor initialized:",
-      typeof extractor,
+      `[xenova-similarity] Feature extractor initialized for model: ${modelName}:`,
+      typeof extractorCache[modelName],
     );
   }
-  return extractor;
+  return extractorCache[modelName]!;
 }
 
-/**
- * Get a normalized sentence embedding for a given sentence.
- * @param sentence - The input sentence to encode.
- * @returns A Float32Array representing the sentence embedding.
- */
+/** 
+ * Get a normalized sentence embedding for a given sentence. 
+ * @param sentence - The input sentence to encode. 
+ * @param modelName - The name of the model to use (optional, defaults to 'Xenova/all-MiniLM-L3-v2'). 
+ * @returns A Float32Array representing the sentence embedding. 
+ */ 
 export async function getSentenceEmbedding(
   sentence: string,
+  modelName?: string,
 ): Promise<Float32Array> {
   if (typeof sentence !== "string" || !sentence.trim()) {
     throw new Error(
       "[xenova-similarity] Invalid input: sentence must be a non-empty string",
     );
   }
-  const extractor = await getFeatureExtractor();
+  const extractor = await getFeatureExtractor(modelName);
+
   if (!extractor || typeof extractor !== "function") {
     throw new Error(
       "[xenova-similarity] Extractor is not initialized or not a function",
