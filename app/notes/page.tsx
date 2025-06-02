@@ -185,8 +185,68 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
   return <span dangerouslySetInnerHTML={{ __html: processedText }} />
 }
 
+// Regex for [gap:answer] syntax
+const gapRegex = /\[gap:([^\]]+)\]/g;
+
+// Import levenshtein distance from fastest-levenshtein
+import { distance as levenshteinDistance } from 'fastest-levenshtein';
+
+// Helper to get color class based on levenshtein distance or similarity score
+const getGapColorClass = (value: string, answer: string, similarity: number, isEmpty: boolean, theme: "dark" | "light" | undefined) => {
+  const isDark = theme === "dark";
+  
+  if (isEmpty) {
+    return isDark 
+      ? "bg-neutral-800 border-neutral-600 text-neutral-200" 
+      : "bg-gray-100 border-gray-300 text-gray-700";
+  }
+  
+  // Use levenshtein distance for immediate feedback
+  const distance = levenshteinDistance(value.toLowerCase().trim(), answer.toLowerCase().trim());
+  
+  // If using similarity score from Xenova
+  if (similarity > 0) {
+    if (similarity > 0.85) {
+      return isDark 
+        ? "bg-green-900/30 border-green-700 text-green-200" 
+        : "bg-green-100 border-green-500 text-green-800";
+    } else if (similarity > 0.6) {
+      return isDark 
+        ? "bg-yellow-900/30 border-yellow-700 text-yellow-200" 
+        : "bg-yellow-100 border-yellow-500 text-yellow-800";
+    } else {
+      return isDark 
+        ? "bg-red-900/30 border-red-700 text-red-200" 
+        : "bg-red-100 border-red-500 text-red-800";
+    }
+  } else {
+    // Using levenshtein distance
+    if (distance === 0) {
+      return isDark 
+        ? "bg-green-900/30 border-green-700 text-green-200" 
+        : "bg-green-100 border-green-500 text-green-800";
+    } else if (distance <= 2) {
+      return isDark 
+        ? "bg-yellow-900/30 border-yellow-700 text-yellow-200" 
+        : "bg-yellow-100 border-yellow-500 text-yellow-800";
+    } else {
+      return isDark 
+        ? "bg-red-900/30 border-red-700 text-red-200" 
+        : "bg-red-100 border-red-500 text-red-800";
+    }
+  }
+};
+
 // Enhanced renderNoteContent function
-const renderNoteContent = (content: string, mcqStates: Record<string, any>, handleMcqOptionClick: Function, shuffledOptionsStorage?: Record<string, any>) => {
+const renderNoteContent = (
+  content: string,
+  mcqStates: Record<string, any>,
+  handleMcqOptionClick: Function,
+  shuffledOptionsStorage?: Record<string, any>,
+  gapStates?: Record<string, { value: string; similarity: number; isRevealed?: boolean }>,
+  setGapStates?: React.Dispatch<React.SetStateAction<Record<string, { value: string; similarity: number; isRevealed?: boolean }>>>,
+  getSimilarity?: (input: string, answer: string) => Promise<number>
+) => {
   console.log('[RAW CONTENT]', JSON.stringify(content));
   const lines = content.split("\n");
   const elements: React.ReactNode[] = [];
@@ -729,6 +789,231 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
       }
     }
 
+    // Fill-in-the-gap block: if line contains [gap:answer]
+    if (gapRegex.test(line)) {
+      let gapIndex = 0;
+      const lineKey = `gap-line-${i}`;
+      // Reset regex state for re-use
+      gapRegex.lastIndex = 0;
+      // Split the line into text and gaps
+      const parts = [];
+      let lastIndex = 0;
+      let match;
+      
+      // Get the current theme
+      const { theme } = useTheme();
+      const isDark = theme === "dark";
+      const gapBgClass = isDark ? "bg-neutral-800/60" : "bg-gray-100";
+      const gapBorderClass = isDark ? "border-blue-700" : "border-blue-400";
+      const gapTextClass = isDark ? "text-neutral-100" : "text-gray-900";
+      
+      while ((match = gapRegex.exec(line)) !== null) {
+        const before = line.slice(lastIndex, match.index);
+        if (before) parts.push(before);
+        const answer = match[1];
+        const gapKey = `${lineKey}-gap-${gapIndex}`;
+        
+        // Get state for this gap
+        let gapValue = gapStates?.[gapKey]?.value || "";
+        let similarity = gapStates?.[gapKey]?.similarity ?? 0;
+        let isRevealed = gapStates?.[gapKey]?.isRevealed ?? false;
+        
+        // Get color class based on levenshtein distance or similarity
+        let colorClass = getGapColorClass(gapValue, answer, similarity, gapValue.length === 0, theme as "dark" | "light" | undefined);
+        
+        // Create a container for the input only (no reveal button)
+        parts.push(
+          <div key={gapKey} className="inline-flex items-center mx-1 gap-1">
+            <Input
+              id={gapKey}
+              type="text"
+              // Always use the current value from state, which will be the answer if revealed
+              value={isRevealed ? answer : gapValue}
+              disabled={isRevealed}
+              spellCheck={false}
+              className={`inline-block w-36 text-center font-mono transition-all duration-300 border-2 rounded-md shadow-sm ${colorClass} ${isRevealed ? (theme === "dark" ? "bg-green-900/30 border-green-700 text-green-200" : "bg-green-100 border-green-500 text-green-800") : ""} ${isRevealed ? "opacity-80" : ""}`}
+              style={{ display: "inline-block", minWidth: 80, maxWidth: 200 }}
+              onChange={(e) => {
+                const val = e.target.value;
+                
+                // First update the input value immediately for responsiveness
+                setGapStates?.((prev: any) => ({
+                  ...prev,
+                  [gapKey]: { ...prev[gapKey], value: val },
+                }));
+                
+                // Skip if already revealed or empty
+                if (!val.length || gapStates?.[gapKey]?.isRevealed) return;
+                
+                  // The initial setGapStates above handles the visual update of the typed character.
+                  // Now, immediately process for autofill.
+
+                  // Check if the input or revealed state has changed since timeout started
+                  // No, this check is not needed if we are running synchronously right after the input event.
+                  // const currentState = gapStates?.[gapKey]; 
+                  // if (!currentState || currentState.value !== val || currentState.isRevealed) return; // val here is from the event, currentState.value might be stale if setGapStates hasn't re-rendered yet.
+
+                  // Do the Levenshtein distance check using 'val' from the current input event
+                  const userInput = val.toLowerCase().trim();
+                  const correctAnswer = answer.toLowerCase().trim();
+                  const distance = levenshteinDistance(userInput, correctAnswer);
+                  
+                  // Check if input is a partial match (beginning of the answer)
+                  const isPartialMatch = correctAnswer.startsWith(userInput) && userInput.length >= 3;
+                  
+                  // Auto-fill if within 2 edit distances or is a partial match with at least 3 chars
+                  if (distance <= 2 || isPartialMatch) {
+                    // Force update with the correct answer and mark as revealed
+                    setGapStates?.((prev: any) => ({
+                      ...prev,
+                      [gapKey]: { 
+                        ...(prev[gapKey] || {}), // Ensure prev[gapKey] exists
+                        value: answer, 
+                        similarity: 1, 
+                        isRevealed: true 
+                      },
+                    }));
+                    
+                    // Log for debugging
+                    console.log(`Autofilled gap ${gapKey} with answer: ${answer} (distance: ${distance}, partial: ${isPartialMatch})`);
+                  }
+              }}
+              // Keep onBlur for when user leaves field without completing
+              onBlur={(e) => {
+                const val = e.target.value;
+                if (!val.length || gapStates?.[gapKey]?.isRevealed) return;
+                
+                // Do the Levenshtein distance check with the same logic as onChange
+                const userInput = val.toLowerCase().trim();
+                const correctAnswer = answer.toLowerCase().trim();
+                const distance = levenshteinDistance(userInput, correctAnswer);
+                
+                // Check if input is a partial match (beginning of the answer)
+                const isPartialMatch = correctAnswer.startsWith(userInput) && userInput.length >= 3;
+                
+                // Auto-fill if within 2 edit distances or is a partial match with at least 3 chars
+                if (distance <= 2 || isPartialMatch) {
+                  // Force update with the correct answer and mark as revealed
+                  setGapStates?.((prev: any) => ({
+                    ...prev,
+                    [gapKey]: { 
+                      ...prev[gapKey], 
+                      value: answer, 
+                      similarity: 1, 
+                      isRevealed: true 
+                    },
+                  }));
+                  
+                  console.log(`Autofilled gap ${gapKey} on blur with answer: ${answer} (distance: ${distance})`);
+                }
+              }}
+              onKeyDown={(e) => {
+                // Handle keyboard navigation between gaps
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault();
+                  // Find the next gap input
+                  const allGapInputs = document.querySelectorAll('input[id^="gap-line-"]');
+                  const currentIndex = Array.from(allGapInputs).findIndex(input => (input as HTMLElement).id === gapKey);
+                  const nextInput = allGapInputs[currentIndex + 1] as HTMLInputElement | undefined;
+                  if (nextInput) {
+                    nextInput.focus();
+                  }
+                }
+              }}
+              placeholder="Type answer..."
+              autoComplete="off"
+            />
+            {isRevealed && (
+              <div className="h-8 w-8 flex items-center justify-center text-green-400">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+              </div>
+            )}
+          </div>
+        );
+        lastIndex = gapRegex.lastIndex;
+        gapIndex++;
+      }
+      
+      // Add any trailing text
+      if (lastIndex < line.length) {
+        parts.push(line.slice(lastIndex));
+      }
+      
+      // Calculate progress for this line's gaps
+      const totalGaps = gapIndex;
+      const filledGaps = Object.entries(gapStates || {}).filter(([key, state]) => 
+        key.startsWith(lineKey) && (state.similarity > 0.6 || state.isRevealed)
+      ).length;
+      
+      elements.push(
+        <div
+          key={lineKey}
+          className="my-6 bg-neutral-850 border border-neutral-700 rounded-lg shadow-lg p-5 transition-all"
+        >
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-neutral-700">
+            <div className="flex items-center">
+              <span className="text-lg font-semibold text-neutral-100">Fill in the gaps</span>
+            </div>
+            
+            {/* Progress indicator */}
+            <div className="flex items-center space-x-3">
+              <div className="text-sm text-neutral-400 font-medium">
+                {filledGaps}/{totalGaps} completed
+              </div>
+              <div className="w-24 h-2 bg-neutral-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-neutral-500 transition-all duration-300"
+                  style={{ width: `${totalGaps > 0 ? (filledGaps / totalGaps) * 100 : 0}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="py-2 leading-relaxed text-neutral-200">{parts}</div>
+          
+          {/* Grade with Xenova button in bottom right */}
+          <div className="flex justify-end mt-4 pt-3 border-t border-neutral-800">
+            <Button
+              type="button"
+              size="sm"
+              className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium border border-neutral-700 transition-colors duration-150"
+              onClick={async () => {
+                // Process all gaps in this line with Xenova similarity
+                const gapKeys = Object.keys(gapStates || {}).filter(key => key.startsWith(lineKey));
+                
+                for (const key of gapKeys) {
+                  const state = gapStates?.[key];
+                  if (state && !state.isRevealed && state.value.length > 0) {
+                    // Extract the answer from the key pattern
+                    const gapMatch = Array.from(line.matchAll(gapRegex));
+                    const gapIndex = parseInt(key.split('-gap-')[1] || '0');
+                    const answer = gapMatch[gapIndex]?.[1] || '';
+                    
+                    // Get similarity using Xenova
+                    const sim = await getSimilarity?.(state.value, answer) || 0;
+                    
+                    // Update state with the similarity score
+                    setGapStates?.((prev: any) => ({
+                      ...prev,
+                      [key]: { ...prev[key], similarity: sim },
+                    }));
+                  }
+                }
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                <path d="m9 11-6 6v3h9l3-3"></path>
+                <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"></path>
+              </svg>
+              Grade with AI
+            </Button>
+          </div>
+        </div>
+      );
+      continue;
+    }
     // Default: Paragraph (or empty line for spacing)
     if (line.trim() === "") {
       elements.push(<div key={i} className="h-4"></div>) // Create some space for empty lines
@@ -752,6 +1037,8 @@ const renderNoteContent = (content: string, mcqStates: Record<string, any>, hand
   return <>{elements}</> // Return a fragment
 }
 
+import { getSentenceEmbedding, cosineSimilarity } from "../actions/xenova-similarity";
+
 export default function NotesPage() {
   const { session, user, isLoading: authIsLoading, error: authError, signOut } = useAuth();
   const router = useRouter();
@@ -765,6 +1052,7 @@ export default function NotesPage() {
   const [availableCategories, setAvailableCategories] = useState<string[]>([])
   const [highlightedText, setHighlightedText] = useState<string>("")
   const [searchQuery, setSearchQuery] = useState<string>("")
+  const [showGapInstructions, setShowGapInstructions] = useState<boolean>(true)
   
   // Persistent storage for shuffled MCQ options that survives re-renders
   const shuffledMcqOptionsRef = useRef<Record<string, any>>({})
@@ -822,6 +1110,26 @@ export default function NotesPage() {
   } | null>(null);
 
   const [mcqStates, setMcqStates] = useState<Record<string, {selectedIndex?: number, showAnswers: boolean}>>({});
+
+  // Fill-in-the-gap state: { [gapKey]: { value, similarity, isRevealed } }
+  const [gapStates, setGapStates] = useState<Record<string, { value: string; similarity: number; isRevealed?: boolean }>>({});
+
+  // Utility for similarity grading
+  const getSimilarity = async (input: string, answer: string): Promise<number> => {
+    if (!input || !answer) return 0;
+    try {
+      // Optionally spellcheck here
+      const [embA, embB] = await Promise.all([
+        getSentenceEmbedding(input),
+        getSentenceEmbedding(answer),
+      ]);
+      return cosineSimilarity(embA, embB);
+    } catch (e) {
+      console.error("[GAP SIMILARITY ERROR]", e);
+      return 0;
+    }
+  };
+
 
   // Protect route - redirect to login if not authenticated
   useEffect(() => {
@@ -1748,7 +2056,7 @@ const fetchNotes = async () => {
             const updateNoteContent = (prevNotes: Note[]) =>
               prevNotes.map(note =>
                 note.id === focusedNoteId
-                  ? { ...note, content: newContent, updated_at: new Date().toISOString() }
+                  ? { ...note, content: newContent, updated_at: new Date().toISOString() } 
                   : note
               );
             setAllNotes(updateNoteContent);
@@ -1977,7 +2285,7 @@ const fetchNotes = async () => {
                       </div>
                     </div>
                   ) : (
-                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current)}</div>
+                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity)}</div>
                   )}
                 </div>
                 <div className="text-xs text-neutral-500 mt-6 md:mt-8 pt-3 md:pt-4 border-t border-neutral-700">
@@ -2199,7 +2507,7 @@ const fetchNotes = async () => {
                   placeholder="Select or create category..."
                   inputPlaceholder="Search/Create category..."
                   emptyPlaceholder="Type to create new category."
-                  theme={theme}
+                  theme={theme as "dark" | "light" | undefined}
                 />
               </div>
 
@@ -2375,8 +2683,8 @@ const fetchNotes = async () => {
                           return (
                             <Button
                               key={optIndex}
-                              onClick={() => !showMcqResults && handleMcqOptionSelect(index, option)}
-                              className={optionButtonClasses}
+                              onClick={() => !showMcqResults && handleMcqOptionClick(index, optIndex, mcq.options[optIndex] === mcq.correctAnswer)}
+                              className={optionButtonClasses as string}
                               disabled={showMcqResults}
                             >
                               <span
