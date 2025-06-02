@@ -66,34 +66,40 @@ export function StudyMode({ deckId }: StudyModeProps) {
 
   // Initialize cards based on spaced repetition setting
   useEffect(() => {
-    if (deck) {
-      let selectedCards;
-      if (isSpacedRepetitionEnabled) {
-        // Get only due cards when spaced repetition is enabled
-        const dueCards = getDueCards(deckId)
-        selectedCards = dueCards.slice(0, settings.studySettings.cardsPerSession);
-      } else {
-        // Get all cards when spaced repetition is disabled
-        selectedCards = deck.cards.slice(0, settings.studySettings.cardsPerSession);
+    const initializeCards = async () => {
+      if (deck) {
+        let cardsToConsider: any[];
+        if (isSpacedRepetitionEnabled) {
+          // Get only due cards when spaced repetition is enabled
+          cardsToConsider = await getDueCards(deckId);
+        } else {
+          // Get all cards when spaced repetition is disabled
+          // Ensure deck.cards exists and is an array before trying to shuffle/slice
+          cardsToConsider = deck.cards || []; 
+        }
+        
+        // Shuffle all available cards first
+        const allShuffledCards = shuffleArray(cardsToConsider);
+        // Then take the configured number of cards for the session
+        const sessionCards = allShuffledCards.slice(0, settings.studySettings.cardsPerSession);
+        setCards(sessionCards);
+        
+        // Initialize statistics
+        setStats(prev => ({
+          ...prev,
+          totalCards: sessionCards.length, // Use sessionCards.length here
+          cardsStudied: 0,
+          knownCards: 0,
+          unknownCards: 0,
+          startTime: new Date(),
+          endTime: null as Date | null,
+          averageTimePerCard: 0,
+          lastCardTime: new Date()
+        }));
       }
-      
-      // Shuffle the cards before setting them to state
-      const shuffledCards = shuffleArray(selectedCards);
-      setCards(shuffledCards);
-      
-      // Initialize statistics
-      setStats(prev => ({
-        ...prev,
-        totalCards: shuffledCards.length,
-        cardsStudied: 0,
-        knownCards: 0,
-        unknownCards: 0,
-        startTime: new Date(),
-        endTime: null,
-        averageTimePerCard: 0,
-        lastCardTime: new Date()
-      }));
-    }
+    };
+
+    initializeCards();
   }, [deck, deckId, isSpacedRepetitionEnabled, settings.studySettings.cardsPerSession, getDueCards])
 
   useEffect(() => {
