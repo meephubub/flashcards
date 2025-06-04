@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   title: "Flashcard App",
   description: "A modern flashcard app with an Obsidian-like interface",
   generator: "me - sam",
+  icons: {
+    icon: "/favicon.ico", // or .png if you used that
+  },
 };
 
 export default function RootLayout({
