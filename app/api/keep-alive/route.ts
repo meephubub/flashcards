@@ -1,33 +1,70 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic'; // Ensure the route is not statically rendered or cached
+export const dynamic = 'force-dynamic';
+
+// ... (existing imports remain the same)
 
 export async function GET() {
   const cookieStore = cookies();
-  // Ensure SUPABASE_URL and SUPABASE_ANON_KEY are available as environment variables
-  // The createRouteHandlerClient will use them automatically
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-
+  const timestamp = new Date().toISOString();
+  
   try {
-    // Perform a simple read operation from the 'decks' table.
-    // Using `head: true` fetches only the count, which is efficient.
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          async get(name: string) {
+            const cookie = await cookieStore.get(name);
+            return cookie?.value;
+          },
+          async set(name: string, value: string, options: CookieOptions) {
+            await cookieStore.set({ name, value, ...options });
+          },
+          async remove(name: string, options: CookieOptions) {
+            await cookieStore.set({ name, value: '', ...options });
+          },
+        },
+      }
+    );
+
     const { error, count } = await supabase
-      .from('decks') 
-      .select('id', { count: 'exact', head: true })
-      .limit(1);
+      .from('cards')
+      .select('id', { count: 'exact', head: true });
 
     if (error) {
-      console.error('Supabase keep-alive ping failed:', error.message);
-      // Return a non-2xx status code so Vercel cron can detect failures
-      return NextResponse.json({ message: 'Supabase ping failed', error: error.message }, { status: 500 });
+      console.error('Keep-alive check failed:', error);
+      return NextResponse.json(
+        { 
+          status: 'error', 
+          message: 'Database check failed',
+          error: error.message,
+          timestamp
+        }, 
+        { status: 500 }
+      );
     }
 
-    console.log('Supabase keep-alive ping successful. Queried "decks" table.');
-    return NextResponse.json({ message: 'Supabase pinged successfully', details: `Queried "decks", count (indicative): ${count}` });
-  } catch (e: any) {
-    console.error('Unexpected error during Supabase keep-alive ping:', e.message);
-    return NextResponse.json({ message: 'Unexpected error during Supabase ping', error: e.message }, { status: 500 });
+    return NextResponse.json({ 
+      status: 'success',
+      message: 'Database connection successful',
+      db_connected: true,
+      timestamp,
+      card_count: count
+    });
+    
+  } catch (error: any) {
+    console.error('Keep-alive error:', error);
+    return NextResponse.json(
+      { 
+        status: 'error',
+        message: 'Internal server error',
+        error: error.message,
+        timestamp
+      }, 
+      { status: 500 }
+    );
   }
 }
