@@ -10,7 +10,7 @@ const extractorCache: {
  * Get or initialize the feature extractor pipeline for a specific model.
  * @param modelName - The name of the model to use (defaults to 'Xenova/all-MiniLM-L3-v2').
  */
-export async function getFeatureExtractor(modelName: string = "Xenova/all-MiniLM-L12-v2") {
+export async function getFeatureExtractor(modelName: string = "Xenova/nomic-embed-text-v1") {
   if (!extractorCache[modelName]) {
     console.log(`[xenova-similarity] Initializing feature extractor for model: ${modelName}...`);
     extractorCache[modelName] = await pipeline("feature-extraction", modelName);
