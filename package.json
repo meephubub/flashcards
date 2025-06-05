@@ -46,6 +46,8 @@
     "@statsig/web-analytics": "^3.17.1",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.8",
+    "@tiptap/react": "^2.13.0",
+    "@tiptap/starter-kit": "^2.13.0",
     "@types/canvas-confetti": "^1.9.0",
     "@types/diff": "^8.0.0",
     "@types/katex": "^0.16.7",
