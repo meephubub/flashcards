@@ -1,7 +1,7 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect, useRef, useCallback } from "react"
+import React from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -245,67 +245,49 @@ const renderNoteContent = (
   shuffledOptionsStorage?: Record<string, any>,
   gapStates?: Record<string, { value: string; similarity: number; isRevealed?: boolean }>,
   setGapStates?: React.Dispatch<React.SetStateAction<Record<string, { value: string; similarity: number; isRevealed?: boolean }>>>,
-  getSimilarity?: (input: string, answer: string) => Promise<number>
+  getSimilarity?: (input: string, answer: string) => Promise<number>,
+  dragDropStates?: Record<string, { answers: Record<number, string>; showAnswers: boolean }>,
+  setDragDropStates?: React.Dispatch<React.SetStateAction<Record<string, { answers: Record<number, string>; showAnswers: boolean }>>>
 ) => {
   console.log('[RAW CONTENT]', JSON.stringify(content));
-  const lines = content.split("\n");
+  const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
-
-  // State variables for parsing
-  let inList = false;
-  let currentListItems: string[] = [];
-  let currentListType: "ul" | "ol" | null = null;
-  
+  let currentList: string[] = [];
   let inTable = false;
+  let tableRows: string[][] = [];
   let currentTableHeaders: string[] = [];
-  let currentTableRows: string[][] = [];
-  
   let inInfoBox = false;
   let infoBoxContent: string[] = [];
   let infoBoxColor = "";
-  
   let inMathBlock = false;
   let mathBlockContent: string[] = [];
-  
   let inMcqBlock = false;
   let currentMcqQuestion = "";
   let currentMcqOptions: McqOption[] = [];
+  let inDragDrop = false;
+  let dragDropLines: string[] = [];
+  let dragDropBlockKey = '';
 
   // Process functions
   const processList = () => {
-    if (inList && currentListItems.length > 0) {
-      if (currentListType === "ul") {
-        elements.push(
-          <ul key={`list-${elements.length}`} className="list-disc list-outside pl-6 my-3 space-y-1.5 text-neutral-300">
-            {currentListItems.map((item, index) => (
-              <li key={index}>{parseInlineMarkdown(item)}</li>
-            ))}
-          </ul>,
-        )
-      } else if (currentListType === "ol") {
-        elements.push(
-          <ol
-            key={`list-${elements.length}`}
-            className="list-decimal list-outside pl-6 my-3 space-y-1.5 text-neutral-300"
-          >
-            {currentListItems.map((item, index) => (
-              <li key={index}>{parseInlineMarkdown(item)}</li>
-            ))}
-          </ol>,
-        )
-      }
+    if (currentList.length > 0) {
+      elements.push(
+        <ul key={`list-${elements.length}`} className="list-disc pl-6 my-4 space-y-2">
+          {currentList.map((item, index) => (
+            <li key={index} className="text-neutral-200">{parseInlineMarkdown(item)}</li>
+          ))}
+        </ul>
+      );
+      currentList = [];
     }
-    inList = false;
-    currentListItems = [];
-    currentListType = null;
-  }
+  };
 
   const processTable = () => {
     // Get the current theme
     const { theme } = useTheme();
     const isDark = theme === "dark";
   
-    if (currentTableRows.length > 0) {
+    if (tableRows.length > 0) {
       elements.push(
         <div key={`table-${elements.length}`} className="my-4 overflow-x-auto">
           <table className={`min-w-full border-collapse border ${isDark ? 'border-neutral-700' : 'border-gray-300'}`}>
@@ -324,7 +306,7 @@ const renderNoteContent = (
               </tr>
             </thead>
             <tbody>
-              {currentTableRows.map((row, rowIndex) => (
+              {tableRows.map((row, rowIndex) => (
                 <tr key={rowIndex} className={isDark 
                   ? (rowIndex % 2 === 0 ? "bg-neutral-900" : "bg-neutral-800/50")
                   : (rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50")}>
@@ -347,7 +329,7 @@ const renderNoteContent = (
     }
     inTable = false;
     currentTableHeaders = [];
-    currentTableRows = [];
+    tableRows = [];
   };
 
   const processInfoBox = () => {
@@ -418,52 +400,30 @@ const renderNoteContent = (
   }
 
   const processMathBlock = () => {
-    // Get the current theme
-    const { theme } = useTheme();
-    const isDark = theme === "dark";
-    const mathTextColor = isDark ? "text-white" : "text-black";
-    
-    if (mathBlockContent.length > 0) {
+    if (inMathBlock && mathBlockContent.length > 0) {
+      const { theme } = useTheme();
+      const isDark = theme === "dark";
+      const mathTextColor = isDark ? "text-white" : "text-black";
+      
       try {
-        const mathContent = mathBlockContent.join("\n")
-
-        // Check for Markdown syntax that would cause KaTeX errors
-        if (mathContent.includes("#") || mathContent.includes("---") || mathContent.includes("!")) {
-          // If problematic content is found, display it as code instead of trying to render as math
-          elements.push(
-            <div
-              key={`math-code-${elements.length}`}
-              className="my-4 p-4 bg-neutral-800 border border-neutral-700 rounded-lg"
-            >
-              <pre className="text-neutral-200 font-mono text-sm overflow-x-auto">{mathContent}</pre>
-            </div>,
-          )
-        } else {
-          // Only try to render with KaTeX if content looks like valid math
-          const renderedMath = katex.renderToString(mathContent, { displayMode: true })
-          elements.push(
-            <div
-              key={`math-${elements.length}`}
-              className={`my-4 overflow-x-auto ${mathTextColor}`}
-              dangerouslySetInnerHTML={{ __html: renderedMath }}
-            />,
-          )
-        }
-      } catch (error) {
-        console.error("KaTeX error:", error)
+        const mathString = mathBlockContent.join("\n");
         elements.push(
-          <div
-            key={`math-error-${elements.length}`}
-            className="my-4 p-4 bg-red-900/30 border border-red-700/60 text-red-200 rounded-lg"
-          >
-            Error rendering math: {error instanceof Error ? error.message : "Unknown error"}
-          </div>,
-        )
+          <div key={`math-${elements.length}`} className={`my-4 p-4 rounded-lg ${mathTextColor}`}>
+            {mathString}
+          </div>
+        );
+      } catch (error) {
+        console.error("Error rendering math block:", error);
+        elements.push(
+          <div key={`math-error-${elements.length}`} className="text-red-500">
+            Error rendering math block
+          </div>
+        );
       }
+      inMathBlock = false;
+      mathBlockContent = [];
     }
-    inMathBlock = false
-    mathBlockContent = []
-  }
+  };
 
   // Helper function to shuffle an array (Fisher-Yates shuffle)
   function shuffleArray<T>(array: T[]): T[] {
@@ -475,15 +435,13 @@ const renderNoteContent = (
     return newArray;
   }
 
-
   const processMcqBlock = () => {
     // Get the current theme
     const { theme } = useTheme();
     const isDark = theme === "dark";
   
     if (currentMcqQuestion && currentMcqOptions.length > 0) {
-      console.log(`[PROCESS MCQ] Called for question: '${currentMcqQuestion}', Options count: ${currentMcqOptions.length}`, currentMcqOptions);
-      const mcqBlockIdentifier = elements.length.toString(); // Convert to string for consistent key
+      const mcqBlockIdentifier = elements.length.toString();
       const blockKeySlugPart = generateSlug(currentMcqQuestion.substring(0,30));
       const blockKey = `mcq-block-${mcqBlockIdentifier}-${blockKeySlugPart}`;
       const mcqState = mcqStates[blockKey] || { showAnswers: false };
@@ -516,7 +474,7 @@ const renderNoteContent = (
               const isSelected = mcqState.selectedIndex === index;
               const showCorrect = mcqState.showAnswers && option.isCorrect;
               const showIncorrect = mcqState.showAnswers && isSelected && !option.isCorrect;
-              
+
               // Define styles for both themes
               let optionClassName = '';
               
@@ -600,8 +558,90 @@ const renderNoteContent = (
     currentMcqOptions = [];
   };
 
+  // Process drag and drop block
+  const processDragDropBlock = () => {
+    if (dragDropLines.length > 0) {
+      let question = '';
+      let pairs: { left: string, right: string }[] = [];
+      let options: string[] = [];
+      
+      dragDropLines.forEach(l => {
+        if (l.startsWith('Question:')) {
+          question = l.replace('Question:', '').trim();
+        } else if (l.startsWith('-')) {
+          const match = l.match(/^\-\s*(.*?)\s*=>\s*\[drop:(.*?)\]/);
+          if (match) {
+            pairs.push({ left: match[1].trim(), right: match[2].trim() });
+          }
+        } else if (l.startsWith('Options:')) {
+          options = l.replace('Options:', '').split(',').map(s => s.trim()).filter(Boolean);
+        }
+      });
+
+      const blockState = dragDropStates?.[dragDropBlockKey] || { answers: {}, showAnswers: false };
+
+      elements.push(
+        <DragDropBlock
+          key={dragDropBlockKey}
+          question={question}
+          pairs={pairs}
+          options={options}
+          userAnswers={blockState.answers}
+          setUserAnswers={(fn) => {
+            if (setDragDropStates) {
+              setDragDropStates(prev => {
+                const currentBlockState = prev[dragDropBlockKey] || { answers: {}, showAnswers: false };
+                const newAnswers = typeof fn === 'function' ? fn(currentBlockState.answers) : fn;
+                return {
+                  ...prev,
+                  [dragDropBlockKey]: { ...currentBlockState, answers: newAnswers }
+                };
+              });
+            }
+          }}
+          showAnswers={blockState.showAnswers}
+          setShowAnswers={(show) => {
+            if (setDragDropStates) {
+              setDragDropStates(prev => ({
+                ...prev,
+                [dragDropBlockKey]: { ...(prev[dragDropBlockKey] || { answers: {}, showAnswers: false }), showAnswers: show }
+              }));
+            }
+          }}
+          theme={useTheme().theme as "dark" | "light"}
+        />
+      );
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    const line = lines[i].trim();
+
+    // Handle drag and drop blocks first
+    if (line.toLowerCase() === '::dragdrop') {
+      processList();
+      processTable();
+      processInfoBox();
+      processMathBlock();
+      if (inMcqBlock) processMcqBlock();
+      inDragDrop = true;
+      dragDropLines = [];
+      dragDropBlockKey = `dragdrop-block-${elements.length}`;
+      continue;
+    }
+
+    if (line === '::' && inDragDrop) {
+      processDragDropBlock();
+      inDragDrop = false;
+      dragDropLines = [];
+      dragDropBlockKey = '';
+      continue;
+    }
+
+    if (inDragDrop) {
+      dragDropLines.push(lines[i]);
+      continue;
+    }
 
     // Check for headings (# Heading 1, ## Heading 2, ### Heading 3)
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/)
@@ -727,7 +767,7 @@ const renderNoteContent = (
         inTable = true
         currentTableHeaders = cells // FIX: Was tableHeaders
       } else {
-        currentTableRows.push(cells) // FIX: Was tableRows
+        tableRows.push(cells) // FIX: Was tableRows
       }
       continue
     } else if (inTable) {
@@ -1033,11 +1073,261 @@ const renderNoteContent = (
     console.log(`[RENDER END] Processing any final MCQ block. Current Question: '${currentMcqQuestion}', Options: ${currentMcqOptions.length}`);
   }
   processMcqBlock(); // Add this line
+  if (inDragDrop) processDragDropBlock();
 
   return <>{elements}</> // Return a fragment
 }
 
 import { getSentenceEmbedding, cosineSimilarity } from "../actions/xenova-similarity";
+
+// Drag and Drop Block Component
+const DragDropItem = React.memo(({ 
+  pair, 
+  index, 
+  userAnswer, 
+  showAnswers, 
+  onDrop, 
+  onRemove,
+  theme 
+}: { 
+  pair: { left: string, right: string },
+  index: number,
+  userAnswer?: string,
+  showAnswers: boolean,
+  onDrop: (e: React.DragEvent, index: number) => void,
+  onRemove: (index: number) => void,
+  theme: "dark" | "light"
+}) => {
+  const getDropColor = useCallback(() => {
+    if (!showAnswers) return theme === "dark" ? "bg-neutral-800 border-neutral-700" : "bg-gray-100 border-gray-300";
+    const correct = pair.right;
+    if (userAnswer === correct) return theme === "dark" ? "bg-green-900/30 border-green-700 text-green-200" : "bg-green-100 border-green-500 text-green-800";
+    if (userAnswer) return theme === "dark" ? "bg-red-900/30 border-red-700 text-red-200" : "bg-red-100 border-red-500 text-red-800";
+    return theme === "dark" ? "bg-neutral-800 border-neutral-700" : "bg-gray-100 border-gray-300";
+  }, [showAnswers, theme, pair.right, userAnswer]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.add('border-blue-500');
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('border-blue-500');
+  }, []);
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="min-w-[80px] font-medium text-neutral-200">{pair.left}</span>
+      <div
+        className={`flex-1 min-w-[120px] min-h-[38px] px-3 py-2 border rounded-md transition-all duration-200 flex items-center ${getDropColor()}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => onDrop(e, index)}
+        data-index={index}
+      >
+        {userAnswer ? (
+          <span className="inline-block font-mono text-base">
+            {userAnswer}
+            {showAnswers && userAnswer !== pair.right && (
+              <span className="ml-2 text-xs text-red-400">(Wrong)</span>
+            )}
+            {showAnswers && userAnswer === pair.right && (
+              <span className="ml-2 text-xs text-green-400">(Correct)</span>
+            )}
+          </span>
+        ) : (
+          <span className="text-neutral-400">Drop here</span>
+        )}
+      </div>
+      {userAnswer && !showAnswers && (
+        <button
+          className="ml-2 text-xs text-neutral-400 hover:text-red-400"
+          onClick={() => onRemove(index)}
+          title="Remove answer"
+        >
+          <XIcon size={16} />
+        </button>
+      )}
+    </div>
+  );
+});
+
+const DragDropOption = React.memo(({ 
+  option, 
+  isUsed, 
+  onDragStart,
+  theme 
+}: { 
+  option: string,
+  isUsed: boolean,
+  onDragStart: (e: React.DragEvent, option: string) => void,
+  theme: "dark" | "light"
+}) => (
+  <div
+    className={`cursor-move px-3 py-1.5 rounded-md border font-mono text-base select-none transition-all ${
+      isUsed 
+        ? 'opacity-40 cursor-not-allowed' 
+        : theme === "dark" 
+          ? 'bg-neutral-700 border-neutral-600 text-neutral-100 hover:bg-neutral-600' 
+          : 'bg-gray-200 border-gray-400 text-gray-800 hover:bg-gray-300'
+    }`}
+    draggable={!isUsed}
+    onDragStart={(e) => onDragStart(e, option)}
+    style={{ pointerEvents: isUsed ? 'none' : 'auto' }}
+  >
+    {option}
+  </div>
+));
+
+type DragDropState = {
+  answers: Record<number, string>;
+  showAnswers: boolean;
+};
+
+type DragDropAction = 
+  | { type: 'SET_ANSWER'; index: number; answer: string }
+  | { type: 'REMOVE_ANSWER'; index: number }
+  | { type: 'RESET' }
+  | { type: 'SHOW_ANSWERS' };
+
+const dragDropReducer = (state: DragDropState, action: DragDropAction): DragDropState => {
+  switch (action.type) {
+    case 'SET_ANSWER':
+      return {
+        ...state,
+        answers: { ...state.answers, [action.index]: action.answer }
+      };
+    case 'REMOVE_ANSWER':
+      const newAnswers = { ...state.answers };
+      delete newAnswers[action.index];
+      return { ...state, answers: newAnswers };
+    case 'RESET':
+      return { answers: {}, showAnswers: false };
+    case 'SHOW_ANSWERS':
+      return { ...state, showAnswers: true };
+    default:
+      return state;
+  }
+};
+
+const DragDropBlock = ({ question, pairs, options, userAnswers, setUserAnswers, showAnswers, setShowAnswers, theme }: {
+  question: string,
+  pairs: { left: string, right: string }[],
+  options: string[],
+  userAnswers: Record<number, string>,
+  setUserAnswers: React.Dispatch<React.SetStateAction<Record<number, string>>>,
+  showAnswers: boolean,
+  setShowAnswers: (show: boolean) => void,
+  theme: "dark" | "light"
+}) => {
+  const [state, dispatch] = React.useReducer(dragDropReducer, {
+    answers: userAnswers,
+    showAnswers
+  });
+
+  const usedOptions = useMemo(() => 
+    Object.values(state.answers).filter(v => v !== undefined && v !== null),
+    [state.answers]
+  );
+  
+  const [shuffledOptions] = useState(() => {
+    const shuffled = [...options];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  });
+
+  const handleDragStart = useCallback((e: React.DragEvent, option: string) => {
+    e.dataTransfer.setData("text/plain", option);
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('border-blue-500');
+    
+    const option = e.dataTransfer.getData("text/plain");
+    if (option && !usedOptions.includes(option)) {
+      dispatch({ type: 'SET_ANSWER', index, answer: option });
+      setUserAnswers(prev => ({ ...prev, [index]: option }));
+    }
+  }, [usedOptions, setUserAnswers]);
+
+  const handleRemoveAnswer = useCallback((index: number) => {
+    dispatch({ type: 'REMOVE_ANSWER', index });
+    setUserAnswers(prev => {
+      const newAnswers = { ...prev };
+      delete newAnswers[index];
+      return newAnswers;
+    });
+  }, [setUserAnswers]);
+
+  const handleReset = useCallback(() => {
+    dispatch({ type: 'RESET' });
+    setUserAnswers({});
+    setShowAnswers(false);
+  }, [setUserAnswers, setShowAnswers]);
+
+  const handleCheckAnswers = useCallback(() => {
+    dispatch({ type: 'SHOW_ANSWERS' });
+    setShowAnswers(true);
+  }, [setShowAnswers]);
+
+  return (
+    <div className={`my-6 ${theme === "dark" ? 'border border-neutral-700 bg-neutral-800/40 rounded-lg shadow-md p-5' : 'bg-white rounded-lg shadow-md p-6 border border-gray-200'}`}>
+      <div className="mb-4 font-semibold text-lg text-neutral-100">{question}</div>
+      <div className="flex flex-col gap-3 mb-6">
+        {pairs.map((pair, idx) => (
+          <DragDropItem
+            key={idx}
+            pair={pair}
+            index={idx}
+            userAnswer={state.answers[idx]}
+            showAnswers={state.showAnswers}
+            onDrop={handleDrop}
+            onRemove={handleRemoveAnswer}
+            theme={theme}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2 mb-4">
+        {shuffledOptions.map((opt, i) => (
+          <DragDropOption
+            key={i}
+            option={opt}
+            isUsed={usedOptions.includes(opt)}
+            onDragStart={handleDragStart}
+            theme={theme}
+          />
+        ))}
+      </div>
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium border border-neutral-700 transition-colors duration-150"
+          onClick={handleReset}
+        >
+          Reset
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="ml-3 bg-blue-700 hover:bg-blue-600 text-white font-medium border border-blue-800 transition-colors duration-150"
+          onClick={handleCheckAnswers}
+        >
+          Check Answers
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 export default function NotesPage() {
   const { session, user, isLoading: authIsLoading, error: authError, signOut } = useAuth();
@@ -1054,6 +1344,21 @@ export default function NotesPage() {
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [showGapInstructions, setShowGapInstructions] = useState<boolean>(true)
   
+  // Sidebar collapse state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Listen for Ctrl+S to toggle sidebar
+  useEffect(() => {
+    const handleSidebarToggle = (e: KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        setSidebarCollapsed((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleSidebarToggle);
+    return () => window.removeEventListener('keydown', handleSidebarToggle);
+  }, []);
+
   // Persistent storage for shuffled MCQ options that survives re-renders
   const shuffledMcqOptionsRef = useRef<Record<string, any>>({})
 
@@ -1114,6 +1419,9 @@ export default function NotesPage() {
   // Fill-in-the-gap state: { [gapKey]: { value, similarity, isRevealed } }
   const [gapStates, setGapStates] = useState<Record<string, { value: string; similarity: number; isRevealed?: boolean }>>({});
 
+  // Drag and Drop state
+  const [dragDropStates, setDragDropStates] = useState<Record<string, { answers: Record<number, string>, showAnswers: boolean }>>({});
+
   // Utility for similarity grading
   const getSimilarity = async (input: string, answer: string): Promise<number> => {
     if (!input || !answer) return 0;
@@ -1156,19 +1464,16 @@ export default function NotesPage() {
     );
   }
 
-  const handleMcqOptionClick = (blockId: string, optionIndex: number, isCorrect: boolean) => {
-    console.log(`[MCQ CLICK] blockId: ${blockId}, optionIndex: ${optionIndex}, isCorrect: ${isCorrect}`);
-    setMcqStates(prev => {
-      const newState = {
-        ...prev,
-        [blockId]: {
-          selectedIndex: optionIndex,
-          showAnswers: true
-        }
-      };
-      console.log('[MCQ CLICK] New state:', newState);
-      return newState;
-    });
+  const handleMcqOptionClick = (blockId: number | string, optionIndex: number, isCorrect: boolean) => {
+    const blockKey = typeof blockId === 'number' ? blockId.toString() : blockId;
+    setMcqStates(prev => ({
+      ...prev,
+      [blockKey]: {
+        ...prev[blockKey],
+        selectedIndex: optionIndex,
+        showAnswers: true
+      }
+    }));
   };
 
   const notesContainerRef = useRef<HTMLDivElement>(null)
@@ -2166,7 +2471,10 @@ const fetchNotes = async () => {
       </div>
 
       {/* Desktop Sidebar */}
-      <div className="hidden md:block">
+      <div
+        className={`hidden md:block transition-all duration-500 ease-in-out ${sidebarCollapsed ? 'w-0 min-w-0 opacity-0 pointer-events-none' : 'w-72 lg:w-80 min-w-[18rem] opacity-100'} border-r border-neutral-800 flex-shrink-0 h-screen`}
+        style={{overflow: 'hidden'}}
+      >
         <NotesSidebar
           notes={allNotes}
           categories={availableCategories}
@@ -2176,12 +2484,19 @@ const fetchNotes = async () => {
           searchQuery={searchQuery}
           onSearchChange={handleSearch}
           onClearSearch={clearSearch}
-          className="w-72 lg:w-80 border-r border-neutral-800 flex-shrink-0 h-screen"
+          className="h-full border-0"
         />
       </div>
 
       <div 
-        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${isAiAssistantOpen ? 'md:pr-[350px]' : 'pr-0'}`}
+        className={`flex-1 flex flex-col overflow-hidden transition-all duration-500 ease-in-out
+          ${isAiAssistantOpen ? 'md:pr-[350px]' : 'pr-0'}
+          ${sidebarCollapsed ? 'max-w-full w-full ml-0' : 'md:ml-0'}
+        `}
+        style={{
+          maxWidth: sidebarCollapsed ? '100vw' : undefined,
+          width: sidebarCollapsed ? '100vw' : undefined,
+        }}
       >
         <div ref={notesContainerRef} className="flex-1 overflow-y-auto p-4 pt-14 md:pt-4 md:p-6 lg:p-8 pb-24 scroll-smooth">
           {/* Search results count - only shown when searching */}
@@ -2285,7 +2600,7 @@ const fetchNotes = async () => {
                       </div>
                     </div>
                   ) : (
-                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity)}</div>
+                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity, dragDropStates, setDragDropStates)}</div>
                   )}
                 </div>
                 <div className="text-xs text-neutral-500 mt-6 md:mt-8 pt-3 md:pt-4 border-t border-neutral-700">

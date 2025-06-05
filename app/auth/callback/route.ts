@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
+import type { CookieOptions } from '@supabase/ssr';
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -8,20 +9,32 @@ export async function GET(request: NextRequest) {
   const origin = requestUrl.origin;
 
   if (code) {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUB_API!, // Or your anon key variable
+      process.env.NEXT_PUBLIC_SUPABASE_PUB_API!,
       {
         cookies: {
           get(name: string) {
             return cookieStore.get(name)?.value;
           },
-          set(name: string, value: string, options) {
-            cookieStore.set({ name, value, ...options });
+          set(name: string, value: string, options: CookieOptions) {
+            const cookieOptions = {
+              ...options,
+              sameSite: 'lax' as const,
+              secure: process.env.NODE_ENV === 'production',
+              path: '/',
+            };
+            cookieStore.set({ name, value, ...cookieOptions });
           },
-          remove(name: string, options) {
-            cookieStore.set({ name, value: '', ...options });
+          remove(name: string, options: CookieOptions) {
+            const cookieOptions = {
+              ...options,
+              sameSite: 'lax' as const,
+              secure: process.env.NODE_ENV === 'production',
+              path: '/',
+            };
+            cookieStore.set({ name, value: '', ...cookieOptions });
           },
         },
       }
@@ -29,7 +42,7 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       // Redirect to a protected route or the home page after successful auth
-      return NextResponse.redirect(`${origin}/notes`); // Or your desired redirect path
+      return NextResponse.redirect(`${origin}/notes`);
     }
   }
 

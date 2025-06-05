@@ -1,10 +1,11 @@
 //supabase.ts
-import { createClient } from "@supabase/supabase-js"
+import { createBrowserClient } from '@supabase/ssr'
 import type { Database } from "@/types/supabase"
+import type { CookieOptions } from '@supabase/ssr'
 
 // For client-side only
-let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-let supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUB_API;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUB_API;
 
 // Validate the environment variables
 if (!supabaseUrl || !supabaseKey) {
@@ -16,19 +17,37 @@ if (!supabaseUrl || !supabaseKey) {
   }
 }
 
-export const supabase = createClient<Database>(
+export const supabase = createBrowserClient<Database>(
   supabaseUrl || '',
-  supabaseKey || ''
-)
-
-// Alternative initialization with error handling
-export const createClient_component = () => {
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables')
+  supabaseKey || '',
+  {
+    cookies: {
+      get(name: string) {
+        if (typeof document === 'undefined') return '';
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift() || '';
+        return '';
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        if (typeof document === 'undefined') return;
+        let cookie = `${name}=${value}`;
+        if (options.path) cookie += `; path=${options.path}`;
+        if (options.maxAge) cookie += `; max-age=${options.maxAge}`;
+        if (options.domain) cookie += `; domain=${options.domain}`;
+        if (options.sameSite) cookie += `; samesite=${options.sameSite}`;
+        document.cookie = cookie;
+      },
+      remove(name: string, options: CookieOptions) {
+        if (typeof document === 'undefined') return;
+        let cookie = `${name}=; max-age=0`;
+        if (options.path) cookie += `; path=${options.path}`;
+        if (options.domain) cookie += `; domain=${options.domain}`;
+        document.cookie = cookie;
+      },
+    },
   }
-  
-  return createClient<Database>(supabaseUrl, supabaseKey)
-}
+)
 
 // Types for our database tables
 export type Deck = {

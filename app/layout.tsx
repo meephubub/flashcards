@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   description: "A modern flashcard app with an Obsidian-like interface",
   generator: "me - sam",
   icons: {
-    icon: "/favicon.ico", // or .png if you used that
+    icon: "/favicon.png", // or .png if you used that
   },
 };
 
