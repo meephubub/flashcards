@@ -36,7 +36,7 @@ export async function GET() {
     
     return NextResponse.json({
       status: 'ok',
-      searxngInstance: 'searxng.site',
+      searxngInstance: 'raspberry-pi',
       responseTimeMs: requestTime,
       hasValidResponse: hasResults,
       resultsCount: hasResults ? data.results.length : 0
