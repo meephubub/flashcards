@@ -8,7 +8,13 @@ export interface ImageGenerationResult {
   created: number;
 }
 
-export async function generateImage(prompt: string): Promise<ImageGenerationResult> {
+export async function generateImage(
+  prompt: string,
+  model: string = "gptimage",
+  width: number = 1024,
+  height: number = 1024,
+  n: number = 1
+): Promise<ImageGenerationResult> {
   try {
     const response = await fetch("https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate", {
       method: "POST",
@@ -17,7 +23,10 @@ export async function generateImage(prompt: string): Promise<ImageGenerationResu
       },
       body: JSON.stringify({
         prompt,
-        model: "flux",
+        model,
+        width,
+        height,
+        n,
         response_format: "b64_json"
       }),
     });

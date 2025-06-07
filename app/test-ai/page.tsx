@@ -9,6 +9,8 @@ import { makeGroqRequest } from "@/lib/groq";
 import { generateImage } from "@/lib/image-generation";
 import { Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface DebugInfo {
   request: any;
@@ -25,6 +27,10 @@ export default function TestAIPage() {
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
+  const [selectedModel, setSelectedModel] = useState("gptimage");
+  const [imageWidth, setImageWidth] = useState(1024);
+  const [imageHeight, setImageHeight] = useState(1024);
+  const [numImages, setNumImages] = useState(1);
   const { toast } = useToast();
 
   const handleCustomEndpoint = async () => {
@@ -48,8 +54,9 @@ export default function TestAIPage() {
         max_tokens: 3000,
       };
 
-      const endpoint = "https://raspberrypi.unicorn-deneb.ts.net/api/v1/chat/completions";
-      
+      const endpoint =
+        "https://raspberrypi.unicorn-deneb.ts.net/api/v1/chat/completions";
+
       try {
         const response = await fetch(endpoint, {
           method: "POST",
@@ -64,14 +71,14 @@ export default function TestAIPage() {
           throw new Error(
             `API error: ${response.statusText}${
               errorData ? ` - ${JSON.stringify(errorData)}` : ""
-            }`
+            }`,
           );
         }
 
         const data = await response.json();
         const result = data.choices[0].message.content;
         setResponse(result);
-        
+
         // Capture debug info
         setDebugInfo({
           request: requestBody,
@@ -81,17 +88,21 @@ export default function TestAIPage() {
         });
       } catch (fetchError) {
         // Handle network errors specifically
-        if (fetchError instanceof TypeError && fetchError.message === "Failed to fetch") {
+        if (
+          fetchError instanceof TypeError &&
+          fetchError.message === "Failed to fetch"
+        ) {
           throw new Error(
-            `Network error: Could not connect to ${endpoint}. Please check if the server is running and accessible.`
+            `Network error: Could not connect to ${endpoint}. Please check if the server is running and accessible.`,
           );
         }
         throw fetchError;
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "An error occurred";
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
-      
+
       // Capture error in debug info
       setDebugInfo({
         request: {
@@ -110,7 +121,8 @@ export default function TestAIPage() {
           max_tokens: 3000,
         },
         response: null,
-        endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/chat/completions",
+        endpoint:
+          "https://raspberrypi.unicorn-deneb.ts.net/api/v1/chat/completions",
         timestamp: new Date().toISOString(),
         error: errorMessage,
       });
@@ -152,7 +164,7 @@ export default function TestAIPage() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(requestBody),
         },
@@ -163,14 +175,14 @@ export default function TestAIPage() {
         throw new Error(
           `API error: ${response.statusText}${
             errorData ? ` - ${JSON.stringify(errorData)}` : ""
-          }`
+          }`,
         );
       }
 
       const data = await response.json();
       const result = data.choices[0].message.content;
       setResponse(result);
-      
+
       // Capture debug info
       setDebugInfo({
         request: requestBody,
@@ -179,9 +191,10 @@ export default function TestAIPage() {
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "An error occurred";
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
-      
+
       // Capture error in debug info
       setDebugInfo({
         request: {
@@ -216,19 +229,22 @@ export default function TestAIPage() {
     try {
       const requestBody = {
         prompt,
-        model: "flux",
-        response_format: "b64_json"
+        model: selectedModel,
+        width: imageWidth,
+        height: imageHeight,
+        n: numImages,
+        response_format: "b64_json",
       };
 
-      const result = await generateImage(prompt);
-      
+      const result = await generateImage(prompt, selectedModel, imageWidth, imageHeight, numImages);
+
       // Get the first image from the data array
       if (result.data && result.data.length > 0) {
         setImage(`data:image/png;base64,${result.data[0].b64_json}`);
       } else {
         throw new Error("No image data received");
       }
-      
+
       // Capture debug info
       setDebugInfo({
         request: requestBody,
@@ -236,8 +252,8 @@ export default function TestAIPage() {
           ...result,
           data: result.data.map((item: any) => ({
             ...item,
-            b64_json: "[BASE64_IMAGE_DATA]" // Truncate base64 data for display
-          }))
+            b64_json: "[BASE64_IMAGE_DATA]", // Truncate base64 data for display
+          })),
         },
         endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate",
         timestamp: new Date().toISOString(),
@@ -245,13 +261,14 @@ export default function TestAIPage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
-      
-      // Capture error in debug info
       setDebugInfo({
         request: {
           prompt,
-          model: "flux",
-          response_format: "b64_json"
+          model: selectedModel,
+          width: imageWidth,
+          height: imageHeight,
+          n: numImages,
+          response_format: "b64_json",
         },
         response: null,
         endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate",
@@ -277,7 +294,7 @@ export default function TestAIPage() {
   return (
     <div className="container mx-auto p-4 space-y-4">
       <h1 className="text-2xl font-bold mb-4">AI Test Page</h1>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>Test Endpoints</CardTitle>
@@ -301,14 +318,96 @@ export default function TestAIPage() {
             <div className="text-sm text-gray-500">
               Note: Image generation is only available with the custom endpoint
             </div>
-            <Button 
-              onClick={handleImageGeneration} 
+            <Button
+              onClick={handleImageGeneration}
               disabled={loading}
               variant="outline"
             >
               {loading ? "Loading..." : "Generate Image (Custom Endpoint Only)"}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Image Generation</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Model</Label>
+            <Select value={selectedModel} onValueChange={setSelectedModel}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="flux">Flux</SelectItem>
+                <SelectItem value="turbo">Turbo</SelectItem>
+                <SelectItem value="gptimage">GPT Image</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Width</Label>
+              <Input
+                type="number"
+                value={imageWidth}
+                onChange={(e) => setImageWidth(Number(e.target.value))}
+                min={256}
+                max={2048}
+                step={64}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Height</Label>
+              <Input
+                type="number"
+                value={imageHeight}
+                onChange={(e) => setImageHeight(Number(e.target.value))}
+                min={256}
+                max={2048}
+                step={64}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Number of Images</Label>
+              <Input
+                type="number"
+                value={numImages}
+                onChange={(e) => setNumImages(Number(e.target.value))}
+                min={1}
+                max={4}
+              />
+            </div>
+          </div>
+
+          <Textarea
+            placeholder="Enter your image generation prompt..."
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="min-h-[100px]"
+          />
+          <Button onClick={handleImageGeneration} disabled={loading}>
+            {loading ? "Generating..." : "Generate Image"}
+          </Button>
+          
+          {error && <div className="text-red-500">{error}</div>}
+          
+          {image && (
+            <div className="relative">
+              <img src={image} alt="Generated" className="max-w-full rounded-lg" />
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute top-2 right-2"
+                onClick={handleCopyImage}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -328,7 +427,9 @@ export default function TestAIPage() {
           <CardContent className="space-y-4">
             <div>
               <h3 className="font-semibold mb-2">Endpoint:</h3>
-              <pre className="bg-gray-100 p-2 rounded">{debugInfo.endpoint}</pre>
+              <pre className="bg-gray-100 p-2 rounded">
+                {debugInfo.endpoint}
+              </pre>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Request:</h3>
@@ -353,7 +454,9 @@ export default function TestAIPage() {
             )}
             <div>
               <h3 className="font-semibold mb-2">Timestamp:</h3>
-              <pre className="bg-gray-100 p-2 rounded">{debugInfo.timestamp}</pre>
+              <pre className="bg-gray-100 p-2 rounded">
+                {debugInfo.timestamp}
+              </pre>
             </div>
           </CardContent>
         </Card>
@@ -369,25 +472,6 @@ export default function TestAIPage() {
           </CardContent>
         </Card>
       )}
-
-      {image && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Generated Image</CardTitle>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleCopyImage}
-              className="h-8 w-8"
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <img src={image} alt="Generated" className="max-w-full h-auto" />
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
-} 
+}

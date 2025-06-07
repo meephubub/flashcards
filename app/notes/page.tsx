@@ -43,8 +43,9 @@ import {
 import "katex/dist/katex.min.css"
 import katex from "katex"
 import { useTheme } from "@/components/theme-provider"
-import { generateImage } from "../../lib/generate-image"
+import { generateImage, type ImageModel } from "../../lib/generate-image"
 import { toast } from "@/components/ui/use-toast"
+import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select"
 
 interface McqOption {
   text: string;
@@ -2450,21 +2451,14 @@ const fetchNotes = async () => {
 
   const generateImageFromTag = async (prompt: string): Promise<string> => {
     try {
-      const requestBody = {
-        prompt,
-        model: "flux",
-        response_format: "b64_json"
-      };
-
-      const result = await generateImage(prompt);
-      
+      const result = await generateImage(prompt, selectedImageModel);
       if (result.data && result.data.length > 0) {
         return `data:image/png;base64,${result.data[0].b64_json}`;
       }
       throw new Error("No image data received");
-    } catch (err) {
-      console.error("Error generating image:", err);
-      throw err;
+    } catch (error) {
+      console.error("Error generating image:", error);
+      throw error;
     }
   };
 
@@ -2508,6 +2502,8 @@ const fetchNotes = async () => {
       setIsGeneratingImages(false);
     }
   };
+
+  const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
 
   return (
     <div
@@ -2898,6 +2894,16 @@ const fetchNotes = async () => {
                   className="min-h-[300px]"
                 />
                 <div className="flex gap-2">
+                  <Select value={selectedImageModel} onValueChange={(value: ImageModel) => setSelectedImageModel(value)}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="flux">Flux</SelectItem>
+                      <SelectItem value="turbo">Turbo</SelectItem>
+                      <SelectItem value="gptimage">GPT Image</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
                     type="button"
                     variant="outline"
@@ -3223,6 +3229,16 @@ const fetchNotes = async () => {
                   className="min-h-[300px]"
                 />
                 <div className="flex gap-2">
+                  <Select value={selectedImageModel} onValueChange={(value: ImageModel) => setSelectedImageModel(value)}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="flux">Flux</SelectItem>
+                      <SelectItem value="turbo">Turbo</SelectItem>
+                      <SelectItem value="gptimage">GPT Image</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
                     type="button"
                     variant="outline"
