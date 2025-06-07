@@ -4,7 +4,9 @@ interface GenerateImageResponse {
   }>;
 }
 
-export async function generateImage(prompt: string): Promise<GenerateImageResponse> {
+export type ImageModel = "flux" | "turbo" | "gptimage";
+
+export async function generateImage(prompt: string, model: ImageModel = "flux"): Promise<GenerateImageResponse> {
   const response = await fetch("https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate", {
     method: "POST",
     headers: {
@@ -12,7 +14,7 @@ export async function generateImage(prompt: string): Promise<GenerateImageRespon
     },
     body: JSON.stringify({
       prompt,
-      model: "flux",
+      model,
       response_format: "b64_json"
     }),
   });
