@@ -139,7 +139,13 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
       cleanAlt = alt.replace(/\|\s*maxheight=\d+/, "").trim()
     }
 
-    return `<img src="${src}" alt="${cleanAlt}" class="max-w-full max-h-[${maxHeight}px] h-auto rounded-md my-2" />`
+    // Check if the source is a base64 image
+    const isBase64 = src.startsWith('data:image/') && src.includes(';base64,')
+    
+    // If it's a base64 image, use it directly, otherwise use the URL
+    const imageSrc = isBase64 ? src : src
+
+    return `<img src="${imageSrc}" alt="${cleanAlt}" class="max-w-full max-h-[${maxHeight}px] h-auto rounded-md my-2" />`
   })
 
   // Links: [text](url)
@@ -1556,9 +1562,15 @@ export default function NotesPage() {
         currentTextareaContent = editingNote.content;
       }
       
+      // Check if the image URL is a base64 string
+      const isBase64 = imageUrl.startsWith('data:image/') && imageUrl.includes(';base64,')
+      
+      // If it's a base64 image, use it directly, otherwise use the URL
+      const imageSrc = isBase64 ? imageUrl : imageUrl
+
       const updatedContent = currentTextareaContent.replace(
         activeEditorContext.originalTag,
-        `![${imageSearchQuery}](${imageUrl})`
+        `![${imageSearchQuery}](${imageSrc})`
       );
 
       if (activeEditorContext.type === 'newNote') {
