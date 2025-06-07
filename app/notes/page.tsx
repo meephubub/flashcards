@@ -43,6 +43,8 @@ import {
 import "katex/dist/katex.min.css"
 import katex from "katex"
 import { useTheme } from "@/components/theme-provider"
+import { generateImage } from "../../lib/generate-image"
+import { toast } from "@/components/ui/use-toast"
 
 interface McqOption {
   text: string;
@@ -2436,6 +2438,77 @@ const fetchNotes = async () => {
     }
   };
 
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+
+  const extractImageTags = (content: string): string[] => {
+    const matches = content.match(/!\(img\)\[(.*?)\]/g) || [];
+    return matches.map(tag => {
+      const match = tag.match(/!\(img\)\[(.*?)\]/);
+      return match ? match[1] : '';
+    }).filter(Boolean);
+  };
+
+  const generateImageFromTag = async (prompt: string): Promise<string> => {
+    try {
+      const requestBody = {
+        prompt,
+        model: "flux",
+        response_format: "b64_json"
+      };
+
+      const result = await generateImage(prompt);
+      
+      if (result.data && result.data.length > 0) {
+        return `data:image/png;base64,${result.data[0].b64_json}`;
+      }
+      throw new Error("No image data received");
+    } catch (err) {
+      console.error("Error generating image:", err);
+      throw err;
+    }
+  };
+
+  const handleGenerateImagesFromTags = async (content: string, contextType: 'newNote' | 'editNote') => {
+    setIsGeneratingImages(true);
+    try {
+      const imageTags = extractImageTags(content);
+      let updatedContent = content;
+
+      for (const tag of imageTags) {
+        try {
+          const imageData = await generateImageFromTag(tag);
+          const originalTag = `!(img)[${tag}]`;
+          const markdownImage = `![${tag}](${imageData})`;
+          updatedContent = updatedContent.replace(originalTag, markdownImage);
+        } catch (err) {
+          console.error(`Failed to generate image for tag: ${tag}`, err);
+          // Continue with other tags even if one fails
+        }
+      }
+
+      // Update the content based on context
+      if (contextType === 'newNote') {
+        setNewNote(prev => ({ ...prev, content: updatedContent }));
+      } else if (contextType === 'editNote') {
+        setEditingNote(prev => prev ? ({ ...prev, content: updatedContent }) : null);
+      }
+
+      toast({
+        title: "Success",
+        description: "Generated images for all image tags",
+      });
+    } catch (err) {
+      console.error("Error generating images:", err);
+      toast({
+        title: "Error",
+        description: "Failed to generate some images",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingImages(false);
+    }
+  };
+
   return (
     <div
       className={`flex h-screen ${theme === "dark" ? "bg-neutral-950 text-neutral-100" : "bg-gray-50 text-gray-900"}`}
@@ -2813,18 +2886,27 @@ const fetchNotes = async () => {
                   className={`${theme === "dark" ? "bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500" : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"}`}
                 />
               </div>
-              <div>
+              <div className="flex flex-col gap-4">
                 <Textarea
-                  placeholder="Note Content (use #, ##, *, -, 1., etc. for formatting)"
                   value={newNote.content}
                   onChange={(e) => {
-                    const triggered = handleImageSearchTrigger(newNote.content, e.target.value, 'newNote');
-                    if (!triggered) {
-                      setNewNote({ ...newNote, content: e.target.value });
-                    }
+                    const newValue = e.target.value;
+                    setNewNote(prev => ({ ...prev, content: newValue }));
+                    handleImageSearchTrigger(newNote.content, newValue, 'newNote');
                   }}
-                  className={`min-h-[160px] font-mono text-sm ${theme === "dark" ? "bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500" : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"}`}
+                  placeholder="Write your note here..."
+                  className="min-h-[300px]"
                 />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleGenerateImagesFromTags(newNote.content, 'newNote')}
+                    disabled={isGeneratingImages}
+                  >
+                    {isGeneratingImages ? "Generating Images..." : "Generate Images from Tags"}
+                  </Button>
+                </div>
               </div>
               <div>
                 <CategoryCombobox
@@ -3127,13 +3209,29 @@ const fetchNotes = async () => {
                   className="bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500"
                 />
               </div>
-              <div>
+              <div className="flex flex-col gap-4">
                 <Textarea
-                  placeholder="Note Content (use #, ##, *, -, 1., etc. for formatting)"
                   value={editingNote?.content || ""}
-                  onChange={(e) => editingNote && setEditingNote({ ...editingNote, content: e.target.value })}
-                  className="min-h-[160px] bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500 font-mono text-sm"
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    setEditingNote(prev => prev ? ({ ...prev, content: newValue }) : null);
+                    if (editingNote) {
+                      handleImageSearchTrigger(editingNote.content, newValue, 'editNote');
+                    }
+                  }}
+                  placeholder="Edit your note here..."
+                  className="min-h-[300px]"
                 />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => editingNote && handleGenerateImagesFromTags(editingNote.content, 'editNote')}
+                    disabled={isGeneratingImages || !editingNote}
+                  >
+                    {isGeneratingImages ? "Generating Images..." : "Generate Images from Tags"}
+                  </Button>
+                </div>
               </div>
               <div>
                 <CategoryCombobox

@@ -206,6 +206,15 @@ export interface GeneratedCard {
     }
   }
   
+  function unescapeGeneratedContent(content: string): string {
+    return content
+      .replace(/\\n/g, '\n')  // Replace \n with actual newlines
+      .replace(/\\"/g, '"')   // Replace \" with "
+      .replace(/\\\\/g, '\\') // Replace \\ with \
+      .replace(/\\t/g, '\t')  // Replace \t with tabs
+      .replace(/\\r/g, '\r'); // Replace \r with carriage returns
+  }
+  
   export async function generateNoteWithGroq(
     topic: string,
   ): Promise<GeneratedNote> {
@@ -270,7 +279,22 @@ export interface GeneratedCard {
     - [x] Correct answer
     - [ ] Incorrect answer
     - [ ] Another incorrect answer
-  
+    Fill the blanks
+    - embed in the content like this: This is a [gap:fill the gap question]
+    Matching questions
+    ::dragdrop
+    Question: Match the capitals to their countries.
+    - France => [drop:Paris]
+    - Germany => [drop:Berlin]
+    - Italy => [drop:Rome]
+    Options: Paris, Berlin, Rome
+    ::
+    - use ::dragdrop:: to start the matching question
+    - use [drop:answer] to mark the answer
+    - use Options: to mark the options
+    - use Question: to mark the question
+    - use :: to mark the end of the matching question
+
     Output Requirements:
     - Ensure content is detailed, accurate, and structured clearly.
     - Break down complex ideas into digestible parts.
@@ -298,8 +322,8 @@ export interface GeneratedCard {
           typeof parsedContent.title === "string" &&
           typeof parsedContent.content === "string"
         ) {
-          // Clean up any potential LaTeX math formatting issues
-          const cleanedContent = parsedContent.content
+          // Clean up any potential LaTeX math formatting issues and unescape content
+          const cleanedContent = unescapeGeneratedContent(parsedContent.content)
             .replace(/\$\s*#/g, "$ ") // Remove any # characters that might appear after $
             .replace(/#\s*\$/g, " $") // Remove any # characters that might appear before $
             .replace(/\$\$\s*#/g, "$$ ") // Remove any # characters that might appear after $$
@@ -324,7 +348,7 @@ export interface GeneratedCard {
         if (titleMatch && contentMatch) {
           try {
             // Create a properly formatted JSON object and clean up LaTeX math
-            const content = contentMatch[1]
+            const content = unescapeGeneratedContent(contentMatch[1])
               .replace(/\$\s*#/g, "$ ")
               .replace(/#\s*\$/g, " $")
               .replace(/\$\$\s*#/g, "$$ ")
@@ -356,7 +380,7 @@ export interface GeneratedCard {
             typeof fixedParsedContent.content === "string"
           ) {
             // Clean up any potential LaTeX math formatting issues
-            const cleanedContent = fixedParsedContent.content
+            const cleanedContent = unescapeGeneratedContent(fixedParsedContent.content)
               .replace(/\$\s*#/g, "$ ")
               .replace(/#\s*\$/g, " $")
               .replace(/\$\$\s*#/g, "$$ ")
@@ -545,8 +569,8 @@ export interface GeneratedCard {
     prompt: string,
     model: string = "llama3-70b-8192"
   ): Promise<string> {
-    const requestBody = {
-      model,
+    // Create base request body without model
+    const baseRequestBody = {
       messages: [
         {
           role: "system",
@@ -563,24 +587,42 @@ export interface GeneratedCard {
 
     // Get API key from environment variables
     const apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
+    console.log("API Key available:", apiKey ? "yes" : "no");
+    
     if (!apiKey) {
+      console.error("Environment variables:", {
+        NEXT_PUBLIC_GROQ_API_KEY: process.env.NEXT_PUBLIC_GROQ_API_KEY ? "exists" : "missing",
+        NODE_ENV: process.env.NODE_ENV,
+      });
       throw new Error("GROQ_API_KEY is not defined in environment variables");
     }
 
     try {
-      // Try custom endpoint first
+      // Try custom endpoint first with GPT-4
       const customEndpoint = "https://raspberrypi.unicorn-deneb.ts.net/api/v1/chat/completions";
       try {
+        console.log("Attempting to use custom endpoint with GPT-4");
+        const customRequestBody = {
+          ...baseRequestBody,
+          model: "gpt-4",
+        };
+        console.log("Custom endpoint request body:", JSON.stringify(customRequestBody, null, 2));
+        
         const response = await fetch(customEndpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify(customRequestBody),
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
+          console.error("Custom endpoint error response:", {
+            status: response.status,
+            statusText: response.statusText,
+            errorData,
+          });
           throw new Error(
             `Custom endpoint error: ${response.statusText}${
               errorData ? ` - ${JSON.stringify(errorData)}` : ""
@@ -591,8 +633,14 @@ export interface GeneratedCard {
         const data = await response.json();
         return data.choices[0].message.content;
       } catch (customError) {
-        // If custom endpoint fails, try Groq
-        console.log("Custom endpoint failed, falling back to Groq:", customError);
+        // If custom endpoint fails, try Groq with Llama
+        console.log("Custom endpoint failed, falling back to Groq with Llama");
+        
+        const groqRequestBody = {
+          ...baseRequestBody,
+          model: "llama3-70b-8192",
+        };
+        console.log("Groq request body:", JSON.stringify(groqRequestBody, null, 2));
         
         const groqResponse = await fetch(
           "https://api.groq.com/openai/v1/chat/completions",
@@ -602,12 +650,17 @@ export interface GeneratedCard {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${apiKey}`,
             },
-            body: JSON.stringify(requestBody),
+            body: JSON.stringify(groqRequestBody),
           },
         );
 
         if (!groqResponse.ok) {
           const errorData = await groqResponse.json().catch(() => null);
+          console.error("Groq API error response:", {
+            status: groqResponse.status,
+            statusText: groqResponse.statusText,
+            errorData,
+          });
           throw new Error(
             `Groq API error: ${groqResponse.statusText}${
               errorData ? ` - ${JSON.stringify(errorData)}` : ""
@@ -619,6 +672,7 @@ export interface GeneratedCard {
         return data.choices[0].message.content;
       }
     } catch (err) {
+      console.error("Full error details:", err);
       if (err instanceof TypeError && err.message === "Failed to fetch") {
         throw new Error(
           "Network error: Could not connect to the API endpoints. Please check your internet connection and try again."
