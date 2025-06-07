@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const testQuery = 'test';
-  const searxngUrl = `https://raspberrypi.unicorn-deneb.ts.net/search?q=!images%20${encodeURIComponent(testQuery)}&format=json`;
+  const searxngUrl = `https://raspberrypi.unicorn-deneb.ts.net/searxng/search?q=!images%20${encodeURIComponent(testQuery)}&format=json`;
   
   try {
     const startTime = Date.now();
