@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { makeGroqRequest } from "@/lib/groq";
 import { generateImage } from "@/lib/image-generation";
+import { Copy } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface DebugInfo {
   request: any;
@@ -23,6 +25,7 @@ export default function TestAIPage() {
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
+  const { toast } = useToast();
 
   const handleCustomEndpoint = async () => {
     setLoading(true);
@@ -260,6 +263,17 @@ export default function TestAIPage() {
     }
   };
 
+  const handleCopyImage = () => {
+    if (image) {
+      const markdownImage = `![Generated Image](${image})`;
+      navigator.clipboard.writeText(markdownImage);
+      toast({
+        title: "Copied!",
+        description: "Image copied in Markdown format",
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-4">
       <h1 className="text-2xl font-bold mb-4">AI Test Page</h1>
@@ -358,8 +372,16 @@ export default function TestAIPage() {
 
       {image && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Generated Image</CardTitle>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleCopyImage}
+              className="h-8 w-8"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
           </CardHeader>
           <CardContent>
             <img src={image} alt="Generated" className="max-w-full h-auto" />
