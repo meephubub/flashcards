@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { makeGroqRequest } from "@/lib/groq";
 import { generateImage } from "@/lib/image-generation";
-import { Copy } from "lucide-react";
+import { generateVoice } from "@/lib/generate-voice";
+import { Copy, Play, Pause } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -49,6 +50,17 @@ export default function TestAIPage() {
   const [jsonResponse, setJsonResponse] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [privateText, setPrivateText] = useState(false);
+
+  // Voice generation parameters
+  const [voiceModel, setVoiceModel] = useState("elevenlabs");
+  const [voiceId, setVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
+  const [voiceStability, setVoiceStability] = useState(0.5);
+  const [voiceSimilarity, setVoiceSimilarity] = useState(0.75);
+  const [voiceStyle, setVoiceStyle] = useState(0.0);
+  const [voiceUseCase, setVoiceUseCase] = useState("narration");
+  const [voiceAudio, setVoiceAudio] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
   const { toast } = useToast();
 
@@ -461,6 +473,88 @@ export default function TestAIPage() {
     }
   };
 
+  const handleVoiceGeneration = async () => {
+    setLoading(true);
+    setError(null);
+    setDebugInfo(null);
+    try {
+      const params = new URLSearchParams({
+        model: "openai-audio",
+        voice: voiceId,
+      });
+
+      // Get API key from environment variables
+      const apiKey = process.env.NEXT_PUBLIC_POLLINATIONS_API;
+      if (!apiKey) {
+        throw new Error("NEXT_PUBLIC_POLLINATIONS_API is not defined in environment variables");
+      }
+
+      // Add API key to the URL instead of headers
+      params.append("api_key", apiKey);
+      const endpoint = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?${params.toString()}`;
+
+      try {
+        // Use our proxy server
+        const proxyUrl = `/api/proxy?url=${encodeURIComponent(endpoint)}`;
+        
+        console.log("Attempting to fetch from:", proxyUrl);
+        
+        const response = await fetch(proxyUrl, {
+          method: "GET",
+          headers: {
+            "Accept": "audio/*",
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
+        }
+
+        const blob = await response.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        setVoiceAudio(audioUrl);
+
+        // Create new audio element
+        const audio = new Audio(audioUrl);
+        setAudioElement(audio);
+
+        // Capture debug info
+        setDebugInfo({
+          request: { prompt, ...Object.fromEntries(params) },
+          response: "Voice generated successfully",
+          endpoint: proxyUrl,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        throw new Error(`Voice generation failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An error occurred";
+      setError(errorMessage);
+      setDebugInfo({
+        request: { prompt },
+        response: null,
+        endpoint: `https://text.pollinations.ai/${encodeURIComponent(prompt)}`,
+        timestamp: new Date().toISOString(),
+        error: errorMessage,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (!audioElement) return;
+
+    if (isPlaying) {
+      audioElement.pause();
+    } else {
+      audioElement.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-4">
       <h1 className="text-2xl font-bold mb-4">AI Test Page</h1>
@@ -706,6 +800,63 @@ export default function TestAIPage() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Voice Generation</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Voice</Label>
+              <Select value={voiceId} onValueChange={setVoiceId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select voice" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alloy">Alloy</SelectItem>
+                  <SelectItem value="echo">Echo</SelectItem>
+                  <SelectItem value="fable">Fable</SelectItem>
+                  <SelectItem value="onyx">Onyx</SelectItem>
+                  <SelectItem value="nova">Nova</SelectItem>
+                  <SelectItem value="shimmer">Shimmer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Textarea
+            placeholder="Enter your text to convert to speech..."
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="min-h-[100px]"
+          />
+          <div className="flex gap-4">
+            <Button onClick={handleVoiceGeneration} disabled={loading}>
+              {loading ? "Generating..." : "Generate Voice"}
+            </Button>
+            {voiceAudio && (
+              <Button
+                variant="outline"
+                onClick={handlePlayPause}
+                className="flex items-center gap-2"
+              >
+                {isPlaying ? (
+                  <>
+                    <Pause className="h-4 w-4" />
+                    Pause
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" />
+                    Play
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
