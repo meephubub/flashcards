@@ -27,10 +27,29 @@ export default function TestAIPage() {
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
-  const [selectedModel, setSelectedModel] = useState("gptimage");
+  
+  // Image generation parameters
+  const [selectedModel, setSelectedModel] = useState("flux");
   const [imageWidth, setImageWidth] = useState(1024);
   const [imageHeight, setImageHeight] = useState(1024);
-  const [numImages, setNumImages] = useState(1);
+  const [seed, setSeed] = useState<string>("");
+  const [nologo, setNologo] = useState(false);
+  const [privateImage, setPrivateImage] = useState(false);
+  const [enhance, setEnhance] = useState(false);
+  const [safe, setSafe] = useState(false);
+  const [transparent, setTransparent] = useState(false);
+
+  // Text generation parameters
+  const [textModel, setTextModel] = useState("openai");
+  const [textSeed, setTextSeed] = useState<string>("");
+  const [temperature, setTemperature] = useState(0.7);
+  const [topP, setTopP] = useState(1.0);
+  const [presencePenalty, setPresencePenalty] = useState(0);
+  const [frequencyPenalty, setFrequencyPenalty] = useState(0);
+  const [jsonResponse, setJsonResponse] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [privateText, setPrivateText] = useState(false);
+
   const { toast } = useToast();
 
   const handleCustomEndpoint = async () => {
@@ -38,91 +57,144 @@ export default function TestAIPage() {
     setError(null);
     setDebugInfo(null);
     try {
-      const requestBody = {
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: "You are a helpful assistant.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.6,
-        max_tokens: 3000,
-      };
+      const params = new URLSearchParams({
+        model: textModel,
+        temperature: temperature.toString(),
+        top_p: topP.toString(),
+        presence_penalty: presencePenalty.toString(),
+        frequency_penalty: frequencyPenalty.toString(),
+        json: jsonResponse.toString(),
+        private: privateText.toString(),
+      });
 
-      const endpoint =
-        "https://raspberrypi.unicorn-deneb.ts.net/api/v1/chat/completions";
+      if (textSeed) params.append("seed", textSeed);
+      if (systemPrompt) params.append("system", systemPrompt);
+
+      // Get API key from environment variables
+      const apiKey = process.env.NEXT_PUBLIC_POLLINATIONS_API;
+      if (!apiKey) {
+        throw new Error("NEXT_PUBLIC_POLLINATIONS_API is not defined in environment variables");
+      }
+
+      // Add API key to the URL instead of headers
+      params.append("api_key", apiKey);
+      const endpoint = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?${params.toString()}`;
 
       try {
-        const response = await fetch(endpoint, {
-          method: "POST",
+        // Try using allorigins.win as a CORS proxy
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(endpoint)}`;
+        
+        console.log("Attempting to fetch from:", proxyUrl);
+        
+        const response = await fetch(proxyUrl, {
+          method: "GET",
           headers: {
-            "Content-Type": "application/json",
+            "Accept": "application/json",
           },
-          body: JSON.stringify(requestBody),
         });
 
+        console.log("Response status:", response.status);
+        console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
         if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
-          throw new Error(
-            `API error: ${response.statusText}${
-              errorData ? ` - ${JSON.stringify(errorData)}` : ""
-            }`,
-          );
+          const errorText = await response.text();
+          console.error("Error response:", errorText);
+          throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
         }
 
-        const data = await response.json();
-        const result = data.choices[0].message.content;
+        const result = await response.text();
         setResponse(result);
 
         // Capture debug info
         setDebugInfo({
-          request: requestBody,
+          request: { prompt, ...Object.fromEntries(params) },
           response: result,
-          endpoint,
+          endpoint: proxyUrl,
           timestamp: new Date().toISOString(),
         });
-      } catch (fetchError) {
-        // Handle network errors specifically
-        if (
-          fetchError instanceof TypeError &&
-          fetchError.message === "Failed to fetch"
-        ) {
-          throw new Error(
-            `Network error: Could not connect to ${endpoint}. Please check if the server is running and accessible.`,
-          );
+      } catch (fetchError: unknown) {
+        console.error("Fetch error details:", {
+          error: fetchError,
+          type: fetchError instanceof Error ? fetchError.constructor.name : typeof fetchError,
+          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
+          stack: fetchError instanceof Error ? fetchError.stack : undefined
+        });
+
+        // Try alternative proxy
+        try {
+          const altProxyUrl = `https://cors-anywhere.herokuapp.com/${endpoint}`;
+          console.log("Trying alternative proxy:", altProxyUrl);
+
+          const altResponse = await fetch(altProxyUrl, {
+            method: "GET",
+            headers: {
+              "Accept": "application/json",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          });
+
+          if (!altResponse.ok) {
+            const errorText = await altResponse.text();
+            throw new Error(`Alternative proxy error: ${altResponse.status} ${altResponse.statusText}${errorText ? ` - ${errorText}` : ""}`);
+          }
+
+          const result = await altResponse.text();
+          setResponse(result);
+
+          setDebugInfo({
+            request: { prompt, ...Object.fromEntries(params) },
+            response: result,
+            endpoint: altProxyUrl,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (altError: unknown) {
+          console.error("Alternative proxy error details:", {
+            error: altError,
+            type: altError instanceof Error ? altError.constructor.name : typeof altError,
+            message: altError instanceof Error ? altError.message : String(altError),
+            stack: altError instanceof Error ? altError.stack : undefined
+          });
+
+          // Try direct fetch as last resort
+          try {
+            console.log("Attempting direct fetch as last resort");
+            const directResponse = await fetch(endpoint, {
+              method: "GET",
+              headers: {
+                "Accept": "application/json",
+              },
+            });
+
+            if (!directResponse.ok) {
+              throw new Error(`Direct fetch failed: ${directResponse.status} ${directResponse.statusText}`);
+            }
+
+            const result = await directResponse.text();
+            setResponse(result);
+
+            setDebugInfo({
+              request: { prompt, ...Object.fromEntries(params) },
+              response: result,
+              endpoint,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (directError: unknown) {
+            throw new Error(
+              `All fetch attempts failed:\n` +
+              `1. First proxy error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}\n` +
+              `2. Alternative proxy error: ${altError instanceof Error ? altError.message : String(altError)}\n` +
+              `3. Direct fetch error: ${directError instanceof Error ? directError.message : String(directError)}`
+            );
+          }
         }
-        throw fetchError;
       }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "An error occurred";
+      const errorMessage = err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
-
-      // Capture error in debug info
       setDebugInfo({
-        request: {
-          model: "gpt-4",
-          messages: [
-            {
-              role: "system",
-              content: "You are a helpful assistant.",
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          temperature: 0.6,
-          max_tokens: 3000,
-        },
+        request: { prompt },
         response: null,
-        endpoint:
-          "https://raspberrypi.unicorn-deneb.ts.net/api/v1/chat/completions",
+        endpoint: `https://text.pollinations.ai/${encodeURIComponent(prompt)}`,
         timestamp: new Date().toISOString(),
         error: errorMessage,
       });
@@ -227,51 +299,149 @@ export default function TestAIPage() {
     setError(null);
     setDebugInfo(null);
     try {
-      const requestBody = {
-        prompt,
+      const params = new URLSearchParams({
         model: selectedModel,
-        width: imageWidth,
-        height: imageHeight,
-        n: numImages,
-        response_format: "b64_json",
-      };
+        width: imageWidth.toString(),
+        height: imageHeight.toString(),
+        nologo: nologo.toString(),
+        private: privateImage.toString(),
+        enhance: enhance.toString(),
+        safe: safe.toString(),
+        transparent: transparent.toString(),
+      });
 
-      const result = await generateImage(prompt, selectedModel, imageWidth, imageHeight, numImages);
+      if (seed) params.append("seed", seed);
 
-      // Get the first image from the data array
-      if (result.data && result.data.length > 0) {
-        setImage(`data:image/png;base64,${result.data[0].b64_json}`);
-      } else {
-        throw new Error("No image data received");
+      // Get API key from environment variables
+      const apiKey = process.env.NEXT_PUBLIC_POLLINATIONS_API;
+      if (!apiKey) {
+        throw new Error("NEXT_PUBLIC_POLLINATIONS_API is not defined in environment variables");
       }
 
-      // Capture debug info
-      setDebugInfo({
-        request: requestBody,
-        response: {
-          ...result,
-          data: result.data.map((item: any) => ({
-            ...item,
-            b64_json: "[BASE64_IMAGE_DATA]", // Truncate base64 data for display
-          })),
-        },
-        endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate",
-        timestamp: new Date().toISOString(),
-      });
+      // Add API key to the URL instead of headers
+      params.append("api_key", apiKey);
+      const endpoint = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?${params.toString()}`;
+
+      try {
+        // Try using allorigins.win as a CORS proxy
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(endpoint)}`;
+        
+        console.log("Attempting to fetch from:", proxyUrl);
+        
+        const response = await fetch(proxyUrl, {
+          method: "GET",
+          headers: {
+            "Accept": "image/*",
+          },
+        });
+
+        console.log("Response status:", response.status);
+        console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Error response:", errorText);
+          throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
+        }
+
+        const blob = await response.blob();
+        console.log("Received blob:", blob.type, blob.size);
+        
+        const imageUrl = URL.createObjectURL(blob);
+        setImage(imageUrl);
+
+        // Capture debug info
+        setDebugInfo({
+          request: { prompt, ...Object.fromEntries(params) },
+          response: "Image generated successfully",
+          endpoint: proxyUrl,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (fetchError: unknown) {
+        console.error("Fetch error details:", {
+          error: fetchError,
+          type: fetchError instanceof Error ? fetchError.constructor.name : typeof fetchError,
+          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
+          stack: fetchError instanceof Error ? fetchError.stack : undefined
+        });
+
+        // Try alternative proxy
+        try {
+          const altProxyUrl = `https://cors-anywhere.herokuapp.com/${endpoint}`;
+          console.log("Trying alternative proxy:", altProxyUrl);
+
+          const altResponse = await fetch(altProxyUrl, {
+            method: "GET",
+            headers: {
+              "Accept": "image/*",
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          });
+
+          if (!altResponse.ok) {
+            const errorText = await altResponse.text();
+            throw new Error(`Alternative proxy error: ${altResponse.status} ${altResponse.statusText}${errorText ? ` - ${errorText}` : ""}`);
+          }
+
+          const blob = await altResponse.blob();
+          const imageUrl = URL.createObjectURL(blob);
+          setImage(imageUrl);
+
+          setDebugInfo({
+            request: { prompt, ...Object.fromEntries(params) },
+            response: "Image generated successfully via alternative proxy",
+            endpoint: altProxyUrl,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (altError: unknown) {
+          console.error("Alternative proxy error details:", {
+            error: altError,
+            type: altError instanceof Error ? altError.constructor.name : typeof altError,
+            message: altError instanceof Error ? altError.message : String(altError),
+            stack: altError instanceof Error ? altError.stack : undefined
+          });
+
+          // Try direct fetch as last resort
+          try {
+            console.log("Attempting direct fetch as last resort");
+            const directResponse = await fetch(endpoint, {
+              method: "GET",
+              headers: {
+                "Accept": "image/*",
+              },
+            });
+
+            if (!directResponse.ok) {
+              throw new Error(`Direct fetch failed: ${directResponse.status} ${directResponse.statusText}`);
+            }
+
+            const blob = await directResponse.blob();
+            const imageUrl = URL.createObjectURL(blob);
+            setImage(imageUrl);
+
+            setDebugInfo({
+              request: { prompt, ...Object.fromEntries(params) },
+              response: "Image generated successfully via direct fetch",
+              endpoint,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (directError: unknown) {
+            throw new Error(
+              `All fetch attempts failed:\n` +
+              `1. First proxy error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}\n` +
+              `2. Alternative proxy error: ${altError instanceof Error ? altError.message : String(altError)}\n` +
+              `3. Direct fetch error: ${directError instanceof Error ? directError.message : String(directError)}`
+            );
+          }
+        }
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
       setDebugInfo({
-        request: {
-          prompt,
-          model: selectedModel,
-          width: imageWidth,
-          height: imageHeight,
-          n: numImages,
-          response_format: "b64_json",
-        },
+        request: { prompt },
         response: null,
-        endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate",
+        endpoint: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`,
         timestamp: new Date().toISOString(),
         error: errorMessage,
       });
@@ -297,35 +467,117 @@ export default function TestAIPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Test Endpoints</CardTitle>
+          <CardTitle>Text Generation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Model</Label>
+              <Select value={textModel} onValueChange={setTextModel}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="mistral">Mistral</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Seed (optional)</Label>
+              <Input
+                type="text"
+                value={textSeed}
+                onChange={(e) => setTextSeed(e.target.value)}
+                placeholder="Enter seed for reproducibility"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Temperature (0.0 - 3.0)</Label>
+              <Input
+                type="number"
+                value={temperature}
+                onChange={(e) => setTemperature(Number(e.target.value))}
+                min={0}
+                max={3}
+                step={0.1}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Top P (0.0 - 1.0)</Label>
+              <Input
+                type="number"
+                value={topP}
+                onChange={(e) => setTopP(Number(e.target.value))}
+                min={0}
+                max={1}
+                step={0.1}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Presence Penalty (-2.0 - 2.0)</Label>
+              <Input
+                type="number"
+                value={presencePenalty}
+                onChange={(e) => setPresencePenalty(Number(e.target.value))}
+                min={-2}
+                max={2}
+                step={0.1}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Frequency Penalty (-2.0 - 2.0)</Label>
+              <Input
+                type="number"
+                value={frequencyPenalty}
+                onChange={(e) => setFrequencyPenalty(Number(e.target.value))}
+                min={-2}
+                max={2}
+                step={0.1}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>System Prompt (optional)</Label>
+            <Textarea
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="Enter system prompt..."
+              className="min-h-[100px]"
+            />
+          </div>
+
+          <div className="flex gap-4">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="jsonResponse"
+                checked={jsonResponse}
+                onChange={(e) => setJsonResponse(e.target.checked)}
+              />
+              <Label htmlFor="jsonResponse">JSON Response</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="privateText"
+                checked={privateText}
+                onChange={(e) => setPrivateText(e.target.checked)}
+              />
+              <Label htmlFor="privateText">Private</Label>
+            </div>
+          </div>
+
           <Textarea
             placeholder="Enter your prompt..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             className="min-h-[100px]"
           />
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <Button onClick={handleCustomEndpoint} disabled={loading}>
-                {loading ? "Loading..." : "Test Custom Endpoint"}
-              </Button>
-              <Button onClick={handleGroq} disabled={loading}>
-                {loading ? "Loading..." : "Test Groq"}
-              </Button>
-            </div>
-            <div className="text-sm text-gray-500">
-              Note: Image generation is only available with the custom endpoint
-            </div>
-            <Button
-              onClick={handleImageGeneration}
-              disabled={loading}
-              variant="outline"
-            >
-              {loading ? "Loading..." : "Generate Image (Custom Endpoint Only)"}
-            </Button>
-          </div>
+          <Button onClick={handleCustomEndpoint} disabled={loading}>
+            {loading ? "Loading..." : "Generate Text"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -334,21 +586,29 @@ export default function TestAIPage() {
           <CardTitle>Image Generation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Model</Label>
-            <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="flux">Flux</SelectItem>
-                <SelectItem value="turbo">Turbo</SelectItem>
-                <SelectItem value="gptimage">GPT Image</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Model</Label>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flux">Flux</SelectItem>
+                  <SelectItem value="turbo">Turbo</SelectItem>
+                  <SelectItem value="gptimage">GPT Image</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Seed (optional)</Label>
+              <Input
+                type="text"
+                value={seed}
+                onChange={(e) => setSeed(e.target.value)}
+                placeholder="Enter seed for reproducibility"
+              />
+            </div>
             <div className="space-y-2">
               <Label>Width</Label>
               <Input
@@ -371,15 +631,53 @@ export default function TestAIPage() {
                 step={64}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Number of Images</Label>
-              <Input
-                type="number"
-                value={numImages}
-                onChange={(e) => setNumImages(Number(e.target.value))}
-                min={1}
-                max={4}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="nologo"
+                checked={nologo}
+                onChange={(e) => setNologo(e.target.checked)}
               />
+              <Label htmlFor="nologo">No Logo</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="privateImage"
+                checked={privateImage}
+                onChange={(e) => setPrivateImage(e.target.checked)}
+              />
+              <Label htmlFor="privateImage">Private</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="enhance"
+                checked={enhance}
+                onChange={(e) => setEnhance(e.target.checked)}
+              />
+              <Label htmlFor="enhance">Enhance Prompt</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="safe"
+                checked={safe}
+                onChange={(e) => setSafe(e.target.checked)}
+              />
+              <Label htmlFor="safe">Safe Mode</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="transparent"
+                checked={transparent}
+                onChange={(e) => setTransparent(e.target.checked)}
+              />
+              <Label htmlFor="transparent">Transparent Background</Label>
             </div>
           </div>
 
