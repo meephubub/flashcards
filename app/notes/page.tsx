@@ -1,7 +1,6 @@
 "use client"
 
-import React from "react"
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -247,7 +246,7 @@ const getGapColorClass = (value: string, answer: string, similarity: number, isE
 };
 
 // Enhanced renderNoteContent function
-const renderNoteContent = (
+const renderNoteContent = useCallback((
   content: string,
   mcqStates: Record<string, any>,
   handleMcqOptionClick: Function,
@@ -1085,7 +1084,7 @@ const renderNoteContent = (
   if (inDragDrop) processDragDropBlock();
 
   return <>{elements}</> // Return a fragment
-}
+}, []);
 
 import { getSentenceEmbedding, cosineSimilarity } from "../actions/xenova-similarity";
 
@@ -1473,7 +1472,7 @@ export default function NotesPage() {
     );
   }
 
-  const handleMcqOptionClick = (blockId: number | string, optionIndex: number, isCorrect: boolean) => {
+  const handleMcqOptionClick = useCallback((blockId: number | string, optionIndex: number, isCorrect: boolean) => {
     const blockKey = typeof blockId === 'number' ? blockId.toString() : blockId;
     setMcqStates(prev => ({
       ...prev,
@@ -1483,7 +1482,7 @@ export default function NotesPage() {
         showAnswers: true
       }
     }));
-  };
+  }, []);
 
   const notesContainerRef = useRef<HTMLDivElement>(null)
   const activeNoteRef = useRef<HTMLDivElement>(null)
@@ -1528,7 +1527,7 @@ export default function NotesPage() {
     }
   }, [isImageSearchDialogOpen, imageSearchQuery]);
 
-  const handleImageSearchTrigger = (
+  const handleImageSearchTrigger = useCallback((
     currentTextValue: string, 
     newTextValue: string,
     contextType: 'newNote' | 'editNote'
@@ -1554,9 +1553,9 @@ export default function NotesPage() {
       return true; // Indicates that the image search was triggered
     }
     return false; // Indicates no image search trigger
-  };
+  }, [setNewNote, setEditingNote]);
 
-  const handleImageSelectedFromDialog = (imageUrl: string) => {
+  const handleImageSelectedFromDialog = useCallback((imageUrl: string) => {
     if (activeEditorContext) {
       let currentTextareaContent = "";
       if (activeEditorContext.type === 'newNote') {
@@ -1583,7 +1582,7 @@ export default function NotesPage() {
       }
     }
     closeImageSearchDialog();
-  };
+  }, [activeEditorContext, newNote.content, editingNote, imageSearchQuery]);
 
   const closeImageSearchDialog = () => {
     setIsImageSearchDialogOpen(false);
@@ -2149,9 +2148,9 @@ const fetchNotes = async () => {
     }
   }
 
-  const handleSuccessfulNoteAdd = () => {
+  const handleSuccessfulNoteAdd = useCallback(() => {
     setIsAddNoteDialogOpen(false)
-  }
+  }, []);
 
   // Extract headings from a note
   const extractHeadingsFromNote = (note: Note) => {
@@ -2200,7 +2199,7 @@ const fetchNotes = async () => {
     }
   }
 
-  const handleGenerateMcqs = async () => {
+  const handleGenerateMcqs = useCallback(async () => {
     if (!focusedNoteId) {
       setMcqError("Please select a note to generate MCQs from.")
       return
@@ -2247,7 +2246,7 @@ const fetchNotes = async () => {
     } finally {
       setIsGeneratingMcqs(false)
     }
-  }
+  }, [focusedNoteId, allNotes]);
 
   const handleMcqOptionSelect = (questionIndex: number, option: string) => {
     setUserAnswers((prev) => ({ ...prev, [questionIndex]: option }))
@@ -2257,7 +2256,7 @@ const fetchNotes = async () => {
     setShowMcqResults(true)
   }
 
-  const calculateMcqScore = () => {
+  const calculateMcqScore = useCallback(() => {
     let correctCount = 0
     generatedMcqs.forEach((mcq, index) => {
       if (userAnswers[index] === mcq.correctAnswer) {
@@ -2269,7 +2268,7 @@ const fetchNotes = async () => {
       total: generatedMcqs.length,
       percentage: generatedMcqs.length > 0 ? (correctCount / generatedMcqs.length) * 100 : 0,
     }
-  }
+  }, [generatedMcqs, userAnswers]);
 
   const handleEditNote = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -2313,13 +2312,13 @@ const fetchNotes = async () => {
     }
   }
 
-  const handleDeleteNote = async (noteId: string) => {
+  const handleDeleteNote = useCallback((noteId: string) => {
     const note = allNotes.find((n) => n.id === noteId)
     if (note) {
       setNoteToDelete(note)
       setIsDeleteDialogOpen(true)
     }
-  }
+  }, [allNotes]);
 
   const confirmDelete = async () => {
     if (!noteToDelete) return
@@ -2347,10 +2346,10 @@ const fetchNotes = async () => {
     }
   }
 
-  const startEditingNote = (note: Note) => {
+  const startEditingNote = useCallback((note: Note) => {
     setEditingNote(note);
     setIsEditNoteDialogOpen(true);
-  }
+  }, []);
 
   // Handle AI note edit - apply edits from the AI Assistant
   const handleAiNoteEdit = async (newContent: string) => {
@@ -2392,7 +2391,7 @@ const fetchNotes = async () => {
         }
       }
     }
-  }
+  };
 
   const handleGenerateFlashcards = async () => {
     if (!noteForFlashcards) return;
@@ -2440,6 +2439,7 @@ const fetchNotes = async () => {
   };
 
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
 
   const extractImageTags = (content: string): string[] => {
     const matches = content.match(/!\(img\)\[(.*?)\]/g) || [];
@@ -2449,7 +2449,7 @@ const fetchNotes = async () => {
     }).filter(Boolean);
   };
 
-  const generateImageFromTag = async (prompt: string): Promise<string> => {
+  const generateImageFromTag = useCallback(async (prompt: string): Promise<string> => {
     try {
       const result = await generateImage(prompt, selectedImageModel);
       if (result.data && result.data.length > 0) {
@@ -2460,9 +2460,9 @@ const fetchNotes = async () => {
       console.error("Error generating image:", error);
       throw error;
     }
-  };
+  }, [selectedImageModel]);
 
-  const handleGenerateImagesFromTags = async (content: string, contextType: 'newNote' | 'editNote') => {
+  const handleGenerateImagesFromTags = useCallback(async (content: string, contextType: 'newNote' | 'editNote') => {
     setIsGeneratingImages(true);
     try {
       const imageTags = extractImageTags(content);
@@ -2501,9 +2501,7 @@ const fetchNotes = async () => {
     } finally {
       setIsGeneratingImages(false);
     }
-  };
-
-  const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
+  }, [generateImageFromTag]);
 
   return (
     <div
@@ -2613,87 +2611,97 @@ const fetchNotes = async () => {
               <p className="text-center text-neutral-400 py-10 text-lg">Note not found or does not match category.</p>
             )}
 
-            {displayedNotes.map((note) => (
-              <Card
-                key={note.id}
-                id={`note-${note.id}`}
-                ref={focusedNoteId === note.id ? activeNoteRef : null}
-                className="bg-neutral-900 border-neutral-800 border-[0.5px] rounded-xl shadow-xl p-5 md:p-8 transition-all duration-300 ease-in-out hover:shadow-2xl data-[focused='true']:ring-1 data-[focused='true']:ring-blue-500/60 data-[focused='true']:scale-[1.01] mx-0 w-full"
-                data-focused={focusedNoteId === note.id}
-              >
-                <div className="flex justify-between items-start mb-4 md:mb-6 pb-3 md:pb-4 border-b border-neutral-700">
-                  <h3 className={`text-2xl md:text-4xl font-bold mr-2 ${theme === "dark" ? "text-neutral-50" : "text-gray-800"}`}>{note.title}</h3>
-                  <div className="flex items-center space-x-2 md:space-x-3">
-                    <button
-                      onClick={() => startEditingNote(note)}
-                      className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
-                      aria-label="Edit note"
+            {useMemo(() => (
+              <>
+                {displayedNotes.map((note) => (
+                  <div
+                    key={note.id}
+                    ref={note.id === focusedNoteId ? activeNoteRef : null}
+                    className={`relative group transition-all duration-200 ${
+                      note.id === focusedNoteId
+                        ? "ring-2 ring-neutral-400 ring-offset-2 ring-offset-neutral-950"
+                        : "hover:ring-1 hover:ring-neutral-500 hover:ring-offset-2 hover:ring-offset-neutral-950"
+                    }`}
+                  >
+                    <Card
+                      className={`relative overflow-hidden ${
+                        theme === "dark"
+                          ? "bg-neutral-900 border-neutral-800"
+                          : "bg-white border-gray-200"
+                      }`}
                     >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => {
-                        setNoteToDelete(note)
-                        setIsDeleteDialogOpen(true)
-                      }}
-                      className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
-                      aria-label="Delete note"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Set the current note for flashcard generation
-                        setNoteForFlashcards(note);
-                        setIsFlashcardsDialogOpen(true)
-                      }}
-                      className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
-                      aria-label="Create flashcards from note"
-                    >
-                      Create Flashcards
-                    </button>
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between">
+                          <CardTitle
+                            className={`text-xl font-semibold ${
+                              theme === "dark" ? "text-neutral-100" : "text-gray-900"
+                            }`}
+                          >
+                            {note.title}
+                          </CardTitle>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => startEditingNote(note)}
+                              className={`opacity-0 group-hover:opacity-100 transition-opacity ${
+                                theme === "dark"
+                                  ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
+                                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                              }`}
+                            >
+                              <PencilIcon className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteNote(note.id)}
+                              className={`opacity-0 group-hover:opacity-100 transition-opacity ${
+                                theme === "dark"
+                                  ? "text-neutral-400 hover:text-red-400 hover:bg-neutral-800"
+                                  : "text-gray-500 hover:text-red-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              <Trash2Icon className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        {note.category && (
+                          <div
+                            className={`text-sm ${
+                              theme === "dark" ? "text-neutral-400" : "text-gray-500"
+                            }`}
+                          >
+                            {note.category}
+                          </div>
+                        )}
+                      </CardHeader>
+                      <CardContent>
+                        <div
+                          className={`prose prose-sm max-w-none ${
+                            theme === "dark"
+                              ? "prose-invert prose-neutral"
+                              : "prose-gray"
+                          }`}
+                        >
+                          {renderNoteContent(
+                            note.content,
+                            mcqStates,
+                            handleMcqOptionClick,
+                            shuffledMcqOptionsRef.current,
+                            gapStates,
+                            setGapStates,
+                            getSimilarity,
+                            dragDropStates,
+                            setDragDropStates
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
-                </div>
-                <div className="prose-custom max-w-none text-sm md:text-base">
-                  {inlineEditingNoteId === note.id ? (
-                    <div className="relative">
-                      <Textarea
-                        ref={inlineEditRef}
-                        value={inlineEditContent}
-                        onChange={(e) => setInlineEditContent(e.target.value)}
-                        className="min-h-[300px] w-full bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500 font-mono text-sm p-4"
-                        placeholder="Edit your note content..."
-                      />
-                      <div className="flex justify-end mt-4 space-x-3">
-                        <Button
-                          onClick={() => setInlineEditingNoteId(null)}
-                          variant="outline"
-                          className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleSaveInlineEdit}
-                          className="bg-neutral-900 dark:bg-neutral-800 hover:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 dark:focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 dark:focus:ring-offset-neutral-900 border border-neutral-200 dark:border-neutral-700"
-                        >
-                          Save Changes
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity, dragDropStates, setDragDropStates)}</div>
-                  )}
-                </div>
-                <div className="text-xs text-neutral-500 mt-6 md:mt-8 pt-3 md:pt-4 border-t border-neutral-700">
-                  Category:{" "}
-                  <span className="font-medium text-neutral-400">
-                    {note.category.charAt(0).toUpperCase() + note.category.slice(1)}
-                  </span>{" "}
-                  | Created:{" "}
-                  {new Date(note.created_at).toLocaleDateString([], { year: "numeric", month: "long", day: "numeric" })}
-                </div>
-              </Card>
-            ))}
+                ))}
+              </>
+            ), [displayedNotes, focusedNoteId, theme, mcqStates, shuffledMcqOptionsRef, gapStates, dragDropStates])}
           </div>
         </div>
 
