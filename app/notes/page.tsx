@@ -30,7 +30,8 @@ import {
   SearchIcon,
   XIcon,
   Menu,
-  FlaskConical
+  FlaskConical,
+  PanelLeft
 } from "lucide-react"
 import {
   Dialog,
@@ -2681,6 +2682,18 @@ export default function NotesPage() {
           width: sidebarCollapsed ? '100vw' : undefined,
         }}
       >
+        {/* Add expand sidebar button when collapsed */}
+        {sidebarCollapsed && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarCollapsed(false)}
+            className={`fixed top-4 left-4 z-50 ${theme === "dark" ? "bg-neutral-900/90 text-neutral-100 hover:text-neutral-100 hover:bg-neutral-800 border-neutral-700/50" : "bg-white/90 text-gray-700 hover:text-gray-900 hover:bg-gray-100 border-gray-200/50"} backdrop-blur-lg h-10 w-10 rounded-full border shadow-lg transition-all duration-200`}
+            aria-label="Expand sidebar"
+          >
+            <PanelLeft className="h-5 w-5" />
+          </Button>
+        )}
         <div ref={notesContainerRef} className="flex-1 overflow-y-auto p-4 pt-14 md:pt-4 md:p-6 lg:p-8 pb-24 scroll-smooth">
           {/* Search results count - only shown when searching */}
           {searchQuery && (
@@ -2739,31 +2752,76 @@ export default function NotesPage() {
           </div>
         </div>
 
-        {/* Floating Bottom Nav Bar */}
-        <div className={`w-full p-3 md:p-4 border-t ${theme === "dark" ? "border-neutral-800/50 bg-neutral-950/90" : "border-gray-200 bg-white/90"} backdrop-blur-xl ${theme === "dark" ? "shadow-[0_-8px_32px_rgba(0,0,0,0.4)]" : "shadow-[0_-8px_32px_rgba(0,0,0,0.1)]"} sticky bottom-0 z-20 flex items-center justify-between`}>
-          <div className="flex items-center space-x-2 md:space-x-3">
+        {/* Floating Bottom Nav Bar with enhanced frosted glass effect */}
+        <div 
+          className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? 'left-1/2 -translate-x-1/2 w-[80%] max-w-4xl' : 'left-[calc(18rem+3rem)]'} ${isAiAssistantOpen ? 'right-[calc(350px+2rem)]' : 'right-6'} px-3 py-2.5 rounded-2xl backdrop-blur-3xl z-20 flex items-center justify-between gap-3 transition-all duration-500 ease-in-out overflow-hidden`}
+          style={{
+            background: theme === "dark" 
+              ? 'linear-gradient(135deg, rgba(23, 23, 23, 0.45) 0%, rgba(38, 38, 38, 0.35) 100%)' 
+              : 'linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.4) 100%)',
+            boxShadow: theme === "dark"
+              ? '0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.08)'
+              : '0 8px 32px rgba(0, 0, 0, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 0.8)',
+            border: theme === "dark"
+              ? '1px solid rgba(255, 255, 255, 0.12)'
+              : '1px solid rgba(255, 255, 255, 0.8)'
+          }}
+        >
+          {/* Glass reflection effect */}
+          <div 
+            className="absolute inset-0 z-[-1]"
+            style={{
+              background: theme === "dark"
+                ? 'linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 0%, transparent 50%)'
+                : 'linear-gradient(to bottom, rgba(255, 255, 255, 0.6) 0%, transparent 60%)'
+            }}
+          ></div>
+          
+          {/* Top-left corner glow */}
+          <div 
+            className="absolute top-0 left-0 w-20 h-20 z-[-1] rounded-full opacity-60 blur-md"
+            style={{
+              background: theme === "dark" 
+                ? 'radial-gradient(circle, rgba(103, 232, 249, 0.3) 0%, transparent 70%)' 
+                : 'radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%)',
+              transform: 'translate(-30%, -30%)'
+            }}
+          ></div>
+          
+          {/* Bottom-right corner glow */}
+          <div 
+            className="absolute bottom-0 right-0 w-20 h-20 z-[-1] rounded-full opacity-60 blur-md"
+            style={{
+              background: theme === "dark" 
+                ? 'radial-gradient(circle, rgba(217, 70, 239, 0.3) 0%, transparent 70%)' 
+                : 'radial-gradient(circle, rgba(236, 72, 153, 0.3) 0%, transparent 70%)',
+              transform: 'translate(30%, 30%)'
+            }}
+          ></div>
+          
+          <div className="flex items-center space-x-1.5">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsAddNoteDialogOpen(true)}
-              className={`p-2 md:p-2.5 rounded-lg backdrop-blur-sm border transition-all duration-200 ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 border-gray-200"}`}
+              className={`p-1.5 rounded-xl backdrop-blur-sm border transition-all duration-200 ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100/50 hover:bg-gray-200/60 border-gray-200/50"}`}
               aria-label="Add new note"
             >
-              <PlusCircleIcon className="h-5 w-5" />
+              <PlusCircleIcon className="h-4 w-4" />
             </Button>
 
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className={`p-2 md:p-2.5 rounded-lg backdrop-blur-sm border transition-all duration-200 ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 border-gray-200"}`}
+              className={`p-1.5 rounded-xl backdrop-blur-sm border transition-all duration-200 ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100/50 hover:bg-gray-200/60 border-gray-200/50"}`}
               aria-label="Toggle theme"
             >
               {theme === "dark" ? (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -2785,8 +2843,8 @@ export default function NotesPage() {
               ) : (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -2800,13 +2858,13 @@ export default function NotesPage() {
               )}
             </Button>
 
-            <span className={`hidden md:inline-flex items-center text-xs rounded-lg px-2 py-1 md:px-2.5 md:py-1.5 backdrop-blur-sm ${theme === "dark" ? "text-neutral-400 border border-white/10 bg-neutral-800/30" : "text-gray-500 border border-gray-200 bg-gray-100/50"}`}>
-              <SparklesIcon className="h-3 w-3 mr-1" /> <kbd className="font-mono text-[10px]">Ctrl+K</kbd>
+            <span className={`hidden md:inline-flex items-center text-xs rounded-lg px-1.5 py-0.5 backdrop-blur-sm ${theme === "dark" ? "text-neutral-400 border border-white/10 bg-neutral-800/30" : "text-gray-500 border border-gray-200 bg-gray-100/50"}`}>
+              <SparklesIcon className="h-2.5 w-2.5 mr-1" /> <kbd className="font-mono text-[9px]">Ctrl+K</kbd>
             </span>
           </div>
 
-          <ScrollArea className="whitespace-nowrap flex-grow mx-2 md:mx-4">
-            <div className="flex space-x-1.5 md:space-x-2 items-center h-10">
+          <ScrollArea className={`whitespace-nowrap flex-grow mx-2 ${sidebarCollapsed && !isAiAssistantOpen ? 'max-w-none' : 'max-w-[50vw]'}`}>
+            <div className="flex space-x-1 items-center h-8">
               {focusedNoteId && currentNoteHeadings.length > 0 ? (
                 currentNoteHeadings.map((heading, index) => (
                   <Button
@@ -2817,14 +2875,14 @@ export default function NotesPage() {
                       const headingEl = document.getElementById(`heading-${generateSlug(heading.text)}`)
                       if (headingEl) headingEl.scrollIntoView({ behavior: "smooth", block: "start" })
                     }}
-                    className={`transition-all rounded-lg px-3 py-2 text-sm ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"} ${
+                    className={`transition-all rounded-lg px-2 py-1 text-xs ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"} ${
                       heading.level === 1
                         ? "font-semibold"
                         : heading.level === 2
-                          ? "pl-3"
+                          ? "pl-2"
                           : heading.level === 3
-                            ? "pl-4 text-sm"
-                            : "pl-5 text-xs"
+                            ? "pl-3 text-xs"
+                            : "pl-4 text-xs"
                     }`}
                   >
                     {heading.level > 1 && <span className="opacity-60 mr-1">{"•".repeat(heading.level - 1)}</span>}
@@ -2838,34 +2896,35 @@ export default function NotesPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleSubheadingClick(sh)}
-                    className={`transition-all rounded-lg px-3 py-2 text-sm ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"}`}
+                    className={`transition-all rounded-lg px-2 py-1 text-xs ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"}`}
                   >
                     {sh}
                   </Button>
                 ))
               ) : (
-                <p className={`text-sm px-3 ${theme === "dark" ? "text-neutral-500" : "text-gray-500"}`}>
-                  No H2 subheadings (##). Add notes with `## Your Subheading`.
+                <p className={`text-xs px-2 ${theme === "dark" ? "text-neutral-500" : "text-gray-500"}`}>
+                  No H2 subheadings (##)
                 </p>
               )}
             </div>
             <ScrollBar orientation="horizontal" className={theme === "dark" ? "[&>div]:bg-neutral-700/50 hover:[&>div]:bg-neutral-600/60" : "[&>div]:bg-gray-300/50 hover:[&>div]:bg-gray-400/60"} />
           </ScrollArea>
+
           {focusedNoteId && (
             <Button
               variant="ghost"
               size="sm"
               onClick={handleGenerateMcqs}
               disabled={isGeneratingMcqs}
-              className={`flex-shrink-0 backdrop-blur-sm border rounded-lg px-4 py-2 transition-all duration-200 ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 border-gray-200"}`}
+              className={`flex-shrink-0 backdrop-blur-sm border rounded-xl px-3 py-1.5 transition-all duration-200 text-xs ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100/50 hover:bg-gray-200/60 border-gray-200/50"}`}
             >
               {isGeneratingMcqs ? (
                 <>
-                  <SparklesIcon className="h-4 w-4 mr-2 animate-spin" /> Generating...
+                  <SparklesIcon className="h-3 w-3 mr-1.5" /> Generating...
                 </>
               ) : (
                 <>
-                  <HelpCircleIcon className="h-4 w-4 mr-2" /> Quiz Me
+                  <HelpCircleIcon className="h-3 w-3 mr-1.5" /> Quiz Me
                 </>
               )}
             </Button>
