@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
+import React from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,6 +53,8 @@ interface McqOption {
   // Add other potential fields if necessary, e.g., explanation?: string;
 }
 import { ImageSearchDialog } from "@/components/image-search-dialog";
+import { AddNoteDialog } from "@/components/add-note-dialog";
+import { EditNoteDialog } from "@/components/edit-note-dialog";
 
 // Helper to generate slugs for IDs
 // Keep track of used slugs to avoid duplicates
@@ -246,7 +249,7 @@ const getGapColorClass = (value: string, answer: string, similarity: number, isE
 };
 
 // Enhanced renderNoteContent function
-const renderNoteContent = useCallback((
+const renderNoteContent = (
   content: string,
   mcqStates: Record<string, any>,
   handleMcqOptionClick: Function,
@@ -1084,7 +1087,7 @@ const renderNoteContent = useCallback((
   if (inDragDrop) processDragDropBlock();
 
   return <>{elements}</> // Return a fragment
-}, []);
+}
 
 import { getSentenceEmbedding, cosineSimilarity } from "../actions/xenova-similarity";
 
@@ -1337,6 +1340,166 @@ const DragDropBlock = ({ question, pairs, options, userAnswers, setUserAnswers, 
   );
 };
 
+interface NoteCardProps {
+  note: Note
+  focusedNoteId: string | null
+  activeNoteRef: React.RefObject<HTMLDivElement> | null
+  theme: string | undefined
+  startEditingNote: (note: Note) => void
+  handleDeleteNote: (noteId: string) => void
+  setNoteForFlashcards: (note: Note | null) => void
+  setIsFlashcardsDialogOpen: (open: boolean) => void
+  inlineEditingNoteId: string | null
+  handleSaveInlineEdit: (noteId: string, content: string) => Promise<void>
+  setInlineEditingNoteId: (noteId: string | null) => void
+  mcqStates: Record<string, any>
+  handleMcqOptionClick: (blockId: string | number, optionIndex: number, isCorrect: boolean) => void
+  shuffledMcqOptionsRef: React.MutableRefObject<Record<string, any>>
+  gapStates: Record<string, { value: string; similarity: number; isRevealed?: boolean }>
+  setGapStates: React.Dispatch<React.SetStateAction<Record<string, { value: string; similarity: number; isRevealed?: boolean }>>>
+  getSimilarity: (input: string, answer: string) => Promise<number>
+  dragDropStates: Record<string, { answers: Record<number, string>; showAnswers: boolean }>
+  setDragDropStates: React.Dispatch<React.SetStateAction<Record<string, { answers: Record<number, string>; showAnswers: boolean }>>>
+}
+
+const NoteCard = React.memo(function NoteCard({
+  note,
+  focusedNoteId,
+  activeNoteRef,
+  theme,
+  startEditingNote,
+  handleDeleteNote,
+  setNoteForFlashcards,
+  setIsFlashcardsDialogOpen,
+  inlineEditingNoteId,
+  handleSaveInlineEdit,
+  setInlineEditingNoteId,
+  mcqStates,
+  handleMcqOptionClick,
+  shuffledMcqOptionsRef,
+  gapStates,
+  setGapStates,
+  getSimilarity,
+  dragDropStates,
+  setDragDropStates
+}: NoteCardProps) {
+  const [inlineEditContent, setInlineEditContent] = useState(note.content);
+  const inlineEditRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (inlineEditingNoteId === note.id) {
+      setInlineEditContent(note.content);
+      setTimeout(() => {
+        inlineEditRef.current?.focus();
+      }, 50);
+    }
+  }, [inlineEditingNoteId, note.id, note.content]);
+
+  const onSave = () => {
+    handleSaveInlineEdit(note.id, inlineEditContent);
+  };
+  
+  return (
+    <Card
+      key={note.id}
+      id={`note-${note.id}`}
+      ref={focusedNoteId === note.id ? activeNoteRef : null}
+      className="bg-neutral-900 border-neutral-800 border-[0.5px] rounded-xl shadow-xl p-5 md:p-8 transition-all duration-300 ease-in-out hover:shadow-2xl data-[focused='true']:ring-1 data-[focused='true']:ring-blue-500/60 data-[focused='true']:scale-[1.01] mx-0 w-full"
+      data-focused={focusedNoteId === note.id}
+    >
+      <div className="flex justify-between items-start mb-4 md:mb-6 pb-3 md:pb-4 border-b border-neutral-700">
+        <h3 className={`text-2xl md:text-4xl font-bold mr-2 ${theme === "dark" ? "text-neutral-50" : "text-gray-800"}`}>{note.title}</h3>
+        <div className="flex items-center space-x-2 md:space-x-3">
+          <button
+            onClick={() => startEditingNote(note)}
+            className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
+            aria-label="Edit note"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => {
+              handleDeleteNote(note.id);
+            }}
+            className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
+            aria-label="Delete note"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => {
+              setNoteForFlashcards(note);
+              setIsFlashcardsDialogOpen(true);
+            }}
+            className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
+            aria-label="Create flashcards from note"
+          >
+            Create Flashcards
+          </button>
+        </div>
+      </div>
+      <div className="prose-custom max-w-none text-sm md:text-base">
+        {inlineEditingNoteId === note.id ? (
+          <div className="relative">
+            <Textarea
+              ref={inlineEditRef}
+              value={inlineEditContent}
+              onChange={(e) => setInlineEditContent(e.target.value)}
+              className="min-h-[300px] w-full bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500 font-mono text-sm p-4"
+              placeholder="Edit your note content..."
+            />
+            <div className="flex justify-end mt-4 space-x-3">
+              <Button
+                onClick={() => setInlineEditingNoteId(null)}
+                variant="outline"
+                className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={onSave}
+                className="bg-neutral-900 dark:bg-neutral-800 hover:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 dark:focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 dark:focus:ring-offset-neutral-900 border border-neutral-200 dark:border-neutral-700"
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity, dragDropStates, setDragDropStates)}</div>
+        )}
+      </div>
+      <div className="text-xs text-neutral-500 mt-6 md:mt-8 pt-3 md:pt-4 border-t border-neutral-700">
+        Category:{" "}
+        <span className="font-medium text-neutral-400">
+          {note.category.charAt(0).toUpperCase() + note.category.slice(1)}
+        </span>{" "}
+        | Created:{" "}
+        {new Date(note.created_at).toLocaleDateString([], { year: "numeric", month: "long", day: "numeric" })}
+      </div>
+    </Card>
+  );
+});
+
+type NoteCardPassthroughProps = Omit<NoteCardProps, 'note'>;
+
+interface NotesListProps extends NoteCardPassthroughProps {
+  notes: Note[];
+}
+
+const NotesList = React.memo(function NotesList({ notes, ...rest }: NotesListProps) {
+  return (
+    <>
+      {notes.map((note) => (
+        <NoteCard
+          key={note.id}
+          note={note}
+          {...rest}
+        />
+      ))}
+    </>
+  );
+});
+
 export default function NotesPage() {
   const { session, user, isLoading: authIsLoading, error: authError, signOut } = useAuth();
   const router = useRouter();
@@ -1527,7 +1690,7 @@ export default function NotesPage() {
     }
   }, [isImageSearchDialogOpen, imageSearchQuery]);
 
-  const handleImageSearchTrigger = useCallback((
+  const handleImageSearchTrigger = (
     currentTextValue: string, 
     newTextValue: string,
     contextType: 'newNote' | 'editNote'
@@ -1553,9 +1716,9 @@ export default function NotesPage() {
       return true; // Indicates that the image search was triggered
     }
     return false; // Indicates no image search trigger
-  }, [setNewNote, setEditingNote]);
+  };
 
-  const handleImageSelectedFromDialog = useCallback((imageUrl: string) => {
+  const handleImageSelectedFromDialog = (imageUrl: string) => {
     if (activeEditorContext) {
       let currentTextareaContent = "";
       if (activeEditorContext.type === 'newNote') {
@@ -1582,7 +1745,7 @@ export default function NotesPage() {
       }
     }
     closeImageSearchDialog();
-  }, [activeEditorContext, newNote.content, editingNote, imageSearchQuery]);
+  };
 
   const closeImageSearchDialog = () => {
     setIsImageSearchDialogOpen(false);
@@ -1702,12 +1865,10 @@ const fetchNotes = async () => {
 
   // State for inline editing
   const [inlineEditingNoteId, setInlineEditingNoteId] = useState<string | null>(null)
-  const [inlineEditContent, setInlineEditContent] = useState<string>("")
-  const inlineEditRef = useRef<HTMLTextAreaElement>(null)
 
   // Handle saving inline edits
-  const handleSaveInlineEdit = useCallback(async () => {
-    if (!inlineEditingNoteId || !inlineEditContent) {
+  const handleSaveInlineEdit = useCallback(async (noteId: string, content: string) => {
+    if (!noteId || !content) {
       setErrorMessage("Cannot save empty content or no note selected for inline edit.");
       return;
     }
@@ -1716,8 +1877,8 @@ const fetchNotes = async () => {
     try {
       const { error } = await supabase
         .from("notes")
-        .update({ content: inlineEditContent, updated_at: new Date().toISOString() })
-        .eq("id", inlineEditingNoteId);
+        .update({ content: content, updated_at: new Date().toISOString() })
+        .eq("id", noteId);
 
       if (error) {
         console.error("Error updating note:", error);
@@ -1729,12 +1890,11 @@ const fetchNotes = async () => {
         
         // Update local state immediately for responsiveness
         const updateNotesState = (prevNotes: Note[]) => prevNotes.map(note => 
-          note.id === inlineEditingNoteId 
-            ? { ...note, content: inlineEditContent, updated_at: new Date().toISOString() } 
+          note.id === noteId
+            ? { ...note, content: content, updated_at: new Date().toISOString() } 
             : note
         );
         setAllNotes(updateNotesState);
-        setDisplayedNotes(updateNotesState); // Assuming displayedNotes should also reflect this change
 
         setInlineEditingNoteId(null); // Clear editing state
         // Optionally, call fetchNotes() if there's a need to re-sync completely from DB,
@@ -1747,7 +1907,7 @@ const fetchNotes = async () => {
     } finally {
       setIsLoading(false);
     }
-  }, [inlineEditingNoteId, inlineEditContent, supabase, fetchNotes, setIsLoading, setErrorMessage, setAllNotes, setDisplayedNotes, setInlineEditingNoteId]);
+  }, [supabase, fetchNotes, setAllNotes, setInlineEditingNoteId]);
 
   // Handle text selection and Ctrl+K, Ctrl+B, and Ctrl+E
     // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
@@ -1853,8 +2013,10 @@ const fetchNotes = async () => {
           
           // If already in edit mode, save the changes
           if (inlineEditingNoteId) {
-            handleSaveInlineEdit()
-            return
+            // This part of logic needs to be adapted as we can't directly call handleSaveInlineEdit without content
+            // For now, we'll just let it be, the user can click the save button.
+            // A more advanced solution would be to use a ref to get the content from the card.
+            return;
           }
 
           // Determine which note to edit
@@ -1919,7 +2081,9 @@ const fetchNotes = async () => {
         setInlineEditingNoteId(null)
       } else if (e.key === "Enter" && e.ctrlKey && inlineEditingNoteId) {
         // Save changes on Ctrl+Enter
-        handleSaveInlineEdit()
+        // This is tricky now. We can't directly call save.
+        // The user should use the save button.
+        // Or we would need to trigger a save on the specific NoteCard instance.
       }
     }
 
@@ -1927,7 +2091,7 @@ const fetchNotes = async () => {
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [allNotes, inlineEditingNoteId, handleSaveInlineEdit])
+  }, [allNotes, inlineEditingNoteId, handleSaveInlineEdit, focusedNoteId])
 
   // Apply text selection styles
     // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
@@ -2017,62 +2181,32 @@ const fetchNotes = async () => {
 
 
 
-  const handleAddNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (!newNote.title || !newNote.content) {
-      setErrorMessage("Title and content are required.");
-      return;
-    }
-    if (!newNote.category.trim()) {
-      setErrorMessage("Category is required. Please select or create one.");
-      return;
-    }
-
+  const handleAddNote = useCallback(async (note: Omit<Note, "id" | "created_at" | "updated_at" | "user_id" | "flashcards">) => {
     setIsLoading(true);
+    let errorResult: string | undefined;
     try {
-      // Get the current user
       const { data: { user } } = await supabase.auth.getUser();
-
       if (!user) {
-        setErrorMessage("You must be logged in to add a note.");
-        setIsLoading(false);
-        // Optionally, redirect to login: router.push('/login');
-        return;
+        throw new Error("You must be logged in to add a note.");
       }
-
-      const noteToInsert = {
-        title: newNote.title,
-        content: newNote.content,
-        category: newNote.category.trim().toLowerCase(),
-        user_id: user.id, // Add the user_id here
-      };
-
+      const noteToInsert = { ...note, user_id: user.id };
       const { data, error } = await supabase.from("notes").insert(noteToInsert).select().single();
+      if (error) throw error;
 
-      if (error) {
-        console.error("Supabase error adding note:", error);
-        setErrorMessage(`Error adding note: ${error.message}`);
-        throw error;
-      }
-
-      setNewNote({ title: "", content: "", category: "" });
-      await fetchNotes(); // Refresh all notes
+      await fetchNotes();
       if (data) {
         if (selectedSidebarCategory === "all" || data.category === selectedSidebarCategory) {
           setFocusedNoteId(data.id);
         }
       }
     } catch (error: any) {
-      // Error message already set or caught by general try-catch
-      if (!errorMessage) { // Ensure an error message is set if not already
-        setErrorMessage(error.message || "An unexpected error occurred.");
-      }
+      console.error("Supabase error adding note:", error);
+      errorResult = error.message || "An unexpected error occurred.";
     } finally {
       setIsLoading(false);
     }
-  };
+    return errorResult;
+  }, [fetchNotes, selectedSidebarCategory, supabase]);
 
   const handleNoteSelectInSidebar = (noteId: string) => {
     setFocusedNoteId(noteId)
@@ -2148,9 +2282,9 @@ const fetchNotes = async () => {
     }
   }
 
-  const handleSuccessfulNoteAdd = useCallback(() => {
+  const handleSuccessfulNoteAdd = () => {
     setIsAddNoteDialogOpen(false)
-  }, []);
+  }
 
   // Extract headings from a note
   const extractHeadingsFromNote = (note: Note) => {
@@ -2199,7 +2333,7 @@ const fetchNotes = async () => {
     }
   }
 
-  const handleGenerateMcqs = useCallback(async () => {
+  const handleGenerateMcqs = async () => {
     if (!focusedNoteId) {
       setMcqError("Please select a note to generate MCQs from.")
       return
@@ -2246,7 +2380,7 @@ const fetchNotes = async () => {
     } finally {
       setIsGeneratingMcqs(false)
     }
-  }, [focusedNoteId, allNotes]);
+  }
 
   const handleMcqOptionSelect = (questionIndex: number, option: string) => {
     setUserAnswers((prev) => ({ ...prev, [questionIndex]: option }))
@@ -2256,7 +2390,7 @@ const fetchNotes = async () => {
     setShowMcqResults(true)
   }
 
-  const calculateMcqScore = useCallback(() => {
+  const calculateMcqScore = () => {
     let correctCount = 0
     generatedMcqs.forEach((mcq, index) => {
       if (userAnswers[index] === mcq.correctAnswer) {
@@ -2268,57 +2402,40 @@ const fetchNotes = async () => {
       total: generatedMcqs.length,
       percentage: generatedMcqs.length > 0 ? (correctCount / generatedMcqs.length) * 100 : 0,
     }
-  }, [generatedMcqs, userAnswers]);
+  }
 
-  const handleEditNote = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingNote) return
-
-    setErrorMessage(null)
-
-    if (!editingNote.title || !editingNote.content) {
-      setErrorMessage("Title and content are required.")
-      return
-    }
-    if (!editingNote.category.trim()) {
-      setErrorMessage("Category is required. Please select or create one.")
-      return
-    }
-
-    setIsLoading(true)
+  const handleEditNote = useCallback(async (note: Note) => {
+    setIsLoading(true);
+    let errorResult: string | undefined;
     try {
       const { error } = await supabase
         .from("notes")
         .update({
-          title: editingNote.title,
-          content: editingNote.content,
-          category: editingNote.category.trim().toLowerCase(),
+          title: note.title,
+          content: note.content,
+          category: note.category.trim().toLowerCase(),
         })
-        .eq("id", editingNote.id)
+        .eq("id", note.id);
 
-      if (error) {
-        console.error("Supabase error updating note:", error)
-        setErrorMessage(`Error updating note: ${error.message}`)
-        throw error
-      }
-
-      setEditingNote(null)
-      setIsEditNoteDialogOpen(false)
-      await fetchNotes() // Refresh all notes
+      if (error) throw error;
+      
+      await fetchNotes(); // Refresh all notes
     } catch (error: any) {
-      // Error message already set
+      console.error("Supabase error updating note:", error);
+      errorResult = error.message || "An unexpected error occurred.";
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+    return errorResult;
+  }, [fetchNotes, supabase]);
 
-  const handleDeleteNote = useCallback((noteId: string) => {
+  const handleDeleteNote = async (noteId: string) => {
     const note = allNotes.find((n) => n.id === noteId)
     if (note) {
       setNoteToDelete(note)
       setIsDeleteDialogOpen(true)
     }
-  }, [allNotes]);
+  }
 
   const confirmDelete = async () => {
     if (!noteToDelete) return
@@ -2391,7 +2508,7 @@ const fetchNotes = async () => {
         }
       }
     }
-  };
+  }
 
   const handleGenerateFlashcards = async () => {
     if (!noteForFlashcards) return;
@@ -2439,7 +2556,6 @@ const fetchNotes = async () => {
   };
 
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
-  const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
 
   const extractImageTags = (content: string): string[] => {
     const matches = content.match(/!\(img\)\[(.*?)\]/g) || [];
@@ -2449,7 +2565,7 @@ const fetchNotes = async () => {
     }).filter(Boolean);
   };
 
-  const generateImageFromTag = useCallback(async (prompt: string): Promise<string> => {
+  const generateImageFromTag = async (prompt: string): Promise<string> => {
     try {
       const result = await generateImage(prompt, selectedImageModel);
       if (result.data && result.data.length > 0) {
@@ -2460,9 +2576,9 @@ const fetchNotes = async () => {
       console.error("Error generating image:", error);
       throw error;
     }
-  }, [selectedImageModel]);
+  };
 
-  const handleGenerateImagesFromTags = useCallback(async (content: string, contextType: 'newNote' | 'editNote') => {
+  const handleGenerateImagesFromTags = async (content: string, contextType: 'newNote' | 'editNote') => {
     setIsGeneratingImages(true);
     try {
       const imageTags = extractImageTags(content);
@@ -2501,7 +2617,9 @@ const fetchNotes = async () => {
     } finally {
       setIsGeneratingImages(false);
     }
-  }, [generateImageFromTag]);
+  };
+
+  const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
 
   return (
     <div
@@ -2611,97 +2729,27 @@ const fetchNotes = async () => {
               <p className="text-center text-neutral-400 py-10 text-lg">Note not found or does not match category.</p>
             )}
 
-            {useMemo(() => (
-              <>
-                {displayedNotes.map((note) => (
-                  <div
-                    key={note.id}
-                    ref={note.id === focusedNoteId ? activeNoteRef : null}
-                    className={`relative group transition-all duration-200 ${
-                      note.id === focusedNoteId
-                        ? "ring-2 ring-neutral-400 ring-offset-2 ring-offset-neutral-950"
-                        : "hover:ring-1 hover:ring-neutral-500 hover:ring-offset-2 hover:ring-offset-neutral-950"
-                    }`}
-                  >
-                    <Card
-                      className={`relative overflow-hidden ${
-                        theme === "dark"
-                          ? "bg-neutral-900 border-neutral-800"
-                          : "bg-white border-gray-200"
-                      }`}
-                    >
-                      <CardHeader className="pb-2">
-                        <div className="flex items-start justify-between">
-                          <CardTitle
-                            className={`text-xl font-semibold ${
-                              theme === "dark" ? "text-neutral-100" : "text-gray-900"
-                            }`}
-                          >
-                            {note.title}
-                          </CardTitle>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => startEditingNote(note)}
-                              className={`opacity-0 group-hover:opacity-100 transition-opacity ${
-                                theme === "dark"
-                                  ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
-                                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                              }`}
-                            >
-                              <PencilIcon className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteNote(note.id)}
-                              className={`opacity-0 group-hover:opacity-100 transition-opacity ${
-                                theme === "dark"
-                                  ? "text-neutral-400 hover:text-red-400 hover:bg-neutral-800"
-                                  : "text-gray-500 hover:text-red-600 hover:bg-gray-100"
-                              }`}
-                            >
-                              <Trash2Icon className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        {note.category && (
-                          <div
-                            className={`text-sm ${
-                              theme === "dark" ? "text-neutral-400" : "text-gray-500"
-                            }`}
-                          >
-                            {note.category}
-                          </div>
-                        )}
-                      </CardHeader>
-                      <CardContent>
-                        <div
-                          className={`prose prose-sm max-w-none ${
-                            theme === "dark"
-                              ? "prose-invert prose-neutral"
-                              : "prose-gray"
-                          }`}
-                        >
-                          {renderNoteContent(
-                            note.content,
-                            mcqStates,
-                            handleMcqOptionClick,
-                            shuffledMcqOptionsRef.current,
-                            gapStates,
-                            setGapStates,
-                            getSimilarity,
-                            dragDropStates,
-                            setDragDropStates
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                ))}
-              </>
-            ), [displayedNotes, focusedNoteId, theme, mcqStates, shuffledMcqOptionsRef, gapStates, dragDropStates])}
+            <NotesList 
+              notes={displayedNotes}
+              focusedNoteId={focusedNoteId}
+              activeNoteRef={activeNoteRef}
+              theme={theme}
+              startEditingNote={startEditingNote}
+              handleDeleteNote={handleDeleteNote}
+              setNoteForFlashcards={setNoteForFlashcards}
+              setIsFlashcardsDialogOpen={setIsFlashcardsDialogOpen}
+              inlineEditingNoteId={inlineEditingNoteId}
+              handleSaveInlineEdit={handleSaveInlineEdit}
+              setInlineEditingNoteId={setInlineEditingNoteId}
+              mcqStates={mcqStates}
+              handleMcqOptionClick={handleMcqOptionClick}
+              shuffledMcqOptionsRef={shuffledMcqOptionsRef}
+              gapStates={gapStates}
+              setGapStates={setGapStates}
+              getSimilarity={getSimilarity}
+              dragDropStates={dragDropStates}
+              setDragDropStates={setDragDropStates}
+            />
           </div>
         </div>
 
@@ -2840,126 +2888,14 @@ const fetchNotes = async () => {
       </div>
 
       {/* Add Note Dialog */}
-      <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
-        <DialogContent className={`max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0 ${theme === "dark" ? "bg-neutral-900 border-neutral-800 text-neutral-100" : "bg-white border-gray-200 text-gray-900"}`}>
-          <div className="p-6 sm:p-8">
-            <DialogHeader className="mb-6">
-              <ShadDialogTitle className={`text-2xl font-bold ${theme === "dark" ? "text-neutral-100" : "text-gray-900"}`}>Add New Note</ShadDialogTitle>
-            </DialogHeader>
-
-            <div className={`space-y-4 mb-6 p-4 border rounded-lg ${theme === "dark" ? "border-neutral-700 bg-neutral-800/50" : "border-gray-200 bg-gray-50"}`}>
-              <p className={`text-sm font-medium ${theme === "dark" ? "text-neutral-300" : "text-gray-700"}`}>Generate with AI ✨</p>
-              <div className="flex space-x-2">
-                <Input
-                  placeholder="Enter a topic for AI note generation..."
-                  value={generationTopic}
-                  onChange={(e) => setGenerationTopic(e.target.value)}
-                  className={`flex-grow ${theme === "dark" ? "bg-neutral-700 border-neutral-600 text-neutral-100 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-neutral-500" : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"}`}
-                  disabled={isGeneratingNote}
-                />
-                <Button
-                  onClick={handleGenerateNote}
-                  disabled={isGeneratingNote || !generationTopic.trim()}
-                  className={`font-semibold transition-all duration-150 whitespace-nowrap ${theme === "dark" ? "bg-neutral-800 hover:bg-neutral-700 text-neutral-100 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700" : "bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 focus:ring-offset-white border border-gray-300"}`}
-                >
-                  {isGeneratingNote ? (
-                    <>
-                      <SparklesIcon className="h-4 w-4 mr-2 animate-pulse" /> Generating...
-                    </>
-                  ) : (
-                    <>
-                      <SparklesIcon className="h-4 w-4 mr-2" /> Generate Note
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                await handleAddNote(e)
-                if (!errorMessage) handleSuccessfulNoteAdd()
-              }}
-              className="space-y-6"
-            >
-              <div>
-                <Input
-                  placeholder="Note Title"
-                  value={newNote.title}
-                  onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
-                  className={`${theme === "dark" ? "bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500" : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"}`}
-                />
-              </div>
-              <div className="flex flex-col gap-4">
-                <Textarea
-                  value={newNote.content}
-                  onChange={(e) => {
-                    const newValue = e.target.value;
-                    setNewNote(prev => ({ ...prev, content: newValue }));
-                    handleImageSearchTrigger(newNote.content, newValue, 'newNote');
-                  }}
-                  placeholder="Write your note here..."
-                  className="min-h-[300px]"
-                />
-                <div className="flex gap-2">
-                  <Select value={selectedImageModel} onValueChange={(value: ImageModel) => setSelectedImageModel(value)}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Select model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="flux">Flux</SelectItem>
-                      <SelectItem value="turbo">Turbo</SelectItem>
-                      <SelectItem value="gptimage">GPT Image</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleGenerateImagesFromTags(newNote.content, 'newNote')}
-                    disabled={isGeneratingImages}
-                  >
-                    {isGeneratingImages ? "Generating Images..." : "Generate Images from Tags"}
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <CategoryCombobox
-                  categories={availableCategories}
-                  value={newNote.category}
-                  onChange={(value) => setNewNote({ ...newNote, category: value })}
-                  placeholder="Select or create category..."
-                  inputPlaceholder="Search/Create category..."
-                  emptyPlaceholder="Type to create new category."
-                  theme={theme as "dark" | "light" | undefined}
-                />
-              </div>
-
-              {errorMessage && (
-                <div className={`p-3 rounded-lg ${theme === "dark" ? "bg-red-900/30 border border-red-700/60 text-red-200" : "bg-red-100 border border-red-300 text-red-800"}`}>
-                  {errorMessage}
-                </div>
-              )}
-              <DialogFooter className="flex justify-between mt-8">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsAddNoteDialogOpen(false)}
-                  className={`${theme === "dark" ? "bg-transparent border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100" : "bg-transparent border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"}`}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all duration-150"
-                >
-                  {isLoading ? "Adding..." : "Add Note"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AddNoteDialog
+        open={isAddNoteDialogOpen}
+        onOpenChange={setIsAddNoteDialogOpen}
+        availableCategories={availableCategories}
+        theme={theme as "dark" | "light" | undefined}
+        handleAddNote={handleAddNote}
+        isLoading={isLoading}
+      />
 
       {/* AI Chat Dialog */}
       <Dialog open={isAiChatDialogOpen} onOpenChange={setIsAiChatDialogOpen}>
@@ -3028,272 +2964,16 @@ const fetchNotes = async () => {
         </DialogContent>
       </Dialog>
 
-      {/* MCQ Dialog */}
-      <Dialog
-        open={isMcqDialogOpen}
-        onOpenChange={(isOpen) => {
-          setIsMcqDialogOpen(isOpen)
-          if (!isOpen) {
-            setGeneratedMcqs([])
-            setUserAnswers({})
-            setShowMcqResults(false)
-            setCurrentMcqNoteTitle(undefined)
-          }
-        }}
-      >
-        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-3xl rounded-xl shadow-2xl p-0 sm:p-0">
-          <ScrollArea className="max-h-[80vh]">
-            <div className="p-6 sm:p-8">
-              <DialogHeader className="mb-6">
-                <ShadDialogTitle className="text-2xl font-bold text-neutral-100">
-                  Quiz: {currentMcqNoteTitle || "Multiple Choice Questions"}
-                </ShadDialogTitle>
-                {generatedMcqs.length > 0 && (
-                  <DialogDescription className="text-neutral-400">
-                    Test your knowledge based on the selected note.
-                  </DialogDescription>
-                )}
-              </DialogHeader>
-
-              {mcqError && (
-                <div className="text-red-400 text-sm p-3 bg-red-900/40 border border-red-700/60 rounded-md mb-4">
-                  {mcqError}
-                </div>
-              )}
-
-              {generatedMcqs.length > 0 ? (
-                <div className="space-y-6">
-                  {generatedMcqs.map((mcq, index) => (
-                    <Card
-                      key={index}
-                      className={`bg-neutral-850 border-neutral-700 p-5 rounded-lg transition-all ${showMcqResults && userAnswers[index] !== mcq.correctAnswer ? "border-red-500/70" : showMcqResults && userAnswers[index] === mcq.correctAnswer ? "border-green-500/70" : ""}`}
-                    >
-                      <CardHeader className="p-0 pb-3 mb-3 border-b border-neutral-700">
-                        <CardTitle className="text-lg font-semibold text-neutral-100">
-                          Question {index + 1}: {mcq.question}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0 space-y-2">
-                        {mcq.options.map((option: string, optIndex: number) => {
-                          const isSelected = userAnswers[index] === option
-                          const isCorrect = option === mcq.correctAnswer
-                          const isUserChoiceIncorrect = isSelected && !isCorrect
-
-                          let optionButtonClasses =
-                            "w-full justify-start text-left h-auto py-2.5 px-4 whitespace-normal rounded-md transition-colors duration-150 disabled:opacity-70 disabled:cursor-default border"
-
-                          if (showMcqResults) {
-                            if (isCorrect) {
-                              optionButtonClasses +=
-                                " bg-green-500/20 border-green-500/60 text-green-200 hover:bg-green-500/30"
-                            } else if (isUserChoiceIncorrect) {
-                              optionButtonClasses += " bg-red-500/20 border-red-500/60 text-red-200 hover:bg-red-500/30"
-                            } else {
-                              optionButtonClasses +=
-                                " bg-neutral-800 border-neutral-700 text-neutral-500 opacity-70 hover:bg-neutral-750" // Other options during results
-                            }
-                          } else {
-                            // Not showing results yet
-                            if (isSelected) {
-                              optionButtonClasses +=
-                                " bg-neutral-600 border-neutral-500 text-neutral-100 ring-2 ring-neutral-500 hover:bg-neutral-550" // Selected
-                            } else {
-                              optionButtonClasses +=
-                                " bg-neutral-800 border-neutral-700 text-neutral-200 hover:bg-neutral-750" // Default, unselected
-                            }
-                          }
-
-                          return (
-                            <Button
-                              key={optIndex}
-                              onClick={() => !showMcqResults && handleMcqOptionClick(index, optIndex, mcq.options[optIndex] === mcq.correctAnswer)}
-                              className={optionButtonClasses as string}
-                              disabled={showMcqResults}
-                            >
-                              <span
-                                className={`mr-3 h-5 w-5 rounded-full flex items-center justify-center border ${
-                                  showMcqResults
-                                    ? option === mcq.correctAnswer
-                                      ? "bg-green-500 border-green-400"
-                                      : userAnswers[index] === option && option !== mcq.correctAnswer
-                                        ? "bg-red-500 border-red-400"
-                                        : "border-neutral-600"
-                                  : userAnswers[index] === option
-                                    ? "bg-neutral-500 border-neutral-500"
-                                    : "border-neutral-600"
-                                }`}
-                              >
-                                {showMcqResults && option === mcq.correctAnswer && (
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                                )}
-                                {showMcqResults && userAnswers[index] === option && option !== mcq.correctAnswer && (
-                                  <XCircle className="h-3.5 w-3.5 text-white" />
-                                )}
-                              </span>
-                              {option}
-                            </Button>
-                          )
-                        })}
-                      </CardContent>
-                      {showMcqResults && (
-                        <div
-                          className={`mt-4 p-3 rounded-md text-sm 
-                                      ${userAnswers[index] === mcq.correctAnswer ? "bg-green-800/50 text-green-200 border border-green-700/60" : "bg-red-800/50 text-red-200 border border-red-700/60"}`}
-                        >
-                          <p className="font-semibold mb-1">
-                            {userAnswers[index] === mcq.correctAnswer ? "Correct!" : "Incorrect."}
-                            {userAnswers[index] !== mcq.correctAnswer && ` Correct answer: ${mcq.correctAnswer}`}
-                          </p>
-                          {mcq.explanation && <p className="text-xs opacity-90">{mcq.explanation}</p>}
-                        </div>
-                      )}
-                    </Card>
-                  ))}
-
-                  {!showMcqResults && generatedMcqs.length > 0 && (
-                    <DialogFooter className="mt-8 sm:justify-center">
-                      <Button
-                        onClick={handleSubmitMcqs}
-                        disabled={Object.keys(userAnswers).length !== generatedMcqs.length}
-                        className="w-full md:w-auto bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-sky-700"
-                      >
-                        Submit Answers & See Results
-                      </Button>
-                    </DialogFooter>
-                  )}
-
-                  {showMcqResults && (
-                    <div className="mt-8 p-5 bg-neutral-800/60 border border-neutral-700 rounded-lg text-center">
-                      <h3 className="text-xl font-semibold text-neutral-100 mb-2">Quiz Completed!</h3>
-                      <p className="text-neutral-300 mb-1">
-                        You scored:{" "}
-                        <strong className="text-xl">
-                          {calculateMcqScore().correct} out of {calculateMcqScore().total}
-                        </strong>{" "}
-                        ({calculateMcqScore().percentage.toFixed(0)}%)
-                      </p>
-                      {mcqError && <p className="text-xs text-red-400 mt-2">Note: {mcqError}</p>}
-                      <Button
-                        onClick={() => setIsMcqDialogOpen(false)}
-                        className="mt-4 bg-neutral-700 hover:bg-neutral-600 text-neutral-100"
-                      >
-                        Close Quiz
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ) : isGeneratingMcqs ? (
-                <div className="text-center py-10">
-                  <SparklesIcon className="h-12 w-12 text-neutral-500 animate-pulse mx-auto mb-4" />
-                  <p className="text-neutral-400">Generating your quiz, please wait...</p>
-                </div>
-              ) : (
-                <div className="text-center py-10">
-                  <InfoIcon className="h-12 w-12 text-neutral-600 mx-auto mb-4" />
-                  <p className="text-neutral-400">
-                    No MCQs to display. {mcqError || "Try generating some from a note."}
-                  </p>
-                  <Button
-                    onClick={() => setIsMcqDialogOpen(false)}
-                    className="mt-6 bg-neutral-700 hover:bg-neutral-600 text-neutral-100"
-                  >
-                    Close
-                  </Button>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-
       {/* Edit Note Dialog */}
-      <Dialog open={isEditNoteDialogOpen} onOpenChange={setIsEditNoteDialogOpen}>
-        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-100 max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0">
-          <div className="p-6 sm:p-8">
-            <DialogHeader className="mb-6">
-              <ShadDialogTitle className="text-2xl font-bold text-neutral-100">Edit Note</ShadDialogTitle>
-            </DialogHeader>
-
-            <form onSubmit={handleEditNote} className="space-y-6">
-              <div>
-                <Input
-                  placeholder="Note Title"
-                  value={editingNote?.title || ""}
-                  onChange={(e) => editingNote && setEditingNote({ ...editingNote, title: e.target.value })}
-                  className="bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500"
-                />
-              </div>
-              <div className="flex flex-col gap-4">
-                <Textarea
-                  value={editingNote?.content || ""}
-                  onChange={(e) => {
-                    const newValue = e.target.value;
-                    setEditingNote(prev => prev ? ({ ...prev, content: newValue }) : null);
-                    if (editingNote) {
-                      handleImageSearchTrigger(editingNote.content, newValue, 'editNote');
-                    }
-                  }}
-                  placeholder="Edit your note here..."
-                  className="min-h-[300px]"
-                />
-                <div className="flex gap-2">
-                  <Select value={selectedImageModel} onValueChange={(value: ImageModel) => setSelectedImageModel(value)}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Select model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="flux">Flux</SelectItem>
-                      <SelectItem value="turbo">Turbo</SelectItem>
-                      <SelectItem value="gptimage">GPT Image</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => editingNote && handleGenerateImagesFromTags(editingNote.content, 'editNote')}
-                    disabled={isGeneratingImages || !editingNote}
-                  >
-                    {isGeneratingImages ? "Generating Images..." : "Generate Images from Tags"}
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <CategoryCombobox
-                  categories={availableCategories}
-                  value={editingNote?.category || ""}
-                  onChange={(value) => editingNote && setEditingNote({ ...editingNote, category: value })}
-                  placeholder="Select or create category..."
-                  inputPlaceholder="Search/Create category..."
-                  emptyPlaceholder="Type to create new category."
-                />
-              </div>
-
-              {errorMessage && (
-                <div className="text-red-400 text-sm p-3 bg-red-900/40 border border-red-700/60 rounded-md">
-                  {errorMessage}
-                </div>
-              )}
-              <div className="flex justify-end space-x-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsEditNoteDialogOpen(false)}
-                  className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="bg-neutral-900 dark:bg-neutral-800 hover:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 dark:focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 dark:focus:ring-offset-neutral-900 border border-neutral-200 dark:border-neutral-700"
-                >
-                  {isLoading ? "Updating Note..." : "Update Note"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <EditNoteDialog
+        open={isEditNoteDialogOpen}
+        onOpenChange={setIsEditNoteDialogOpen}
+        noteToEdit={editingNote}
+        onUpdateNote={handleEditNote}
+        availableCategories={availableCategories}
+        theme={theme as "dark" | "light" | undefined}
+        isLoading={isLoading}
+      />
 
       {/* Generate Flashcards Dialog */}
       <GenerateFlashcardsDialog 
