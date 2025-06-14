@@ -1344,7 +1344,7 @@ const DragDropBlock = ({ question, pairs, options, userAnswers, setUserAnswers, 
 interface NoteCardProps {
   note: Note
   focusedNoteId: string | null
-  activeNoteRef: React.RefObject<HTMLDivElement> | null
+  activeNoteRef: React.RefObject<HTMLDivElement>
   theme: string | undefined
   startEditingNote: (note: Note) => void
   handleDeleteNote: (noteId: string) => void
@@ -1589,7 +1589,7 @@ export default function NotesPage() {
   const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
 
   const notesContainerRef = useRef<HTMLDivElement>(null)
-  const activeNoteRef = useRef<HTMLDivElement | null>(null)
+  const activeNoteRef = useRef<HTMLDivElement>(null)
 
   // Utility for similarity grading
   const getSimilarity = async (input: string, answer: string): Promise<number> => {
@@ -1667,7 +1667,7 @@ export default function NotesPage() {
       if (error) {
         console.error("Error updating note:", error);
         setErrorMessage(`Error updating note: ${error.message}`);
-        // Potentially throw error to be caught by the outer catch if needed for more complex scenarios
+        // Potentially, throw error to be caught by the outer catch if needed for more complex scenarios
       } else {
         setErrorMessage("Note updated successfully!");
         setTimeout(() => setErrorMessage(null), 2000);
@@ -2201,6 +2201,26 @@ export default function NotesPage() {
     html.light .bg-neutral-950 {
       background-color: #f8fafc;
     }
+    /* Enhanced scrollbar hiding */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none !important;
+      scrollbar-width: none !important;
+    }
+    /* Hide all scrollbars in the app */
+    ::-webkit-scrollbar {
+      width: 0px !important;
+      height: 0px !important;
+      display: none !important;
+    }
+    * {
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
   `
     // Append to head
     document.head.appendChild(styleElement)
@@ -2668,7 +2688,7 @@ export default function NotesPage() {
           searchQuery={searchQuery}
           onSearchChange={handleSearch}
           onClearSearch={clearSearch}
-          className="h-full border-0"
+          className="h-full border-0 no-scrollbar"
         />
       </div>
 
@@ -2694,7 +2714,7 @@ export default function NotesPage() {
             <PanelLeft className="h-5 w-5" />
           </Button>
         )}
-        <div ref={notesContainerRef} className="flex-1 overflow-y-auto p-4 pt-14 md:pt-4 md:p-6 lg:p-8 pb-24 scroll-smooth">
+        <div ref={notesContainerRef} className="flex-1 overflow-y-auto p-4 pt-14 md:pt-4 md:p-6 lg:p-8 pb-24 scroll-smooth no-scrollbar">
           {/* Search results count - only shown when searching */}
           {searchQuery && (
             <div className="text-xs text-neutral-400 mb-6 ml-1">
@@ -2754,7 +2774,7 @@ export default function NotesPage() {
 
         {/* Floating Bottom Nav Bar with enhanced frosted glass effect */}
         <div 
-          className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? 'left-1/2 -translate-x-1/2 w-[80%] max-w-4xl' : 'left-[calc(18rem+3rem)]'} ${isAiAssistantOpen ? 'right-[calc(350px+2rem)]' : 'right-6'} px-3 py-2.5 rounded-2xl backdrop-blur-3xl z-20 flex items-center justify-between gap-3 transition-all duration-500 ease-in-out overflow-hidden`}
+          className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? 'left-1/2 -translate-x-1/2 w-[80%] max-w-4xl' : 'left-[calc(18rem+3rem)]'} ${isAiAssistantOpen ? 'right-[calc(350px+2rem)]' : 'right-6'} px-3 py-2.5 rounded-2xl backdrop-blur-3xl z-20 flex items-center gap-3 transition-all duration-500 ease-in-out overflow-hidden`}
           style={{
             background: theme === "dark" 
               ? 'linear-gradient(135deg, rgba(23, 23, 23, 0.45) 0%, rgba(38, 38, 38, 0.35) 100%)' 
@@ -2863,72 +2883,75 @@ export default function NotesPage() {
             </span>
           </div>
 
-          <ScrollArea className={`whitespace-nowrap flex-grow mx-2 ${sidebarCollapsed && !isAiAssistantOpen ? 'max-w-none' : 'max-w-[50vw]'}`}>
-            <div className="flex space-x-1 items-center h-8">
-              {focusedNoteId && currentNoteHeadings.length > 0 ? (
-                currentNoteHeadings.map((heading, index) => (
-                  <Button
-                    key={`heading-${index}`}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      const headingEl = document.getElementById(`heading-${generateSlug(heading.text)}`)
-                      if (headingEl) headingEl.scrollIntoView({ behavior: "smooth", block: "start" })
-                    }}
-                    className={`transition-all rounded-lg px-2 py-1 text-xs ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"} ${
-                      heading.level === 1
-                        ? "font-semibold"
-                        : heading.level === 2
-                          ? "pl-2"
-                          : heading.level === 3
-                            ? "pl-3 text-xs"
-                            : "pl-4 text-xs"
-                    }`}
-                  >
-                    {heading.level > 1 && <span className="opacity-60 mr-1">{"•".repeat(heading.level - 1)}</span>}
-                    {heading.text}
-                  </Button>
-                ))
-              ) : subheadings.length > 0 ? (
-                subheadings.map((sh) => (
-                  <Button
-                    key={generateSlug(sh)}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleSubheadingClick(sh)}
-                    className={`transition-all rounded-lg px-2 py-1 text-xs ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"}`}
-                  >
-                    {sh}
-                  </Button>
-                ))
-              ) : (
-                <p className={`text-xs px-2 ${theme === "dark" ? "text-neutral-500" : "text-gray-500"}`}>
-                  No H2 subheadings (##)
-                </p>
-              )}
-            </div>
-            <ScrollBar orientation="horizontal" className={theme === "dark" ? "[&>div]:bg-neutral-700/50 hover:[&>div]:bg-neutral-600/60" : "[&>div]:bg-gray-300/50 hover:[&>div]:bg-gray-400/60"} />
-          </ScrollArea>
+          <div className="flex-grow mx-2 overflow-hidden">
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex h-8 items-center space-x-1">
+                {focusedNoteId && currentNoteHeadings.length > 0 ? (
+                  currentNoteHeadings.map((heading, index) => (
+                    <Button
+                      key={`heading-${index}`}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const headingEl = document.getElementById(`heading-${generateSlug(heading.text)}`)
+                        if (headingEl) headingEl.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }}
+                      className={`transition-all rounded-lg px-2 py-1 text-xs ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"} ${
+                        heading.level === 1
+                          ? "font-semibold"
+                          : heading.level === 2
+                            ? "pl-2"
+                            : heading.level === 3
+                              ? "pl-3 text-xs"
+                              : "pl-4 text-xs"
+                      }`}
+                    >
+                      {heading.level > 1 && <span className="opacity-60 mr-1">{"•".repeat(heading.level - 1)}</span>}
+                      {heading.text}
+                    </Button>
+                  ))
+                ) : subheadings.length > 0 ? (
+                  subheadings.map((sh) => (
+                    <Button
+                      key={generateSlug(sh)}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSubheadingClick(sh)}
+                      className={`transition-all rounded-lg px-2 py-1 text-xs ${theme === "dark" ? "text-neutral-300 hover:text-white hover:bg-white/5 data-[state=active]:bg-white/10 data-[state=active]:text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 data-[state=active]:bg-gray-200 data-[state=active]:text-gray-900"}`}
+                    >
+                      {sh}
+                    </Button>
+                  ))
+                ) : (
+                  <p className={`text-xs px-2 ${theme === "dark" ? "text-neutral-500" : "text-gray-500"}`}>
+                    No H2 subheadings (##)
+                  </p>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
 
-          {focusedNoteId && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleGenerateMcqs}
-              disabled={isGeneratingMcqs}
-              className={`flex-shrink-0 backdrop-blur-sm border rounded-xl px-3 py-1.5 transition-all duration-200 text-xs ${theme === "dark" ? "text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 border-white/10" : "text-gray-700 hover:text-gray-900 bg-gray-100/50 hover:bg-gray-200/60 border-gray-200/50"}`}
-            >
-              {isGeneratingMcqs ? (
-                <>
-                  <SparklesIcon className="h-3 w-3 mr-1.5" /> Generating...
-                </>
-              ) : (
-                <>
-                  <HelpCircleIcon className="h-3 w-3 mr-1.5" /> Quiz Me
-                </>
-              )}
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleGenerateMcqs}
+            disabled={isGeneratingMcqs || !focusedNoteId}
+            className={`flex-shrink-0 backdrop-blur-sm border rounded-xl px-3 py-1.5 transition-all duration-200 text-xs ${
+              theme === "dark" 
+                ? "text-neutral-200 bg-white/5 border-white/10" + (!focusedNoteId ? " opacity-60" : " hover:text-white hover:bg-white/10")
+                : "bg-gray-100/50 border-gray-200/50" + (!focusedNoteId ? " text-gray-500 opacity-70" : " text-gray-700 hover:text-gray-900 hover:bg-gray-200/60")
+            }`}
+          >
+            {isGeneratingMcqs ? (
+              <>
+                <SparklesIcon className="h-3 w-3 mr-1.5" /> Generating...
+              </>
+            ) : (
+              <>
+                <HelpCircleIcon className="h-3 w-3 mr-1.5" /> Quiz Me
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
