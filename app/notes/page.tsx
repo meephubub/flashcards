@@ -1518,18 +1518,6 @@ export default function NotesPage() {
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Listen for Ctrl+S to toggle sidebar
-  useEffect(() => {
-    const handleSidebarToggle = (e: KeyboardEvent) => {
-      if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
-        e.preventDefault();
-        setSidebarCollapsed((prev) => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleSidebarToggle);
-    return () => window.removeEventListener('keydown', handleSidebarToggle);
-  }, []);
-
   // Persistent storage for shuffled MCQ options that survives re-renders
   const shuffledMcqOptionsRef = useRef<Record<string, any>>({})
 
@@ -1593,6 +1581,15 @@ export default function NotesPage() {
   // Drag and Drop state
   const [dragDropStates, setDragDropStates] = useState<Record<string, { answers: Record<number, string>, showAnswers: boolean }>>({});
 
+  // State for inline editing
+  const [inlineEditingNoteId, setInlineEditingNoteId] = useState<string | null>(null)
+
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
+
+  const notesContainerRef = useRef<HTMLDivElement>(null)
+  const activeNoteRef = useRef<HTMLDivElement | null>(null)
+
   // Utility for similarity grading
   const getSimilarity = async (input: string, answer: string): Promise<number> => {
     if (!input || !answer) return 0;
@@ -1609,32 +1606,6 @@ export default function NotesPage() {
     }
   };
 
-
-  // Protect route - redirect to login if not authenticated
-  useEffect(() => {
-    if (!authIsLoading && !session) {
-      router.push('/');
-    }
-  }, [session, authIsLoading, router]);
-
-  // Show loading spinner while authentication state is being determined
-  if (authIsLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black/5">
-        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  // Show redirect message if not authenticated
-  if (!session) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Redirecting to login...</p>
-      </div>
-    );
-  }
-
   const handleMcqOptionClick = useCallback((blockId: number | string, optionIndex: number, isCorrect: boolean) => {
     const blockKey = typeof blockId === 'number' ? blockId.toString() : blockId;
     setMcqStates(prev => ({
@@ -1647,15 +1618,162 @@ export default function NotesPage() {
     }));
   }, []);
 
-  const notesContainerRef = useRef<HTMLDivElement>(null)
-  const activeNoteRef = useRef<HTMLDivElement>(null)
+  const fetchNotes = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      if (!user) {
+        setErrorMessage("You must be logged in to view notes")
+        setAllNotes([])
+        return
+      }
+
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("Supabase error fetching notes:", error)
+        setErrorMessage(`Error fetching notes: ${error.message}`)
+        throw error
+      }
+      if (data) {
+        setAllNotes(data as Note[])
+        setErrorMessage(null)
+      }
+    } catch (error) {
+      // Error message already set or logged
+    } finally {
+      setIsLoading(false)
+    }
+  }, [supabase, user]);
+
+  // Handle saving inline edits
+  const handleSaveInlineEdit = useCallback(async (noteId: string, content: string) => {
+    if (!noteId || !content) {
+      setErrorMessage("Cannot save empty content or no note selected for inline edit.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase
+        .from("notes")
+        .update({ content: content, updated_at: new Date().toISOString() })
+        .eq("id", noteId);
+
+      if (error) {
+        console.error("Error updating note:", error);
+        setErrorMessage(`Error updating note: ${error.message}`);
+        // Potentially throw error to be caught by the outer catch if needed for more complex scenarios
+      } else {
+        setErrorMessage("Note updated successfully!");
+        setTimeout(() => setErrorMessage(null), 2000);
+        
+        // Update local state immediately for responsiveness
+        const updateNotesState = (prevNotes: Note[]) => prevNotes.map(note => 
+          note.id === noteId
+            ? { ...note, content: content, updated_at: new Date().toISOString() } 
+            : note
+        );
+        setAllNotes(updateNotesState);
+
+        setInlineEditingNoteId(null); // Clear editing state
+        // Optionally, call fetchNotes() if there's a need to re-sync completely from DB,
+        // but optimistic update above should suffice for UI.
+        // await fetchNotes(); 
+      }
+    } catch (error: any) {
+      console.error("Outer catch - Error updating note:", error);
+      setErrorMessage(`Failed to update note: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase, fetchNotes, setAllNotes, setInlineEditingNoteId]);
+
+  const handleAddNote = useCallback(async (note: Omit<Note, "id" | "created_at" | "updated_at" | "user_id" | "flashcards">) => {
+    setIsLoading(true);
+    let errorResult: string | undefined;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("You must be logged in to add a note.");
+      }
+      const noteToInsert = { ...note, user_id: user.id };
+      const { data, error } = await supabase.from("notes").insert(noteToInsert).select().single();
+      if (error) throw error;
+
+      await fetchNotes();
+      if (data) {
+        if (selectedSidebarCategory === "all" || data.category === selectedSidebarCategory) {
+          setFocusedNoteId(data.id);
+        }
+      }
+    } catch (error: any) {
+      console.error("Supabase error adding note:", error);
+      errorResult = error.message || "An unexpected error occurred.";
+    } finally {
+      setIsLoading(false);
+    }
+    return errorResult;
+  }, [fetchNotes, selectedSidebarCategory, supabase]);
+
+  const handleEditNote = useCallback(async (note: Note) => {
+    setIsLoading(true);
+    let errorResult: string | undefined;
+    try {
+      const { error } = await supabase
+        .from("notes")
+        .update({
+          title: note.title,
+          content: note.content,
+          category: note.category.trim().toLowerCase(),
+        })
+        .eq("id", note.id);
+
+      if (error) throw error;
+      
+      await fetchNotes(); // Refresh all notes
+    } catch (error: any) {
+      console.error("Supabase error updating note:", error);
+      errorResult = error.message || "An unexpected error occurred.";
+    } finally {
+      setIsLoading(false);
+    }
+    return errorResult;
+  }, [fetchNotes, supabase]);
+
+  const startEditingNote = useCallback((note: Note) => {
+    setEditingNote(note);
+    setIsEditNoteDialogOpen(true);
+  }, []);
+
+  // Listen for Ctrl+S to toggle sidebar
+  useEffect(() => {
+    const handleSidebarToggle = (e: KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        setSidebarCollapsed((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleSidebarToggle);
+    return () => window.removeEventListener('keydown', handleSidebarToggle);
+  }, []);
+
+  // Protect route - redirect to login if not authenticated
+  useEffect(() => {
+    if (!authIsLoading && !session) {
+      router.push('/');
+    }
+  }, [session, authIsLoading, router]);
 
   // Fetch notes when authenticated
   useEffect(() => {
     if (session) {
       fetchNotes();
     }
-  }, [session])
+  }, [session, fetchNotes])
 
   const IMAGE_TAG_REGEX = /!\(img\)\[([^\]]+)\]$/;
 
@@ -1830,85 +1948,6 @@ export default function NotesPage() {
     }
   }, [focusedNoteId, displayedNotes])
 
-const fetchNotes = async () => {
-  setIsLoading(true)
-  try {
-    // User is already authenticated through useAuth()
-    if (!user) {
-      setErrorMessage("You must be logged in to view notes")
-      setAllNotes([])
-      return
-    }
-
-    // Fetch notes only for the current user
-    const { data, error } = await supabase
-      .from("notes")
-      .select("*")
-      .eq("user_id", user.id) // Filter by user ID
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Supabase error fetching notes:", error)
-      setErrorMessage(`Error fetching notes: ${error.message}`)
-      throw error
-    }
-    if (data) {
-      setAllNotes(data as Note[])
-      setErrorMessage(null)
-    }
-  } catch (error) {
-    // Error message already set or logged
-  } finally {
-    setIsLoading(false)
-  }
-}
-
-  // State for inline editing
-  const [inlineEditingNoteId, setInlineEditingNoteId] = useState<string | null>(null)
-
-  // Handle saving inline edits
-  const handleSaveInlineEdit = useCallback(async (noteId: string, content: string) => {
-    if (!noteId || !content) {
-      setErrorMessage("Cannot save empty content or no note selected for inline edit.");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { error } = await supabase
-        .from("notes")
-        .update({ content: content, updated_at: new Date().toISOString() })
-        .eq("id", noteId);
-
-      if (error) {
-        console.error("Error updating note:", error);
-        setErrorMessage(`Error updating note: ${error.message}`);
-        // Potentially throw error to be caught by the outer catch if needed for more complex scenarios
-      } else {
-        setErrorMessage("Note updated successfully!");
-        setTimeout(() => setErrorMessage(null), 2000);
-        
-        // Update local state immediately for responsiveness
-        const updateNotesState = (prevNotes: Note[]) => prevNotes.map(note => 
-          note.id === noteId
-            ? { ...note, content: content, updated_at: new Date().toISOString() } 
-            : note
-        );
-        setAllNotes(updateNotesState);
-
-        setInlineEditingNoteId(null); // Clear editing state
-        // Optionally, call fetchNotes() if there's a need to re-sync completely from DB,
-        // but optimistic update above should suffice for UI.
-        // await fetchNotes(); 
-      }
-    } catch (error: any) {
-      console.error("Outer catch - Error updating note:", error);
-      setErrorMessage(`Failed to update note: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [supabase, fetchNotes, setAllNotes, setInlineEditingNoteId]);
-
   // Handle text selection and Ctrl+K, Ctrl+B, and Ctrl+E
     // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
   useEffect(() => {
@@ -2065,14 +2104,6 @@ const fetchNotes = async () => {
             const noteToEdit = allNotes.find((n) => n.id === targetNoteId)
             if (noteToEdit) {
               setInlineEditingNoteId(targetNoteId)
-              setInlineEditContent(noteToEdit.content)
-
-              // Focus the textarea after it's rendered
-              setTimeout(() => {
-                if (inlineEditRef.current) {
-                  inlineEditRef.current.focus()
-                }
-              }, 50)
             }
           }
         }
@@ -2091,7 +2122,7 @@ const fetchNotes = async () => {
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [allNotes, inlineEditingNoteId, handleSaveInlineEdit, focusedNoteId])
+  }, [allNotes, inlineEditingNoteId, handleSaveInlineEdit, fetchNotes, supabase, focusedNoteId])
 
   // Apply text selection styles
     // THIS useEffect WILL LIKELY NEED TO BE REVISITED OR REMOVED IF IT HANDLES AUTH
@@ -2179,34 +2210,23 @@ const fetchNotes = async () => {
     }
   }, [theme])
 
+  // Show loading spinner while authentication state is being determined
+  if (authIsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black/5">
+        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
-
-  const handleAddNote = useCallback(async (note: Omit<Note, "id" | "created_at" | "updated_at" | "user_id" | "flashcards">) => {
-    setIsLoading(true);
-    let errorResult: string | undefined;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("You must be logged in to add a note.");
-      }
-      const noteToInsert = { ...note, user_id: user.id };
-      const { data, error } = await supabase.from("notes").insert(noteToInsert).select().single();
-      if (error) throw error;
-
-      await fetchNotes();
-      if (data) {
-        if (selectedSidebarCategory === "all" || data.category === selectedSidebarCategory) {
-          setFocusedNoteId(data.id);
-        }
-      }
-    } catch (error: any) {
-      console.error("Supabase error adding note:", error);
-      errorResult = error.message || "An unexpected error occurred.";
-    } finally {
-      setIsLoading(false);
-    }
-    return errorResult;
-  }, [fetchNotes, selectedSidebarCategory, supabase]);
+  // Show redirect message if not authenticated
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Redirecting to login...</p>
+      </div>
+    );
+  }
 
   const handleNoteSelectInSidebar = (noteId: string) => {
     setFocusedNoteId(noteId)
@@ -2404,31 +2424,6 @@ const fetchNotes = async () => {
     }
   }
 
-  const handleEditNote = useCallback(async (note: Note) => {
-    setIsLoading(true);
-    let errorResult: string | undefined;
-    try {
-      const { error } = await supabase
-        .from("notes")
-        .update({
-          title: note.title,
-          content: note.content,
-          category: note.category.trim().toLowerCase(),
-        })
-        .eq("id", note.id);
-
-      if (error) throw error;
-      
-      await fetchNotes(); // Refresh all notes
-    } catch (error: any) {
-      console.error("Supabase error updating note:", error);
-      errorResult = error.message || "An unexpected error occurred.";
-    } finally {
-      setIsLoading(false);
-    }
-    return errorResult;
-  }, [fetchNotes, supabase]);
-
   const handleDeleteNote = async (noteId: string) => {
     const note = allNotes.find((n) => n.id === noteId)
     if (note) {
@@ -2462,11 +2457,6 @@ const fetchNotes = async () => {
       setIsLoading(false)
     }
   }
-
-  const startEditingNote = useCallback((note: Note) => {
-    setEditingNote(note);
-    setIsEditNoteDialogOpen(true);
-  }, []);
 
   // Handle AI note edit - apply edits from the AI Assistant
   const handleAiNoteEdit = async (newContent: string) => {
@@ -2555,8 +2545,6 @@ const fetchNotes = async () => {
     }
   };
 
-  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
-
   const extractImageTags = (content: string): string[] => {
     const matches = content.match(/!\(img\)\[(.*?)\]/g) || [];
     return matches.map(tag => {
@@ -2618,8 +2606,6 @@ const fetchNotes = async () => {
       setIsGeneratingImages(false);
     }
   };
-
-  const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
 
   return (
     <div
