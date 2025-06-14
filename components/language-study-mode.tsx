@@ -35,11 +35,15 @@ export interface StudyCard extends Flashcard {
   consecutiveCorrectAttempts: number;
 }
 
-// Helper function to shuffle an array (Fisher-Yates)
+// Helper function to shuffle an array (Fisher-Yates with crypto)
 function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array];
+  // Use crypto.getRandomValues for better randomization
+  const randomValues = new Uint32Array(newArray.length);
+  crypto.getRandomValues(randomValues);
+  
   for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomValues[i] % (i + 1);
     [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
   return newArray;
@@ -177,7 +181,15 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
     // Select a random card from our weighted pool
     const randomIndex = Math.floor(Math.random() * weightedPool.length);
     const nextCard = weightedPool[randomIndex];
-    setCurrentCardId(nextCard.id);
+
+    // Ensure we don't get the same card twice in a row if possible
+    if (weightedPool.length > 1 && nextCard.id === previousCardId) {
+      // If we got the same card, try one more time with a different random index
+      const newRandomIndex = (randomIndex + 1) % weightedPool.length;
+      setCurrentCardId(weightedPool[newRandomIndex].id);
+    } else {
+      setCurrentCardId(nextCard.id);
+    }
     
     console.log(`Selected next card: ${nextCard.id}, incorrect attempts: ${nextCard.incorrectAttempts || 0}, recently seen: ${recentlySeenCards.current.includes(nextCard.id)}`);
 
