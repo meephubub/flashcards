@@ -55,7 +55,7 @@ export async function generateFlashcards(
     topic: string,
     numCards: number = 5,
     difficulty: string = "medium",
-    includeImages: boolean = true
+    includeImages: boolean = false
 ): Promise<GenerationResult> {
     try {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -65,19 +65,33 @@ export async function generateFlashcards(
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                model: "mixtral-8x7b-32768",
+                model: "llama-3.3-70b-versatile",
                 messages: [
                     {
                         role: "system",
-                        content: `You are an expert educational content creator. Create ${numCards} high-quality flashcards about "${topic}" at ${difficulty} difficulty level. Each flashcard should have a clear, concise question and a detailed, accurate answer. The content should be engaging and educational.`
+                        content: `You are an expert educational content creator specializing in creating high-quality flashcards. Your task is to create ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level.
+
+Guidelines for creating effective flashcards:
+1. Questions should be clear, specific, and test understanding
+2. Answers should be concise but complete
+3. Use simple, direct language
+4. Focus on key concepts and important details
+5. Avoid overly complex or ambiguous questions
+6. if it's about a language, include just a word or sentence on one side and the translation on the other
+
+IMPORTANT: Format each flashcard EXACTLY like this:
+Q: [Your question here]
+A: [Your answer here]
+
+Do not use any other format or prefixes. Each flashcard must start with "Q:" and its answer must start with "A:".`
                     },
                     {
                         role: "user",
-                        content: `Generate ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level.`
+                        content: `Generate ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level. Make sure each flashcard follows the exact format specified.`
                     }
                 ],
                 temperature: 0.7,
-                max_tokens: 4000,
+                max_completion_tokens: 4000,
             }),
         });
 
@@ -87,6 +101,7 @@ export async function generateFlashcards(
 
         const data = await response.json();
         const content = data.choices[0].message.content;
+        console.log("Raw flashcard response:", content);
 
         // Parse the content to extract flashcards
         const flashcards: GeneratedCard[] = [];
@@ -94,26 +109,39 @@ export async function generateFlashcards(
         let currentCard: Partial<GeneratedCard> = {};
 
         for (const line of lines) {
-            if (line.startsWith("Q:") || line.startsWith("Question:")) {
-                if (currentCard.question) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue; // Skip empty lines
+
+            if (trimmedLine.startsWith("Q:") || trimmedLine.startsWith("Question:")) {
+                // If we have a complete previous card, add it
+                if (currentCard.question && currentCard.answer) {
+                    console.log("Adding card:", currentCard);
                     flashcards.push(currentCard as GeneratedCard);
                 }
+                // Start a new card
                 currentCard = {
-                    question: line.replace(/^(Q:|Question:)\s*/, "").trim(),
+                    question: trimmedLine.replace(/^(Q:|Question:)\s*/, "").trim(),
                     answer: "",
                     image: null,
                 };
-            } else if (line.startsWith("A:") || line.startsWith("Answer:")) {
-                currentCard.answer = line.replace(/^(A:|Answer:)\s*/, "").trim();
+            } else if (trimmedLine.startsWith("A:") || trimmedLine.startsWith("Answer:")) {
+                if (currentCard.question) {
+                    currentCard.answer = trimmedLine.replace(/^(A:|Answer:)\s*/, "").trim();
+                }
             }
         }
 
-        if (currentCard.question) {
+        // Add the last card if it's complete
+        if (currentCard.question && currentCard.answer) {
+            console.log("Adding final card:", currentCard);
             flashcards.push(currentCard as GeneratedCard);
         }
 
-        // Generate images for each flashcard if requested
-        if (includeImages) {
+        console.log("Total cards parsed:", flashcards.length);
+        console.log("Cards:", flashcards);
+
+        // Only generate images if explicitly requested and we have valid cards
+        if (includeImages && flashcards.length > 0) {
             const imagePromises = flashcards.map(async (card) => {
                 try {
                     const imageResult = await generateImage(card.question);
@@ -127,6 +155,11 @@ export async function generateFlashcards(
             });
 
             await Promise.all(imagePromises);
+        }
+
+        // Validate that we have cards before returning
+        if (flashcards.length === 0) {
+            throw new Error("No valid flashcards were generated. Please try again.");
         }
 
         return {
@@ -637,35 +670,11 @@ export async function generateMultipleChoiceQuestionsWithGroq(
 // Helper function to make a request to the Groq API
 export async function makeGroqRequest(
     prompt: string,
-    model: string = "llama3-70b-8192"
+    model: string = "llama-3.3-70b-versatile"
 ): Promise<string> {
-    // Create base request body without model
-    const baseRequestBody = {
-        messages: [
-            {
-                role: "system",
-                content: "You are a helpful assistant.",
-            },
-            {
-                role: "user",
-                content: prompt,
-            },
-        ],
-        temperature: 0.6,
-        max_tokens: 3000,
-    };
-
-    // Get API key from environment variables
-    const apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
-    console.log("API Key available:", apiKey ? "yes" : "no");
-    
-    if (!apiKey) {
-        console.error("Environment variables:", {
-            NEXT_PUBLIC_GROQ_API_KEY: process.env.NEXT_PUBLIC_GROQ_API_KEY ? "exists" : "missing",
-            NODE_ENV: process.env.NODE_ENV,
-        });
-        throw new Error("GROQ_API_KEY is not defined in environment variables");
-    }
+    const groq = new Groq({
+        apiKey: process.env.GROQ_API_KEY,
+    });
 
     try {
         // Try custom endpoint first with GPT-4
@@ -673,8 +682,18 @@ export async function makeGroqRequest(
         try {
             console.log("Attempting to use custom endpoint with GPT-4");
             const customRequestBody = {
-                ...baseRequestBody,
-                model: "gpt-4",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a helpful assistant.",
+                    },
+                    {
+                        role: "user",
+                        content: prompt,
+                    },
+                ],
+                temperature: 0.6,
+                max_tokens: 3000,
             };
             console.log("Custom endpoint request body:", JSON.stringify(customRequestBody, null, 2));
             
@@ -707,8 +726,18 @@ export async function makeGroqRequest(
             console.log("Custom endpoint failed, falling back to Groq with Llama");
             
             const groqRequestBody = {
-                ...baseRequestBody,
-                model: "llama3-70b-8192",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a helpful assistant.",
+                    },
+                    {
+                        role: "user",
+                        content: prompt,
+                    },
+                ],
+                temperature: 0.6,
+                max_tokens: 3000,
             };
             console.log("Groq request body:", JSON.stringify(groqRequestBody, null, 2));
             
@@ -718,7 +747,7 @@ export async function makeGroqRequest(
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${apiKey}`,
+                        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
                     },
                     body: JSON.stringify(groqRequestBody),
                 },
