@@ -1481,7 +1481,7 @@ const NoteCard = React.memo(function NoteCard({
       className={`
         bg-neutral-900 border-neutral-800 border-[0.5px] rounded-xl 
         transition-all duration-300 ease-in-out 
-        hover:shadow-2xl hover:scale-[1.005] hover:translate-y-[-1px]
+        hover:shadow-2xl hover:scale-[1.008] hover:translate-y-[-2px]
         data-[focused='true']:ring-2 data-[focused='true']:ring-blue-500/60
         data-[focused='true']:shadow-2xl
         mx-0 w-full overflow-hidden
@@ -1495,7 +1495,8 @@ const NoteCard = React.memo(function NoteCard({
             : '0 8px 16px -8px rgba(0, 0, 0, 0.5)'
           : isActive 
             ? '0 20px 40px -15px rgba(0, 0, 0, 0.2), 0 0 15px -5px rgba(0, 0, 0, 0.08)'
-            : '0 8px 16px -8px rgba(0, 0, 0, 0.1)'
+            : '0 8px 16px -8px rgba(0, 0, 0, 0.1)',
+        transformOrigin: 'center top'
       }}
       data-focused={isActive}
     >
