@@ -385,22 +385,29 @@ const renderNoteContent = (
       const colorClass = colorClasses[infoBoxColor as keyof typeof colorClasses] || colorClasses.blue;
       const textColorClass = textColorClasses[infoBoxColor as keyof typeof textColorClasses] || textColorClasses.blue;
 
-      // Create a modified parseInlineMarkdown function that ensures highlighted text has proper contrast
-      const parseInfoBoxContent = (text: string) => {
-        // Use a custom class for highlighted text in info boxes to ensure proper contrast
-        const highlightedText = text.replace(/==(.*?)==/g, (match, p1) => {
+      // Fixed: processInfoBoxContent function to properly handle ** for bold text
+      const processInfoBoxContent = (text: string) => {
+        // First handle special case for bold text in info boxes
+        let processedText = text.replace(
+          /\*\*(.*?)\*\*/g,
+          '<strong class="font-bold text-neutral-200">$1</strong>'
+        );
+
+        // Handle highlighted text
+        processedText = processedText.replace(/==(.*?)==/g, (match, p1) => {
           return `<span class="${isDark ? 'text-white' : 'text-black'} font-medium">${p1}</span>`;
         });
         
         // Use the original parseInlineMarkdown for other formatting
-        return parseInlineMarkdown(highlightedText);
+        // But we need to make sure we don't re-process the bold text we just processed
+        return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
       };
 
       elements.push(
         <div key={`infobox-${elements.length}`} className={`my-4 p-4 rounded-lg border ${colorClass}`}>
           {infoBoxContent.map((line, index) => (
             <p key={index} className={`mb-2 last:mb-0 ${textColorClass}`}>
-              {parseInfoBoxContent(line)}
+              {processInfoBoxContent(line)}
             </p>
           ))}
         </div>,
@@ -1361,8 +1368,10 @@ interface NoteCardProps {
   getSimilarity: (input: string, answer: string) => Promise<number>
   dragDropStates: Record<string, { answers: Record<number, string>; showAnswers: boolean }>
   setDragDropStates: React.Dispatch<React.SetStateAction<Record<string, { answers: Record<number, string>; showAnswers: boolean }>>>
+  onSelectNote: (noteId: string) => void
 }
 
+// Update the NoteCard component for modern color styling
 const NoteCard = React.memo(function NoteCard({
   note,
   focusedNoteId,
@@ -1382,10 +1391,56 @@ const NoteCard = React.memo(function NoteCard({
   setGapStates,
   getSimilarity,
   dragDropStates,
-  setDragDropStates
+  setDragDropStates,
+  onSelectNote
 }: NoteCardProps) {
   const [inlineEditContent, setInlineEditContent] = useState(note.content);
   const inlineEditRef = useRef<HTMLTextAreaElement>(null);
+  const isDark = theme === "dark";
+  const isActive = focusedNoteId === note.id;
+
+  // Update the category color map to use the same color scheme as info boxes
+  const categoryColorMap: { [key: string]: { bg: string, accent: string, border: string } } = {
+    biology: isDark 
+      ? { bg: "bg-green-900/30", accent: "bg-green-500/80", border: "border-green-700/60" }
+      : { bg: "bg-green-100", accent: "bg-green-500/70", border: "border-green-300" },
+    chemistry: isDark 
+      ? { bg: "bg-rose-900/30", accent: "bg-rose-500/80", border: "border-rose-700/60" }
+      : { bg: "bg-rose-100", accent: "bg-rose-500/70", border: "border-rose-300" },
+    physics: isDark 
+      ? { bg: "bg-amber-900/30", accent: "bg-amber-400/80", border: "border-amber-700/60" }
+      : { bg: "bg-amber-100", accent: "bg-amber-500/70", border: "border-amber-300" },
+    english: isDark 
+      ? { bg: "bg-blue-900/30", accent: "bg-blue-500/80", border: "border-blue-700/60" }
+      : { bg: "bg-blue-100", accent: "bg-blue-500/70", border: "border-blue-300" },
+    math: isDark 
+      ? { bg: "bg-purple-900/30", accent: "bg-purple-500/80", border: "border-purple-700/60" }
+      : { bg: "bg-purple-100", accent: "bg-purple-500/70", border: "border-purple-300" },
+    history: isDark 
+      ? { bg: "bg-orange-900/30", accent: "bg-orange-500/80", border: "border-orange-700/60" }
+      : { bg: "bg-orange-100", accent: "bg-orange-500/70", border: "border-orange-300" },
+    art: isDark 
+      ? { bg: "bg-pink-900/30", accent: "bg-pink-500/80", border: "border-pink-700/60" }
+      : { bg: "bg-pink-100", accent: "bg-pink-500/70", border: "border-pink-300" },
+    music: isDark 
+      ? { bg: "bg-indigo-900/30", accent: "bg-indigo-500/80", border: "border-indigo-700/60" }
+      : { bg: "bg-indigo-100", accent: "bg-indigo-500/70", border: "border-indigo-300" },
+    computer: isDark 
+      ? { bg: "bg-cyan-900/30", accent: "bg-cyan-500/80", border: "border-cyan-700/60" }
+      : { bg: "bg-cyan-100", accent: "bg-cyan-500/70", border: "border-cyan-300" },
+    programming: isDark 
+      ? { bg: "bg-teal-900/30", accent: "bg-teal-500/80", border: "border-teal-700/60" }
+      : { bg: "bg-teal-100", accent: "bg-teal-500/70", border: "border-teal-300" },
+  };
+
+  const getCategoryColorClass = (category: string): { bg: string, accent: string, border: string } => {
+    const lowerCategory = category.toLowerCase().trim();
+    return categoryColorMap[lowerCategory] || (isDark 
+      ? { bg: "bg-neutral-800/30", accent: "bg-neutral-500/80", border: "border-neutral-700/60" }
+      : { bg: "bg-gray-100", accent: "bg-gray-400/70", border: "border-gray-300" });
+  };
+
+  const categoryColors = getCategoryColorClass(note.category);
 
   useEffect(() => {
     if (inlineEditingNoteId === note.id) {
@@ -1396,89 +1451,198 @@ const NoteCard = React.memo(function NoteCard({
     }
   }, [inlineEditingNoteId, note.id, note.content]);
 
-  const onSave = () => {
+  const onSave = useCallback(() => {
     handleSaveInlineEdit(note.id, inlineEditContent);
-  };
+  }, [handleSaveInlineEdit, note.id, inlineEditContent]);
+
+  const handleCardClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (
+      e.target instanceof Element && 
+      (e.target.tagName === 'BUTTON' || 
+       e.target.tagName === 'INPUT' || 
+       e.target.tagName === 'A' ||
+       e.target.closest('button') ||
+       e.target.closest('input') ||
+       e.target.closest('a'))
+    ) {
+      return;
+    }
+    
+    onSelectNote(note.id);
+  }, [note.id, onSelectNote]);
   
   return (
     <Card
       key={note.id}
       id={`note-${note.id}`}
-      ref={focusedNoteId === note.id ? activeNoteRef : null}
-      className="bg-neutral-900 border-neutral-800 border-[0.5px] rounded-xl shadow-xl p-5 md:p-8 transition-all duration-300 ease-in-out hover:shadow-2xl data-[focused='true']:ring-1 data-[focused='true']:ring-blue-500/60 data-[focused='true']:scale-[1.01] mx-0 w-full"
-      data-focused={focusedNoteId === note.id}
+      ref={isActive ? activeNoteRef : null}
+      onClick={handleCardClick}
+      className={`
+        bg-neutral-900 border-neutral-800 border-[0.5px] rounded-xl 
+        transition-all duration-300 ease-in-out 
+        hover:shadow-2xl hover:scale-[1.005] hover:translate-y-[-1px]
+        data-[focused='true']:ring-2 data-[focused='true']:ring-blue-500/60
+        data-[focused='true']:shadow-2xl
+        mx-0 w-full overflow-hidden
+        ${isDark ? "bg-neutral-900/95" : "bg-white/95 border-neutral-200"}
+      `}
+      style={{
+        backdropFilter: 'blur(10px)',
+        boxShadow: isDark 
+          ? isActive 
+            ? '0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 15px -5px rgba(0, 0, 0, 0.3)'
+            : '0 8px 16px -8px rgba(0, 0, 0, 0.5)'
+          : isActive 
+            ? '0 20px 40px -15px rgba(0, 0, 0, 0.2), 0 0 15px -5px rgba(0, 0, 0, 0.08)'
+            : '0 8px 16px -8px rgba(0, 0, 0, 0.1)'
+      }}
+      data-focused={isActive}
     >
-      <div className="flex justify-between items-start mb-4 md:mb-6 pb-3 md:pb-4 border-b border-neutral-700">
-        <h3 className={`text-2xl md:text-4xl font-bold mr-2 ${theme === "dark" ? "text-neutral-50" : "text-gray-800"}`}>{note.title}</h3>
-        <div className="flex items-center space-x-2 md:space-x-3">
-          <button
-            onClick={() => startEditingNote(note)}
-            className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
-            aria-label="Edit note"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => {
-              handleDeleteNote(note.id);
-            }}
-            className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
-            aria-label="Delete note"
-          >
-            Delete
-          </button>
-          <button
-            onClick={() => {
-              setNoteForFlashcards(note);
-              setIsFlashcardsDialogOpen(true);
-            }}
-            className="text-neutral-400 hover:text-neutral-300 text-xs transition-colors"
-            aria-label="Create flashcards from note"
-          >
-            Create Flashcards
-          </button>
-        </div>
+      {/* Modern category color bar */}
+      <div className={`${categoryColors.bg} p-0.5 border-b ${categoryColors.border}`}>
+        <div className={`h-1 w-16 ${categoryColors.accent} rounded-full mx-auto`}></div>
       </div>
-      <div className="prose-custom max-w-none text-sm md:text-base">
-        {inlineEditingNoteId === note.id ? (
-          <div className="relative">
-            <Textarea
-              ref={inlineEditRef}
-              value={inlineEditContent}
-              onChange={(e) => setInlineEditContent(e.target.value)}
-              className="min-h-[300px] w-full bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500 font-mono text-sm p-4"
-              placeholder="Edit your note content..."
-            />
-            <div className="flex justify-end mt-4 space-x-3">
-              <Button
-                onClick={() => setInlineEditingNoteId(null)}
-                variant="outline"
-                className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={onSave}
-                className="bg-neutral-900 dark:bg-neutral-800 hover:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 dark:focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 dark:focus:ring-offset-neutral-900 border border-neutral-200 dark:border-neutral-700"
-              >
-                Save Changes
-              </Button>
+      
+      <div className="relative overflow-hidden">
+        <div className="p-6 md:p-8 pt-4">
+          <div className="flex justify-between items-start mb-4 md:mb-6 pb-3 md:pb-4 border-b border-neutral-700/50">
+            <h3 className={`text-2xl md:text-3xl font-bold mr-2 ${isDark ? "text-neutral-50" : "text-gray-800"}`}>
+              {note.title}
+            </h3>
+            <div className="flex items-center space-x-2">
+              <div className="flex gap-1.5 md:gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEditingNote(note);
+                  }}
+                  className={`p-2 rounded-full ${isDark 
+                    ? "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/80" 
+                    : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100/80"} 
+                    transition-colors cursor-pointer`}
+                  aria-label="Edit note"
+                >
+                  <PencilIcon className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteNote(note.id);
+                  }}
+                  className={`p-2 rounded-full ${isDark 
+                    ? "text-neutral-400 hover:text-red-300 hover:bg-red-950/30" 
+                    : "text-neutral-500 hover:text-red-600 hover:bg-red-50"} 
+                    transition-colors cursor-pointer`}
+                  aria-label="Delete note"
+                >
+                  <Trash2Icon className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setNoteForFlashcards(note);
+                    setIsFlashcardsDialogOpen(true);
+                  }}
+                  className={`p-2 rounded-full ${isDark 
+                    ? "text-neutral-400 hover:text-blue-300 hover:bg-blue-950/30" 
+                    : "text-neutral-500 hover:text-blue-600 hover:bg-blue-50"} 
+                    transition-colors cursor-pointer`}
+                  aria-label="Create flashcards from note"
+                >
+                  <FlaskConical className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
-        ) : (
-          <div id={`note-content-${note.id}`}>{renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity, dragDropStates, setDragDropStates)}</div>
-        )}
-      </div>
-      <div className="text-xs text-neutral-500 mt-6 md:mt-8 pt-3 md:pt-4 border-t border-neutral-700">
-        Category:{" "}
-        <span className="font-medium text-neutral-400">
-          {note.category.charAt(0).toUpperCase() + note.category.slice(1)}
-        </span>{" "}
-        | Created:{" "}
-        {new Date(note.created_at).toLocaleDateString([], { year: "numeric", month: "long", day: "numeric" })}
+          
+          <div className={`prose-custom max-w-none text-sm md:text-base ${isDark ? "text-neutral-300" : "text-neutral-700"}`}>
+            {inlineEditingNoteId === note.id ? (
+              <div className="relative">
+                <Textarea
+                  ref={inlineEditRef}
+                  value={inlineEditContent}
+                  onChange={(e) => setInlineEditContent(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  className={`min-h-[300px] w-full rounded-lg ${isDark 
+                    ? "bg-neutral-800/70 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500" 
+                    : "bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:border-gray-300 focus:ring-gray-300"} 
+                    font-mono text-sm p-4`}
+                  placeholder="Edit your note content..."
+                />
+                <div className="flex justify-end mt-4 space-x-3">
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInlineEditingNoteId(null);
+                    }}
+                    variant="outline"
+                    className={`${isDark 
+                      ? "bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100" 
+                      : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-800"} 
+                      cursor-pointer`}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSave();
+                    }}
+                    className={`${isDark 
+                      ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                      : "bg-blue-600 hover:bg-blue-700 text-white"} 
+                      font-semibold py-2 px-4 rounded-lg shadow-sm cursor-pointer`}
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div id={`note-content-${note.id}`} className="mt-2">
+                {renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity, dragDropStates, setDragDropStates)}
+              </div>
+            )}
+          </div>
+          
+          <div className={`flex items-center justify-between text-xs mt-6 md:mt-8 pt-3 md:pt-4 border-t ${isDark ? "border-neutral-800" : "border-gray-200"}`}>
+            <div className={`flex items-center ${isDark ? "text-neutral-500" : "text-gray-500"}`}>
+              <span className={`mr-2 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide ${categoryColors.bg} ${categoryColors.border} border 
+                ${isDark ? "text-neutral-200" : "text-gray-700"}`}>
+                {note.category.charAt(0).toUpperCase() + note.category.slice(1)}
+              </span>
+              <span className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 mr-1">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+                </svg>
+                {new Date(note.created_at).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </Card>
   );
+}, (prevProps, nextProps) => {
+  // Existing comparison logic
+  const isThisNotesFocusStatusChanged = 
+    (prevProps.note.id === prevProps.focusedNoteId) !== (nextProps.note.id === nextProps.focusedNoteId);
+  const isThisNoteBeingEdited = 
+    (prevProps.note.id === prevProps.inlineEditingNoteId) !== (nextProps.note.id === nextProps.inlineEditingNoteId);
+  
+  if (
+    prevProps.note.id !== nextProps.note.id ||
+    prevProps.note.title !== nextProps.note.title ||
+    prevProps.note.content !== nextProps.note.content ||
+    prevProps.note.category !== nextProps.note.category ||
+    isThisNotesFocusStatusChanged ||
+    isThisNoteBeingEdited ||
+    (prevProps.theme !== nextProps.theme)
+  ) {
+    return false; // Return false to trigger re-render
+  }
+  
+  return true; // Return true to prevent re-render
 });
 
 type NoteCardPassthroughProps = Omit<NoteCardProps, 'note'>;
@@ -1589,7 +1753,7 @@ export default function NotesPage() {
   const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
 
   const notesContainerRef = useRef<HTMLDivElement>(null)
-  const activeNoteRef = useRef<HTMLDivElement>(null)
+  const activeNoteRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>
 
   // Utility for similarity grading
   const getSimilarity = async (input: string, answer: string): Promise<number> => {
@@ -2249,9 +2413,12 @@ export default function NotesPage() {
     );
   }
 
-  const handleNoteSelectInSidebar = (noteId: string) => {
-    setFocusedNoteId(noteId)
-  }
+  // Replace original handleNoteSelectInSidebar with optimized version
+  const handleNoteSelectInSidebar = useCallback((noteId: string) => {
+    if (focusedNoteId !== noteId) {
+      setFocusedNoteId(noteId);
+    }
+  }, [focusedNoteId]);
 
   const handleCategorySelectFromSidebar = (category: string) => {
     setSelectedSidebarCategory(category)
@@ -2272,9 +2439,13 @@ export default function NotesPage() {
     }
   }
 
-  const clearFocus = () => {
-    setFocusedNoteId(null)
-  }
+  // Replace original clearFocus with optimized version
+  const clearFocus = useCallback((e: React.MouseEvent) => {
+    // Only clear if we're clicking directly on the background container, not on any child
+    if (e.target === e.currentTarget) {
+      setFocusedNoteId(null);
+    }
+  }, []);
 
   // Search function
   const handleSearch = (query: string) => {
@@ -2631,6 +2802,7 @@ export default function NotesPage() {
   return (
     <div
       className={`flex h-screen ${theme === "dark" ? "bg-neutral-950 text-neutral-100" : "bg-gray-50 text-gray-900"}`}
+      onClick={clearFocus}
     >
       {/* Mobile Hamburger Menu */}
       <div className="md:hidden fixed top-4 left-4 z-50">
@@ -2701,6 +2873,7 @@ export default function NotesPage() {
           maxWidth: sidebarCollapsed ? '100vw' : undefined,
           width: sidebarCollapsed ? '100vw' : undefined,
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Add expand sidebar button when collapsed */}
         {sidebarCollapsed && (
@@ -2721,7 +2894,7 @@ export default function NotesPage() {
               Found {displayedNotes.length} {displayedNotes.length === 1 ? "result" : "results"} for "{searchQuery}"
             </div>
           )}
-          <div className="mt-6 space-y-6 md:space-y-8 w-full max-w-5xl mx-auto">
+          <div className="mt-6 space-y-8 md:space-y-10 w-full max-w-4xl mx-auto">
             {isLoading && displayedNotes.length === 0 && (
               <p className="text-center text-neutral-500 py-10">Loading notes...</p>
             )}
@@ -2768,6 +2941,7 @@ export default function NotesPage() {
               getSimilarity={getSimilarity}
               dragDropStates={dragDropStates}
               setDragDropStates={setDragDropStates}
+              onSelectNote={handleNoteSelectInSidebar}
             />
           </div>
         </div>
