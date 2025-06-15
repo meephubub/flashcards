@@ -1125,7 +1125,7 @@ export async function generateAIFlashcards(
     if (targetDeckId && existingDeckVerified) {
       // Add cards to existing deck
       for (const card of generatedResult.cards) {
-        const added = await addCard(supabase, targetDeckId, card.front, card.back, null); // AI-generated cards don't have img_url from groq.ts
+        const added = await addCard(supabase, targetDeckId, card.question, card.answer, null); // Map question/answer to front/back
         if (added) cardsSuccessfullyAdded++;
       }
       return {
@@ -1148,7 +1148,7 @@ export async function generateAIFlashcards(
       targetDeckId = newDeckData.id; // Assign the new deck's ID
       // Add cards to the new deck
       for (const card of generatedResult.cards) {
-        const added = await addCard(supabase, targetDeckId, card.front, card.back, null); // AI-generated cards don't have img_url from groq.ts
+        const added = await addCard(supabase, targetDeckId, card.question, card.answer, null); // Map question/answer to front/back
         if (added) cardsSuccessfullyAdded++;
       }
       finalDeck = await getDeck(supabase, targetDeckId, user.id); 
