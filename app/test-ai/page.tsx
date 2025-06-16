@@ -12,6 +12,9 @@ import { Copy, Play, Pause } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { upscaleImageClientSide } from "@/lib/upscale";
+import Link from "next/link";
 
 interface DebugInfo {
   request: any;
@@ -28,6 +31,17 @@ export default function TestAIPage() {
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
+  const [generationStats, setGenerationStats] = useState<{
+    apiTime: number;
+    totalTime: number;
+    timestamp: string;
+  } | null>(null);
+  const [isUpscaling, setIsUpscaling] = useState(false);
+  const [upscaleStats, setUpscaleStats] = useState<{
+    time: number;
+    timestamp: string;
+  } | null>(null);
+  const [shouldUpscale, setShouldUpscale] = useState(false);
   
   // Image generation parameters
   const [selectedModel, setSelectedModel] = useState("flux");
@@ -39,6 +53,8 @@ export default function TestAIPage() {
   const [enhance, setEnhance] = useState(false);
   const [safe, setSafe] = useState(false);
   const [transparent, setTransparent] = useState(false);
+  const [togetherSteps] = useState(1);
+  const [togetherN, setTogetherN] = useState(1);
 
   // Text generation parameters
   const [textModel, setTextModel] = useState("openai");
@@ -310,143 +326,25 @@ export default function TestAIPage() {
     setLoading(true);
     setError(null);
     setDebugInfo(null);
+    const startTime = performance.now();
     try {
-      const params = new URLSearchParams({
-        model: selectedModel,
-        width: imageWidth.toString(),
-        height: imageHeight.toString(),
-        nologo: nologo.toString(),
-        private: privateImage.toString(),
-        enhance: enhance.toString(),
-        safe: safe.toString(),
-        transparent: transparent.toString(),
+      const apiStartTime = performance.now();
+      const result = await generateImage(prompt, selectedModel as any);
+      const apiEndTime = performance.now();
+
+      const generatedImageUri = `data:image/png;base64,${result.data[0].b64_json}`;
+      setImage(generatedImageUri);
+
+      if (shouldUpscale) {
+        await handleUpscale(generatedImageUri);
+      }
+
+      const endTime = performance.now();
+      setGenerationStats({
+        apiTime: apiEndTime - apiStartTime,
+        totalTime: endTime - startTime,
+        timestamp: new Date().toISOString(),
       });
-
-      if (seed) params.append("seed", seed);
-
-      // Get API key from environment variables
-      const apiKey = process.env.NEXT_PUBLIC_POLLINATIONS_API;
-      if (!apiKey) {
-        throw new Error("NEXT_PUBLIC_POLLINATIONS_API is not defined in environment variables");
-      }
-
-      // Add API key to the URL instead of headers
-      params.append("api_key", apiKey);
-      const endpoint = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?${params.toString()}`;
-
-      try {
-        // Try using allorigins.win as a CORS proxy
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(endpoint)}`;
-        
-        console.log("Attempting to fetch from:", proxyUrl);
-        
-        const response = await fetch(proxyUrl, {
-          method: "GET",
-          headers: {
-            "Accept": "image/*",
-          },
-        });
-
-        console.log("Response status:", response.status);
-        console.log("Response headers:", Object.fromEntries(response.headers.entries()));
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Error response:", errorText);
-          throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
-        }
-
-        const blob = await response.blob();
-        console.log("Received blob:", blob.type, blob.size);
-        
-        const imageUrl = URL.createObjectURL(blob);
-        setImage(imageUrl);
-
-        // Capture debug info
-        setDebugInfo({
-          request: { prompt, ...Object.fromEntries(params) },
-          response: "Image generated successfully",
-          endpoint: proxyUrl,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (fetchError: unknown) {
-        console.error("Fetch error details:", {
-          error: fetchError,
-          type: fetchError instanceof Error ? fetchError.constructor.name : typeof fetchError,
-          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
-          stack: fetchError instanceof Error ? fetchError.stack : undefined
-        });
-
-        // Try alternative proxy
-        try {
-          const altProxyUrl = `https://cors-anywhere.herokuapp.com/${endpoint}`;
-          console.log("Trying alternative proxy:", altProxyUrl);
-
-          const altResponse = await fetch(altProxyUrl, {
-            method: "GET",
-            headers: {
-              "Accept": "image/*",
-              "X-Requested-With": "XMLHttpRequest",
-            },
-          });
-
-          if (!altResponse.ok) {
-            const errorText = await altResponse.text();
-            throw new Error(`Alternative proxy error: ${altResponse.status} ${altResponse.statusText}${errorText ? ` - ${errorText}` : ""}`);
-          }
-
-          const blob = await altResponse.blob();
-          const imageUrl = URL.createObjectURL(blob);
-          setImage(imageUrl);
-
-          setDebugInfo({
-            request: { prompt, ...Object.fromEntries(params) },
-            response: "Image generated successfully via alternative proxy",
-            endpoint: altProxyUrl,
-            timestamp: new Date().toISOString(),
-          });
-        } catch (altError: unknown) {
-          console.error("Alternative proxy error details:", {
-            error: altError,
-            type: altError instanceof Error ? altError.constructor.name : typeof altError,
-            message: altError instanceof Error ? altError.message : String(altError),
-            stack: altError instanceof Error ? altError.stack : undefined
-          });
-
-          // Try direct fetch as last resort
-          try {
-            console.log("Attempting direct fetch as last resort");
-            const directResponse = await fetch(endpoint, {
-              method: "GET",
-              headers: {
-                "Accept": "image/*",
-              },
-            });
-
-            if (!directResponse.ok) {
-              throw new Error(`Direct fetch failed: ${directResponse.status} ${directResponse.statusText}`);
-            }
-
-            const blob = await directResponse.blob();
-            const imageUrl = URL.createObjectURL(blob);
-            setImage(imageUrl);
-
-            setDebugInfo({
-              request: { prompt, ...Object.fromEntries(params) },
-              response: "Image generated successfully via direct fetch",
-              endpoint,
-              timestamp: new Date().toISOString(),
-            });
-          } catch (directError: unknown) {
-            throw new Error(
-              `All fetch attempts failed:\n` +
-              `1. First proxy error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}\n` +
-              `2. Alternative proxy error: ${altError instanceof Error ? altError.message : String(altError)}\n` +
-              `3. Direct fetch error: ${directError instanceof Error ? directError.message : String(directError)}`
-            );
-          }
-        }
-      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
@@ -555,8 +453,115 @@ export default function TestAIPage() {
     setIsPlaying(!isPlaying);
   };
 
+  const handleTogetherImageGeneration = async () => {
+    setLoading(true);
+    setError(null);
+    setDebugInfo(null);
+    setGenerationStats(null);
+    setUpscaleStats(null);
+    const startTime = performance.now();
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_TOGETHER_API_KEY;
+      if (!apiKey) {
+        throw new Error("TOGETHER_API_KEY is not defined in environment variables");
+      }
+
+      const apiStartTime = performance.now();
+      const response = await fetch("https://api.together.xyz/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "black-forest-labs/FLUX.1-schnell-Free",
+          prompt: prompt,
+          steps: togetherSteps,
+          n: togetherN,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
+      }
+
+      const result = await response.json();
+      const apiEndTime = performance.now();
+
+      const generatedImageUrl = result.data[0].url;
+      setImage(generatedImageUrl);
+
+      if (shouldUpscale) {
+        await handleUpscale(generatedImageUrl);
+      }
+
+      setDebugInfo({
+        request: {
+          prompt,
+          model: "black-forest-labs/FLUX.1-schnell-Free",
+          steps: togetherSteps,
+          n: togetherN,
+        },
+        response: result,
+        endpoint: "https://api.together.xyz/v1/images/generations",
+        timestamp: new Date().toISOString(),
+      });
+
+      const endTime = performance.now();
+      setGenerationStats({
+        apiTime: apiEndTime - apiStartTime,
+        totalTime: endTime - startTime,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An error occurred";
+      setError(errorMessage);
+      setDebugInfo({
+        request: {
+          prompt,
+          model: "black-forest-labs/FLUX.1-schnell-Free",
+          steps: togetherSteps,
+          n: togetherN,
+        },
+        response: null,
+        endpoint: "https://api.together.xyz/v1/images/generations",
+        timestamp: new Date().toISOString(),
+        error: errorMessage,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpscale = async (imageUrl: string) => {
+    setIsUpscaling(true);
+    const startTime = performance.now();
+    try {
+      const upscaledImage = await upscaleImageClientSide(imageUrl);
+      setImage(upscaledImage);
+
+      const endTime = performance.now();
+      setUpscaleStats({
+        time: endTime - startTime,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
+      setError(errorMessage);
+    } finally {
+      setIsUpscaling(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-4">
+      <div className="flex justify-end">
+        <Button asChild variant="outline">
+          <Link href="/test-ai/upscale">Go to Upscale Test Page →</Link>
+        </Button>
+      </div>
       <h1 className="text-2xl font-bold mb-4">AI Test Page</h1>
 
       <Card>
@@ -691,6 +696,7 @@ export default function TestAIPage() {
                   <SelectItem value="flux">Flux</SelectItem>
                   <SelectItem value="turbo">Turbo</SelectItem>
                   <SelectItem value="gptimage">GPT Image</SelectItem>
+                  <SelectItem value="together">Together AI</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -765,15 +771,40 @@ export default function TestAIPage() {
               <Label htmlFor="safe">Safe Mode</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="transparent"
+              <Switch
+                id="transparent-bg"
                 checked={transparent}
-                onChange={(e) => setTransparent(e.target.checked)}
+                onCheckedChange={setTransparent}
               />
-              <Label htmlFor="transparent">Transparent Background</Label>
+              <Label htmlFor="transparent-bg">Transparent Background</Label>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="should-upscale"
+                  checked={shouldUpscale}
+                  onCheckedChange={setShouldUpscale}
+                  disabled={loading}
+                />
+                <Label htmlFor="should-upscale">Upscale after generation</Label>
+              </div>
             </div>
           </div>
+
+          {selectedModel === "together" && (
+            <>
+              <div className="space-y-2">
+                <Label>Number of Images</Label>
+                <Input
+                  type="number"
+                  value={togetherN}
+                  onChange={(e) => setTogetherN(Number(e.target.value))}
+                  min={1}
+                  max={4}
+                />
+              </div>
+            </>
+          )}
 
           <Textarea
             placeholder="Enter your image generation prompt..."
@@ -781,23 +812,81 @@ export default function TestAIPage() {
             onChange={(e) => setPrompt(e.target.value)}
             className="min-h-[100px]"
           />
-          <Button onClick={handleImageGeneration} disabled={loading}>
-            {loading ? "Generating..." : "Generate Image"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={
+                selectedModel === "together"
+                  ? handleTogetherImageGeneration
+                  : handleImageGeneration
+              }
+              disabled={loading || isUpscaling}
+            >
+              {loading && !isUpscaling && "Generating..."}
+              {isUpscaling && "Upscaling..."}
+              {!loading && !isUpscaling && "Generate Image"}
+            </Button>
+            {image && (
+              <Button variant="outline" onClick={handleCopyImage}>
+                Copy Image
+              </Button>
+            )}
+          </div>
           
           {error && <div className="text-red-500">{error}</div>}
           
           {image && (
-            <div className="relative">
-              <img src={image} alt="Generated" className="max-w-full rounded-lg" />
-              <Button
-                size="icon"
-                variant="ghost"
-                className="absolute top-2 right-2"
-                onClick={handleCopyImage}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
+            <div className="mt-4">
+              <div className="relative">
+                <img
+                  src={image}
+                  alt="Generated"
+                  className="max-w-full h-auto rounded-lg shadow-lg"
+                />
+                <div className="absolute top-2 right-2 flex gap-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={handleCopyImage}
+                    className="bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              {generationStats && (
+                <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <h3 className="text-sm font-medium mb-2">Generation Statistics</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">API Time:</span>
+                      <span className="ml-2 font-mono">{generationStats.apiTime.toFixed(2)}ms</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">Total Time:</span>
+                      <span className="ml-2 font-mono">{generationStats.totalTime.toFixed(2)}ms</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-500 dark:text-gray-400">Timestamp:</span>
+                      <span className="ml-2 font-mono">{new Date(generationStats.timestamp).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {upscaleStats && (
+                <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <h3 className="text-sm font-medium mb-2">Upscale Statistics</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400">Upscale Time:</span>
+                      <span className="ml-2 font-mono">{upscaleStats.time.toFixed(2)}ms</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-500 dark:text-gray-400">Timestamp:</span>
+                      <span className="ml-2 font-mono">{new Date(upscaleStats.timestamp).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

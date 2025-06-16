@@ -255,6 +255,7 @@ export function AddNoteDialog({
                     <SelectItem value="flux">Flux</SelectItem>
                     <SelectItem value="turbo">Turbo</SelectItem>
                     <SelectItem value="gptimage">GPT Image</SelectItem>
+                    <SelectItem value="together">Together AI</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button

@@ -111,6 +111,16 @@ export function Sidebar() {
           </Button>
           <Button
             variant="ghost"
+            className={`w-full justify-start gap-2 ${pathname === "/test-ai" ? "bg-accent" : ""}`}
+            asChild
+          >
+            <Link href="/test-ai">
+              <Sparkles className="h-4 w-4" />
+              Test AI
+            </Link>
+          </Button>
+          <Button
+            variant="ghost"
             className={`w-full justify-start gap-2 ${pathname === "/settings" ? "bg-accent" : ""}`}
             asChild
           >

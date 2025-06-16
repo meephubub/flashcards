@@ -4,9 +4,42 @@ interface GenerateImageResponse {
   }>;
 }
 
-export type ImageModel = "flux" | "turbo" | "gptimage";
+export type ImageModel = "flux" | "turbo" | "gptimage" | "together";
 
 export async function generateImage(prompt: string, model: ImageModel = "flux"): Promise<GenerateImageResponse> {
+  if (model === "together") {
+    const apiKey = process.env.NEXT_PUBLIC_TOGETHER_API_KEY;
+    if (!apiKey) {
+      throw new Error("NEXT_PUBLIC_TOGETHER_API_KEY is not defined in environment variables");
+    }
+
+    const response = await fetch("https://api.together.xyz/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "black-forest-labs/FLUX.1-schnell-Free",
+        prompt: prompt,
+        steps: 1,
+        n: 1
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
+    }
+
+    const result = await response.json();
+    return {
+      data: [{
+        b64_json: result.data[0].url
+      }]
+    };
+  }
+
   const apiKey = process.env.NEXT_PUBLIC_POLLINATIONS_API;
   if (!apiKey) {
     throw new Error("NEXT_PUBLIC_POLLINATIONS_API is not defined in environment variables");
