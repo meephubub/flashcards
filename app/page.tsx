@@ -42,7 +42,7 @@ export default function Home() {
     }
   }, [authError]);
 
-  if (isLoading) { // isLoading from useAuth()
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black/5">
         <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
@@ -52,7 +52,7 @@ export default function Home() {
 
   return (
     <div className="relative flex h-screen bg-[#f5f5f7]">
-      {!session && !isLoading && (
+      {!session && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md p-8 mx-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             <div className="text-center">
@@ -69,7 +69,7 @@ export default function Home() {
                 {formError || authError}
               </div>
             )}
-
+    
             <form className="mt-6 space-y-6" onSubmit={handleAuth}>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -88,7 +88,7 @@ export default function Home() {
                   />
                 </div>
               </div>
-
+    
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   Password
@@ -106,7 +106,7 @@ export default function Home() {
                   />
                 </div>
               </div>
-
+    
               <button
                 type="submit"
                 className="flex w-full justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-black dark:bg-white dark:text-black hover:bg-gray-900 dark:hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black dark:focus:ring-white"
@@ -114,7 +114,7 @@ export default function Home() {
                 {isSignUp ? 'Sign up' : 'Sign in'}
               </button>
             </form>
-
+    
             <p className="mt-4 text-sm text-center text-gray-600 dark:text-gray-300">
               {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
               <button
@@ -127,7 +127,7 @@ export default function Home() {
           </div>
         </div>
       )}
-
+    
       <Sidebar />
       <main className={`flex-1 p-6 overflow-auto ${!session ? 'opacity-30 pointer-events-none' : ''}`}>
         <DeckGrid />

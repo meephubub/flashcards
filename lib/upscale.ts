@@ -78,12 +78,12 @@ export class Upscaler {
     try {
       this.modelBuffers.esrgan = await this.loadModel(
         'esrgan-v1',
-        '/models/RealESRGAN_x4.onnx',
+        'https://huggingface.co/Meeperomi/RealESRGAN_x4-onnx/resolve/main/RealESRGAN_x4.onnx?download=true',
         'Real-ESRGAN (~25 MB)',
       );
       this.modelBuffers.gfpgan = await this.loadModel(
         'gfpgan-v1.4',
-        '/models/GFPGANv1.4.onnx',
+        'https://huggingface.co/Meeperomi/GFPGANv1.4-onnx/resolve/main/GFPGANv1.4.onnx?download=true',
         'GFPGAN (~330 MB)',
       );
 

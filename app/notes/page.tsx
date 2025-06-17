@@ -1440,25 +1440,6 @@ const NoteCard = React.memo(function NoteCard({
       : { bg: "bg-gray-100", accent: "bg-gray-400/70", border: "border-gray-300" });
   };
 
-  // Helper function to get the specific color value for CSS properties
-  const getCategoryColor = (category: string, isDarkMode: boolean): string => {
-    const lowerCategory = category.toLowerCase().trim();
-    const colorMap = {
-      biology: '#22c55e',      // green
-      chemistry: '#f43f5e',    // rose
-      physics: '#f59e0b',      // amber
-      english: '#3b82f6',      // blue
-      math: '#a855f7',         // purple
-      history: '#f97316',      // orange
-      art: '#ec4899',          // pink
-      music: '#6366f1',        // indigo
-      computer: '#06b6d4',     // cyan
-      programming: '#14b8a6',  // teal
-    };
-    
-    return colorMap[lowerCategory as keyof typeof colorMap] || (isDarkMode ? '#737373' : '#a3a3a3');
-  };
-
   const categoryColors = getCategoryColorClass(note.category);
 
   useEffect(() => {
@@ -1519,24 +1500,9 @@ const NoteCard = React.memo(function NoteCard({
       }}
       data-focused={isActive}
     >
-      {/* Modern category color bar with refined gradient */}
-      <div className={`relative h-1.5 overflow-hidden ${isDark ? 'bg-neutral-800/70' : 'bg-neutral-100'}`}>
-        <div 
-          className={`absolute inset-0 opacity-90 backdrop-blur-sm`}
-          style={{
-            background: `linear-gradient(90deg, 
-              transparent 0%, 
-              ${getCategoryColor(note.category, isDark)}40 20%, 
-              ${getCategoryColor(note.category, isDark)} 50%, 
-              ${getCategoryColor(note.category, isDark)}40 80%, 
-              transparent 100%
-            )`,
-            boxShadow: `0 1px 4px 0 ${getCategoryColor(note.category, isDark)}40`,
-            width: '80%',
-            left: '10%',
-            borderRadius: '2px'
-          }}
-        />
+      {/* Modern category color bar */}
+      <div className={`${categoryColors.bg} p-0.5 border-b ${categoryColors.border}`}>
+        <div className={`h-1 w-16 ${categoryColors.accent} rounded-full mx-auto`}></div>
       </div>
       
       <div className="relative overflow-hidden">
