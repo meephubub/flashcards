@@ -1,4 +1,5 @@
 import { Backend } from "@/app/test-ai/upscale/page";
+import { Tensor } from "onnxruntime-web";
 
 // --- IndexedDB Caching ---
 const DB_NAME = 'ModelCacheDB';
@@ -178,7 +179,7 @@ export class Upscaler {
 }
 
 // Helper function to load an image from a URL
-function loadImage(url: string): Promise<HTMLImageElement> {
+export function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "Anonymous"; // Important for loading images from other origins (like Together AI)

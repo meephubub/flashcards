@@ -134,6 +134,21 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
 
   // Images: ![alt](url) or ![alt|maxheight=500](url) for custom height
   processedText = processedText.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, src) => {
+    // Check for YouTube URLs
+    const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/;
+    const youtubeMatch = src.match(youtubeRegex);
+
+    if (youtubeMatch) {
+      const videoId = youtubeMatch[1];
+      return `<iframe 
+        class="w-full aspect-video rounded-md my-2"
+        src="https://www.youtube.com/embed/${videoId}" 
+        frameborder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowfullscreen>
+      </iframe>`;
+    }
+    
     // Check if alt text contains height specification
     const heightMatch = alt.match(/\|\s*maxheight=(\d+)/)
     let maxHeight = 400 // Default max height
@@ -1710,13 +1725,13 @@ export default function NotesPage() {
   const [aiPrompt, setAiPrompt] = useState<string>("")
   const [aiResponse, setAiResponse] = useState<string>("")
   const [isProcessingAiRequest, setIsProcessingAiRequest] = useState<boolean>(false)
-  const [isMcqDialogOpen, setIsMcqDialogOpen] = useState<boolean>(false)
-  const [generatedMcqs, setGeneratedMcqs] = useState<MultipleChoiceQuestion[]>([])
-  const [isGeneratingMcqs, setIsGeneratingMcqs] = useState<boolean>(false)
-  const [mcqError, setMcqError] = useState<string | null>(null)
-  const [currentMcqNoteTitle, setCurrentMcqNoteTitle] = useState<string | undefined>(undefined)
-  const [userAnswers, setUserAnswers] = useState<Record<number, string>>({})
-  const [showMcqResults, setShowMcqResults] = useState<boolean>(false)
+  const [isQuizDialogOpen, setIsQuizDialogOpen] = useState(false);
+  const [generatedQuestions, setGeneratedQuestions] = useState<any[]>([]);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [quizError, setQuizError] = useState<string | null>(null);
+  const [currentQuizNoteTitle, setCurrentQuizNoteTitle] = useState<string | null>(null);
+  const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
+  const [showQuizResults, setShowQuizResults] = useState(false);
   const [isEditNoteDialogOpen, setIsEditNoteDialogOpen] = useState<boolean>(false)
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState<boolean>(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
@@ -2548,50 +2563,49 @@ export default function NotesPage() {
 
   const handleGenerateMcqs = async () => {
     if (!focusedNoteId) {
-      setMcqError("Please select a note to generate MCQs from.")
-      return
+      setQuizError("Please select a note to generate quiz questions from.");
+      return;
     }
-    const noteToGenerateFrom = allNotes.find((note) => note.id === focusedNoteId)
+    const noteToGenerateFrom = allNotes.find((note) => note.id === focusedNoteId);
     if (!noteToGenerateFrom) {
-      setMcqError("Focused note not found.")
-      return
+      setQuizError("Focused note not found.");
+      return;
     }
 
-    setIsGeneratingMcqs(true)
-    setMcqError(null)
-    setGeneratedMcqs([])
-    setUserAnswers({})
-    setShowMcqResults(false)
-    setCurrentMcqNoteTitle(noteToGenerateFrom.title)
+    setIsGeneratingQuiz(true);
+    setQuizError(null);
+    setGeneratedQuestions([]);
+    setUserAnswers({});
+    setShowQuizResults(false);
+    setCurrentQuizNoteTitle(noteToGenerateFrom.title);
 
     try {
-      const response = await fetch("/api/generate-mcq", {
+      const response = await fetch("/api/quiz-me", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          noteContent: noteToGenerateFrom.content,
-          noteTitle: noteToGenerateFrom.title,
-          numberOfQuestions: 5, // Or make this configurable
+          content: noteToGenerateFrom.content,
+          numQuestions: 5,
         }),
-      })
+      });
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to generate MCQs from API.")
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate quiz questions from API.");
       }
 
-      const data: MCQGenerationResult = await response.json()
-      if (data.mcqs && data.mcqs.length > 0) {
-        setGeneratedMcqs(data.mcqs)
-        setIsMcqDialogOpen(true)
+      const data = await response.json();
+      if (data.questions && data.questions.length > 0) {
+        setGeneratedQuestions(data.questions);
+        setIsQuizDialogOpen(true);
       } else {
-        setMcqError("No MCQs were generated for this note. The content might be too short or not suitable.")
+        setQuizError("No quiz questions were generated for this note. The content might be too short or not suitable.");
       }
     } catch (error: any) {
-      console.error("Error generating MCQs:", error)
-      setMcqError(error.message || "An unexpected error occurred while generating MCQs.")
+      console.error("Error generating quiz questions:", error);
+      setQuizError(error.message || "An unexpected error occurred while generating quiz questions.");
     } finally {
-      setIsGeneratingMcqs(false)
+      setIsGeneratingQuiz(false);
     }
   }
 
@@ -2600,20 +2614,20 @@ export default function NotesPage() {
   }
 
   const handleSubmitMcqs = () => {
-    setShowMcqResults(true)
+    setShowQuizResults(true)
   }
 
   const calculateMcqScore = () => {
     let correctCount = 0
-    generatedMcqs.forEach((mcq, index) => {
+    generatedQuestions.forEach((mcq, index) => {
       if (userAnswers[index] === mcq.correctAnswer) {
         correctCount++
       }
     })
     return {
       correct: correctCount,
-      total: generatedMcqs.length,
-      percentage: generatedMcqs.length > 0 ? (correctCount / generatedMcqs.length) * 100 : 0,
+      total: generatedQuestions.length,
+      percentage: generatedQuestions.length > 0 ? (correctCount / generatedQuestions.length) * 100 : 0,
     }
   }
 
@@ -3110,14 +3124,14 @@ export default function NotesPage() {
             variant="ghost"
             size="sm"
             onClick={handleGenerateMcqs}
-            disabled={isGeneratingMcqs || !focusedNoteId}
+            disabled={isGeneratingQuiz || !focusedNoteId}
             className={`flex-shrink-0 backdrop-blur-sm border rounded-xl px-3 py-1.5 transition-all duration-200 text-xs ${
               theme === "dark" 
                 ? "text-neutral-200 bg-white/5 border-white/10" + (!focusedNoteId ? " opacity-60" : " hover:text-white hover:bg-white/10")
                 : "bg-gray-100/50 border-gray-200/50" + (!focusedNoteId ? " text-gray-500 opacity-70" : " text-gray-700 hover:text-gray-900 hover:bg-gray-200/60")
             }`}
           >
-            {isGeneratingMcqs ? (
+            {isGeneratingQuiz ? (
               <>
                 <SparklesIcon className="h-3 w-3 mr-1.5" /> Generating...
               </>
