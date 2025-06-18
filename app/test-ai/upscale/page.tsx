@@ -23,6 +23,7 @@ export default function UpscaleTestPage() {
   const [statusLog, setStatusLog] = useState<string[]>([]);
   const [upscaleStats, setUpscaleStats] = useState<{ time: number; inferenceTime: number; } | null>(null);
   const [backend, setBackend] = useState<Backend>("wasm");
+  const [useRealEsrgan, setUseRealEsrgan] = useState(true);
   const [useGfpgan, setUseGfpgan] = useState(false);
   const originalImageDataRef = useRef<ImageData | null>(null);
   const upscalerRef = useRef<Upscaler | null>(null);
@@ -69,7 +70,7 @@ export default function UpscaleTestPage() {
         }
       },
       onComplete: (inferenceTime) => {
-        setStatusLog(prevLog => [...prevLog, "Upscaling complete!"]);
+        setStatusLog(prevLog => [...prevLog, "Processing complete!"]);
         const endTime = performance.now();
         setUpscaleStats({ time: endTime - upscaleStartTimeRef.current, inferenceTime });
         setIsUpscaling(false);
@@ -124,6 +125,12 @@ export default function UpscaleTestPage() {
   const handleUpscale = async () => {
     if (!originalImageDataRef.current || !upscalerRef.current) return;
     
+    // Validate that at least one model is selected
+    if (!useRealEsrgan && !useGfpgan) {
+      setError("Please select at least one model to use (Real-ESRGAN or GFPGAN).");
+      return;
+    }
+    
     setIsUpscaling(true);
     setError(null);
     setUpscaleStats(null);
@@ -132,7 +139,18 @@ export default function UpscaleTestPage() {
     setStatusLog([]);
     upscaleStartTimeRef.current = performance.now();
     
-    upscalerRef.current.upscale(originalImageDataRef.current, backend, useGfpgan);
+    upscalerRef.current.upscale(originalImageDataRef.current, backend, useGfpgan, useRealEsrgan);
+  };
+
+  const getProcessingDescription = () => {
+    if (useRealEsrgan && useGfpgan) {
+      return "Face restoration with GFPGAN, then upscaling with Real-ESRGAN";
+    } else if (useGfpgan) {
+      return "Face restoration with GFPGAN only (no upscaling)";
+    } else if (useRealEsrgan) {
+      return "Upscaling with Real-ESRGAN only";
+    }
+    return "No processing selected";
   };
 
   return (
@@ -144,10 +162,10 @@ export default function UpscaleTestPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Client-Side Image Upscaling Test</CardTitle>
+          <CardTitle>Client-Side Image Processing Test</CardTitle>
           <CardDescription>
-            This tool uses the Real-ESRGAN model to upscale images directly in your browser.
-            You can also optionally enable GFPGAN for face restoration before upscaling.
+            Choose which models to use for image processing. You can use GFPGAN for face restoration, 
+            Real-ESRGAN for upscaling, or both together.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -169,20 +187,54 @@ export default function UpscaleTestPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center space-x-2 pt-2">
-                <Switch id="gfpgan-switch" checked={useGfpgan} onCheckedChange={setUseGfpgan} disabled={!isModelReady || isUpscaling}/>
-                <Label htmlFor="gfpgan-switch">Use GFPGAN (Face Restoration)</Label>
+            </div>
+
+            <div className="space-y-4">
+              <Label className="text-base font-medium">3. Select Models to Use</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    id="realesrgan-switch" 
+                    checked={useRealEsrgan} 
+                    onCheckedChange={setUseRealEsrgan} 
+                    disabled={!isModelReady || isUpscaling}
+                  />
+                  <Label htmlFor="realesrgan-switch">Use Real-ESRGAN (Upscaling)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    id="gfpgan-switch" 
+                    checked={useGfpgan} 
+                    onCheckedChange={setUseGfpgan} 
+                    disabled={!isModelReady || isUpscaling}
+                  />
+                  <Label htmlFor="gfpgan-switch">Use GFPGAN (Face Restoration)</Label>
+                </div>
               </div>
-              <div className="flex items-start text-xs text-gray-500 p-2 bg-gray-50 dark:bg-gray-800 rounded-md">
+              
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-md">
+                <div className="flex items-start">
                   <InfoIcon className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
-                  <span>GFPGAN is a large model (~330MB) that will be downloaded. It runs before upscaling to improve faces. For this model, WASM is often faster than WebGPU.</span>
+                  <div className="text-sm text-blue-700 dark:text-blue-300">
+                    <p className="font-medium mb-1">Processing: {getProcessingDescription()}</p>
+                    <ul className="space-y-1 list-disc list-inside">
+                      <li><strong>Real-ESRGAN:</strong> Upscales images by 4x (~25MB model)</li>
+                      <li><strong>GFPGAN:</strong> Restores faces in images (~330MB model)</li>
+                      <li><strong>Both:</strong> GFPGAN runs first, then Real-ESRGAN upscales the result</li>
+                      <li><strong>GFPGAN only:</strong> Face restoration without upscaling</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           
           <div>
-            <Button onClick={handleUpscale} disabled={!originalImageUrl || isUpscaling || !isModelReady}>
-              {isUpscaling ? "Upscaling..." : !isModelReady ? "Models Loading..." : "3. Upscale Image"}
+            <Button 
+              onClick={handleUpscale} 
+              disabled={!originalImageUrl || isUpscaling || !isModelReady || (!useRealEsrgan && !useGfpgan)}
+            >
+              {isUpscaling ? "Processing..." : !isModelReady ? "Models Loading..." : "4. Process Image"}
             </Button>
           </div>
 
@@ -211,7 +263,7 @@ export default function UpscaleTestPage() {
 
           {upscaleStats && !isUpscaling && (
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-              <h3 className="text-sm font-medium mb-2">Upscale Statistics</h3>
+              <h3 className="text-sm font-medium mb-2">Processing Statistics</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">Total Time:</span>
@@ -234,7 +286,7 @@ export default function UpscaleTestPage() {
                 </CardContent>
               </Card>
             )}
-            {gfpganImageUrl && (
+            {gfpganImageUrl && useGfpgan && (
               <Card>
                 <CardHeader><CardTitle>GFPGAN Result</CardTitle></CardHeader>
                 <CardContent>
@@ -242,11 +294,19 @@ export default function UpscaleTestPage() {
                 </CardContent>
               </Card>
             )}
-            {upscaledImageUrl && (
+            {upscaledImageUrl && useRealEsrgan && (
               <Card>
-                <CardHeader><CardTitle>Upscaled Result</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Final Result</CardTitle></CardHeader>
                 <CardContent>
-                  <img src={upscaledImageUrl} alt="Upscaled" className="w-full h-auto rounded-md" />
+                  <img src={upscaledImageUrl} alt="Processed" className="w-full h-auto rounded-md" />
+                </CardContent>
+              </Card>
+            )}
+            {gfpganImageUrl && useGfpgan && !useRealEsrgan && (
+              <Card>
+                <CardHeader><CardTitle>Final Result (GFPGAN Only)</CardTitle></CardHeader>
+                <CardContent>
+                  <img src={gfpganImageUrl} alt="GFPGAN Only" className="w-full h-auto rounded-md" />
                 </CardContent>
               </Card>
             )}

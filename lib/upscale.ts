@@ -116,9 +116,20 @@ export class Upscaler {
     return modelBuffer;
   }
 
-  upscale(imageData: ImageData, backend: Backend, useGfpgan: boolean): void {
-    if (!this.modelBuffers.esrgan || !this.modelBuffers.gfpgan) {
-      this.callbacks.onError?.(new Error("Models not loaded yet. Please wait until initialization is complete."));
+  upscale(imageData: ImageData, backend: Backend, useGfpgan: boolean, useRealEsrgan: boolean = true): void {
+    // Validate that at least one model is selected
+    if (!useGfpgan && !useRealEsrgan) {
+      this.callbacks.onError?.(new Error("At least one model must be selected (GFPGAN or Real-ESRGAN)."));
+      return;
+    }
+
+    // Check if required models are loaded
+    if (useRealEsrgan && !this.modelBuffers.esrgan) {
+      this.callbacks.onError?.(new Error("Real-ESRGAN model not loaded yet. Please wait until initialization is complete."));
+      return;
+    }
+    if (useGfpgan && !this.modelBuffers.gfpgan) {
+      this.callbacks.onError?.(new Error("GFPGAN model not loaded yet. Please wait until initialization is complete."));
       return;
     }
 
@@ -127,14 +138,29 @@ export class Upscaler {
         imageData,
         backend,
         useGfpgan,
+        useRealEsrgan,
       }, [imageData.data.buffer]);
-    } else if (this.modelBuffers.esrgan && this.modelBuffers.gfpgan) {
+    } else {
+      // Only send the models that are needed
+      const modelBuffersToSend: { esrgan?: ArrayBuffer, gfpgan?: ArrayBuffer } = {};
+      const transferList: ArrayBufferLike[] = [imageData.data.buffer];
+      
+      if (useRealEsrgan && this.modelBuffers.esrgan) {
+        modelBuffersToSend.esrgan = this.modelBuffers.esrgan;
+        transferList.push(this.modelBuffers.esrgan);
+      }
+      if (useGfpgan && this.modelBuffers.gfpgan) {
+        modelBuffersToSend.gfpgan = this.modelBuffers.gfpgan;
+        transferList.push(this.modelBuffers.gfpgan);
+      }
+
       this.worker.postMessage({
         imageData,
-        modelBuffers: this.modelBuffers,
+        modelBuffers: modelBuffersToSend,
         backend,
         useGfpgan,
-      }, [imageData.data.buffer, this.modelBuffers.esrgan, this.modelBuffers.gfpgan]);
+        useRealEsrgan,
+      }, transferList);
       this.modelsSentToWorker = true;
       this.modelBuffers = {};
     }

@@ -8,7 +8,7 @@ let localModelBuffers: { esrgan?: ArrayBuffer, gfpgan?: ArrayBuffer } | null = n
 
 // Listen for messages from the main thread
 self.onmessage = async (event) => {
-  const { imageData, modelBuffers, backend, useGfpgan } = event.data;
+  const { imageData, modelBuffers, backend, useGfpgan, useRealEsrgan } = event.data;
 
   try {
     // If model buffers are provided (on first call), store them locally.
@@ -17,41 +17,44 @@ self.onmessage = async (event) => {
     }
 
     // Create new sessions if the backend has changed or sessions don't exist.
-    if ((!esrganSession || backend !== currentBackend) && localModelBuffers?.esrgan) {
+    if (backend !== currentBackend) {
       currentBackend = backend;
       const options = {
         executionProviders: [backend],
         executionProviderOptions: { webgpu: { powerPreference: 'high-performance' } }
       };
 
-      self.postMessage({ type: 'status', message: `Initializing Real-ESRGAN with ${backend.toUpperCase()}...` });
-      esrganSession = await InferenceSession.create(localModelBuffers.esrgan, options);
-      self.postMessage({ type: 'status', message: `Real-ESRGAN initialized.` });
+      // Initialize Real-ESRGAN if needed
+      if (useRealEsrgan && localModelBuffers?.esrgan && (!esrganSession || backend !== currentBackend)) {
+        self.postMessage({ type: 'status', message: `Initializing Real-ESRGAN with ${backend.toUpperCase()}...` });
+        esrganSession = await InferenceSession.create(localModelBuffers.esrgan, options);
+        self.postMessage({ type: 'status', message: `Real-ESRGAN initialized.` });
+      }
 
-      if (localModelBuffers.gfpgan) {
+      // Initialize GFPGAN if needed
+      if (useGfpgan && localModelBuffers?.gfpgan && (!gfpganSession || backend !== currentBackend)) {
         self.postMessage({ type: 'status', message: `Initializing GFPGAN with ${backend.toUpperCase()}...` });
         gfpganSession = await InferenceSession.create(localModelBuffers.gfpgan, options);
         self.postMessage({ type: 'status', message: `GFPGAN initialized.` });
       }
     }
     
-    if (!esrganSession) {
-      throw new Error("ESRGAN session is not initialized.");
-    }
+    let imageToProcess = imageData;
+    let totalInferenceTime = 0;
 
-    let imageToUpscale = imageData;
+    // Step 1: Run GFPGAN if requested
     if (useGfpgan) {
       if (!gfpganSession) {
         throw new Error("GFPGAN session is not initialized but was requested.");
       }
-      self.postMessage({ type: 'status', message: 'Resizing for GFPGAN and running face restoration...' });
+      self.postMessage({ type: 'status', message: 'Running face restoration with GFPGAN...' });
       const gfpganStartTime = performance.now();
 
-      const originalWidth = imageToUpscale.width;
-      const originalHeight = imageToUpscale.height;
+      const originalWidth = imageToProcess.width;
+      const originalHeight = imageToProcess.height;
 
       // 1. Resize input to 512x512 for GFPGAN
-      const resizedForGfpgan = resizeImageData(imageToUpscale, 512, 512);
+      const resizedForGfpgan = resizeImageData(imageToProcess, 512, 512);
 
       // 2. Run GFPGAN inference
       const gfpganInputTensor = imageDataToTensor(resizedForGfpgan);
@@ -66,19 +69,29 @@ self.onmessage = async (event) => {
       const gfpganOutputImageData = tensorToImageData(gfpganOutputTensor, 512, 512);
 
       // 4. Resize GFPGAN output back to original dimensions
-      imageToUpscale = resizeImageData(gfpganOutputImageData, originalWidth, originalHeight);
+      imageToProcess = resizeImageData(gfpganOutputImageData, originalWidth, originalHeight);
       
       // Post the GFPGAN result back to the main thread for display
       self.postMessage({
         type: 'gfpgan_result',
-        imageData: imageToUpscale
+        imageData: imageToProcess
       });
 
       const gfpganTime = performance.now() - gfpganStartTime;
+      totalInferenceTime += gfpganTime;
       self.postMessage({ type: 'status', message: `GFPGAN finished in ${gfpganTime.toFixed(0)}ms.` });
     }
     
-    await upscaleAndStreamTiles(esrganSession, imageToUpscale);
+    // Step 2: Run Real-ESRGAN if requested
+    if (useRealEsrgan) {
+      if (!esrganSession) {
+        throw new Error("Real-ESRGAN session is not initialized but was requested.");
+      }
+      await upscaleAndStreamTiles(esrganSession, imageToProcess, totalInferenceTime);
+    } else {
+      // If only GFPGAN was used, send completion message
+      self.postMessage({ type: 'complete', success: true, inferenceTime: totalInferenceTime });
+    }
 
   } catch (error) {
     const errorMessage = error instanceof Error 
@@ -114,11 +127,11 @@ const TILE_SIZE = 256; // The dimension of the square tile for processing
 async function upscaleAndStreamTiles(
   session: InferenceSession,
   imageData: ImageData,
+  totalInferenceTime: number
 ): Promise<void> {
   const scale = 4;
   const outputWidth = imageData.width * scale;
   const outputHeight = imageData.height * scale;
-  let totalInferenceTime = 0;
 
   // 1. Send initialization message with final dimensions
   self.postMessage({
@@ -146,7 +159,8 @@ async function upscaleAndStreamTiles(
 
       const t0 = performance.now();
       const results = await session.run(feeds);
-      totalInferenceTime += performance.now() - t0;
+      const inferenceTime = performance.now() - t0;
+      totalInferenceTime += inferenceTime;
 
       const outputTensor = results[session.outputNames[0]];
       if (!outputTensor) {
