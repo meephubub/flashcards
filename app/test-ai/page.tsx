@@ -344,6 +344,18 @@ export default function TestAIPage() {
   };
 
   const handleImageGeneration = async () => {
+    // Route to appropriate handler based on selected model
+    if (selectedModel === "together") {
+      return handleTogetherImageGeneration();
+    } else if (["dall-e-3", "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large", "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney"].includes(selectedModel)) {
+      return handleCustomImageGeneration();
+    } else {
+      // Use the original pollinations API for flux, turbo, gptimage
+      return handlePollinationsImageGeneration();
+    }
+  };
+
+  const handlePollinationsImageGeneration = async () => {
     setLoading(true);
     setError(null);
     setDebugInfo(null);
@@ -373,6 +385,77 @@ export default function TestAIPage() {
         request: { prompt },
         response: null,
         endpoint: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`,
+        timestamp: new Date().toISOString(),
+        error: errorMessage,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCustomImageGeneration = async () => {
+    setLoading(true);
+    setError(null);
+    setDebugInfo(null);
+    setGenerationStats(null);
+    setUpscaleStats(null);
+    const startTime = performance.now();
+    try {
+      const apiStartTime = performance.now();
+      
+      const requestBody = {
+        prompt: prompt,
+        model: selectedModel,
+        response_format: "url"
+      };
+
+      const response = await fetch("https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
+      }
+
+      const result = await response.json();
+      const apiEndTime = performance.now();
+
+      const generatedImageUrl = result.url || result.data?.[0]?.url;
+      if (!generatedImageUrl) {
+        throw new Error("No image URL found in response");
+      }
+      
+      setImage(generatedImageUrl);
+
+      if (shouldUpscale) {
+        await handleUpscale(generatedImageUrl);
+      }
+
+      setDebugInfo({
+        request: requestBody,
+        response: result,
+        endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate",
+        timestamp: new Date().toISOString(),
+      });
+
+      const endTime = performance.now();
+      setGenerationStats({
+        apiTime: apiEndTime - apiStartTime,
+        totalTime: endTime - startTime,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An error occurred";
+      setError(errorMessage);
+      setDebugInfo({
+        request: { prompt, model: selectedModel, response_format: "url" },
+        response: null,
+        endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate",
         timestamp: new Date().toISOString(),
         error: errorMessage,
       });
@@ -749,6 +832,16 @@ export default function TestAIPage() {
                   <SelectItem value="turbo">Turbo</SelectItem>
                   <SelectItem value="gptimage">GPT Image</SelectItem>
                   <SelectItem value="together">Together AI</SelectItem>
+                  <SelectItem value="dall-e-3">Dall-E 3</SelectItem>
+                  <SelectItem value="sdxl-1.0">SDXL 1.0</SelectItem>
+                  <SelectItem value="sdxl-l">SDXL L</SelectItem>
+                  <SelectItem value="sdxl-turbo">SDXL Turbo</SelectItem>
+                  <SelectItem value="sd-3.5-large">SD 3.5 Large</SelectItem>
+                  <SelectItem value="flux-pro">Flux Pro</SelectItem>
+                  <SelectItem value="flux-dev">Flux Dev</SelectItem>
+                  <SelectItem value="flux-schnell">Flux Schnell</SelectItem>
+                  <SelectItem value="flux-canny">Flux Canny</SelectItem>
+                  <SelectItem value="midjourney">Midjourney</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -866,11 +959,7 @@ export default function TestAIPage() {
           />
           <div className="flex gap-2">
             <Button
-              onClick={
-                selectedModel === "together"
-                  ? handleTogetherImageGeneration
-                  : handleImageGeneration
-              }
+              onClick={handleImageGeneration}
               disabled={loading || isUpscaling}
             >
               {loading && !isUpscaling && "Generating..."}
