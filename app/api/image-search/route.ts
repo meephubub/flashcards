@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Temporarily using a public instance for testing Vercel connectivity
-  const searxngUrl = `https://raspberrypi.unicorn-deneb.ts.net/searxng/search?q=!images%20${encodeURIComponent(query)}&format=json`;
+  const searxngUrl = `https://flashcards-api-mhmd.onrender.com/v1/searxng/search?q=!images%20${encodeURIComponent(query)}&format=json`;
   // const searxngUrl = `https://raspberrypi.unicorn-deneb.ts.net/search?q=!images%20${encodeURIComponent(query)}&format=json`; // Original
 
   try {

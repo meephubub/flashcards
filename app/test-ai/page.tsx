@@ -409,7 +409,7 @@ export default function TestAIPage() {
         response_format: "url"
       };
 
-      const response = await fetch("https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate", {
+      const response = await fetch("https://flashcards-api-mhmd.onrender.com/v1/images/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -439,7 +439,7 @@ export default function TestAIPage() {
       setDebugInfo({
         request: requestBody,
         response: result,
-        endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate",
+        endpoint: "https://flashcards-api-mhmd.onrender.com/v1/images/generate",
         timestamp: new Date().toISOString(),
       });
 
@@ -455,7 +455,7 @@ export default function TestAIPage() {
       setDebugInfo({
         request: { prompt, model: selectedModel, response_format: "url" },
         response: null,
-        endpoint: "https://raspberrypi.unicorn-deneb.ts.net/api/v1/images/generate",
+        endpoint: "https://flashcards-api-mhmd.onrender.com/v1/images/generate",
         timestamp: new Date().toISOString(),
         error: errorMessage,
       });

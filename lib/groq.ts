@@ -678,7 +678,7 @@ export async function makeGroqRequest(
 
     try {
         // Try custom endpoint first with GPT-4
-        const customEndpoint = "https://raspberrypi.unicorn-deneb.ts.net/api/v1/chat/completions";
+        const customEndpoint = "https://flashcards-api-mhmd.onrender.com/v1/chat/completions";
         try {
             console.log("Attempting to use custom endpoint with GPT-4");
             const customRequestBody = {
