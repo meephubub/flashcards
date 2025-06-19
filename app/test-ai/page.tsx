@@ -403,11 +403,18 @@ export default function TestAIPage() {
     try {
       const apiStartTime = performance.now();
       
-      const requestBody = {
-        prompt: prompt,
-        model: selectedModel,
-        response_format: "url"
-      };
+      const requestBody = selectedModel === "flux-canny"
+        ? {
+            prompt: prompt,
+            model: selectedModel,
+            response_format: "url",
+            height: imageHeight
+          }
+        : {
+            prompt: prompt,
+            model: selectedModel,
+            response_format: "url"
+          };
 
       const response = await fetch("https://flashcards-api-mhmd.onrender.com/v1/images/generate", {
         method: "POST",
