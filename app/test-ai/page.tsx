@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -78,7 +78,16 @@ export default function TestAIPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
+  const [referenceImage, setReferenceImage] = useState<File | null>(null);
+  const [referenceImageBase64, setReferenceImageBase64] = useState("");
+  const [referenceImageUrl, setReferenceImageUrl] = useState("");
+
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Ping the root endpoint to wake up the Render server
+    fetch("https://flashcards-api-mhmd.onrender.com/").catch(() => {}); // Ignore errors
+  }, []);
 
   const handleDownloadImage = () => {
     if (image) {
@@ -403,26 +412,45 @@ export default function TestAIPage() {
     try {
       const apiStartTime = performance.now();
       
-      const requestBody = selectedModel === "flux-canny"
-        ? {
-            prompt: prompt,
-            model: selectedModel,
-            response_format: "url",
-            height: imageHeight
-          }
-        : {
-            prompt: prompt,
-            model: selectedModel,
-            response_format: "url"
-          };
+      let requestBody: any;
+      let response;
+      let endpoint = "https://flashcards-api-mhmd.onrender.com/v1/images/generate";
+      let fetchOptions: RequestInit = {};
 
-      const response = await fetch("https://flashcards-api-mhmd.onrender.com/v1/images/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      if (selectedModel === "flux-canny") {
+        if (!referenceImageUrl) {
+          throw new Error("Reference image URL is required for flux-canny model.");
+        }
+        requestBody = {
+          prompt: prompt,
+          model: selectedModel,
+          width: imageWidth,
+          height: imageHeight,
+          image_url: referenceImageUrl,
+        };
+        fetchOptions = {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        };
+      } else {
+        requestBody = {
+          prompt: prompt,
+          model: selectedModel,
+          response_format: "url"
+        };
+        fetchOptions = {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        };
+      }
+
+      response = await fetch(endpoint, fetchOptions);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -446,7 +474,7 @@ export default function TestAIPage() {
       setDebugInfo({
         request: requestBody,
         response: result,
-        endpoint: "https://flashcards-api-mhmd.onrender.com/v1/images/generate",
+        endpoint,
         timestamp: new Date().toISOString(),
       });
 
@@ -697,6 +725,23 @@ export default function TestAIPage() {
     }
   };
 
+  // Helper to convert file to base64
+  const handleReferenceImageChange = async (file: File | null) => {
+    setReferenceImage(file);
+    if (!file) {
+      setReferenceImageBase64("");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove the data:image/...;base64, prefix if present
+      const base64 = result.split(",")[1] || result;
+      setReferenceImageBase64(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-4">
       <div className="flex justify-end">
@@ -941,6 +986,26 @@ export default function TestAIPage() {
                 <Label htmlFor="should-upscale">Upscale after generation</Label>
               </div>
             </div>
+            {selectedModel === "flux-canny" && (
+              <div className="space-y-2 col-span-2">
+                <Label>Reference Image URL (required for Flux Canny)</Label>
+                <Input
+                  type="url"
+                  placeholder="https://example.com/image.png"
+                  value={referenceImageUrl}
+                  onChange={e => setReferenceImageUrl(e.target.value)}
+                />
+                {referenceImageUrl && (
+                  <div className="mt-2">
+                    <img
+                      src={referenceImageUrl}
+                      alt="Reference Preview"
+                      className="max-h-32 rounded border"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {selectedModel === "together" && (
