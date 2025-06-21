@@ -1665,18 +1665,48 @@ type NoteCardPassthroughProps = Omit<NoteCardProps, 'note'>;
 
 interface NotesListProps extends NoteCardPassthroughProps {
   notes: Note[];
+  visibleCount: number;
+  isLoadingMore: boolean;
+  hasMoreNotes: boolean;
+  loadMoreRef: React.RefObject<HTMLDivElement>;
 }
 
-const NotesList = React.memo(function NotesList({ notes, ...rest }: NotesListProps) {
+const NotesList = React.memo(function NotesList({ notes, visibleCount, isLoadingMore, hasMoreNotes, loadMoreRef, ...rest }: NotesListProps) {
+  const visibleNotes = notes.slice(0, visibleCount);
+  
   return (
     <>
-      {notes.map((note) => (
+      {visibleNotes.map((note) => (
         <NoteCard
           key={note.id}
           note={note}
           {...rest}
         />
       ))}
+      
+      {/* Load more trigger */}
+      {hasMoreNotes && (
+        <div 
+          ref={loadMoreRef}
+          className="flex justify-center py-8"
+        >
+          {isLoadingMore ? (
+            <div className="flex items-center space-x-2 text-neutral-400">
+              <div className="w-4 h-4 border-2 border-neutral-600 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-sm">Loading more notes...</span>
+            </div>
+          ) : (
+            <div className="h-8" /> // Invisible trigger for intersection observer
+          )}
+        </div>
+      )}
+      
+      {/* End of notes indicator */}
+      {!hasMoreNotes && notes.length > 0 && (
+        <div className="text-center py-8 text-neutral-500 text-sm">
+          You've reached the end of your notes
+        </div>
+      )}
     </>
   );
 });
@@ -1698,6 +1728,11 @@ export default function NotesPage() {
   
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Virtual scrolling state
+  const [visibleNotesCount, setVisibleNotesCount] = useState(5);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreNotes, setHasMoreNotes] = useState(true);
 
   // Persistent storage for shuffled MCQ options that survives re-renders
   const shuffledMcqOptionsRef = useRef<Record<string, any>>({})
@@ -1770,6 +1805,7 @@ export default function NotesPage() {
 
   const notesContainerRef = useRef<HTMLDivElement>(null)
   const activeNoteRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>
+  const loadMoreRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>
 
   // Utility for similarity grading
   const getSimilarity = async (input: string, answer: string): Promise<number> => {
@@ -1786,6 +1822,66 @@ export default function NotesPage() {
       return 0;
     }
   };
+
+  // Load more notes function
+  const loadMoreNotes = useCallback(() => {
+    if (isLoadingMore || !hasMoreNotes) return;
+    
+    setIsLoadingMore(true);
+    
+    // Simulate loading delay for better UX
+    setTimeout(() => {
+      setVisibleNotesCount(prev => {
+        const newCount = prev + 5;
+        const hasMore = newCount < displayedNotes.length;
+        setHasMoreNotes(hasMore);
+        return newCount;
+      });
+      setIsLoadingMore(false);
+    }, 300);
+  }, [isLoadingMore, hasMoreNotes, displayedNotes.length]);
+
+  // Intersection observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && hasMoreNotes && !isLoadingMore) {
+          loadMoreNotes();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => {
+      if (loadMoreRef.current) {
+        observer.unobserve(loadMoreRef.current);
+      }
+    };
+  }, [loadMoreNotes, hasMoreNotes, isLoadingMore]);
+
+  // Reset virtual scrolling when displayed notes change
+  useEffect(() => {
+    setVisibleNotesCount(5);
+    setHasMoreNotes(displayedNotes.length > 5);
+  }, [displayedNotes.length]);
+
+  // Ensure focused note is visible
+  useEffect(() => {
+    if (focusedNoteId && displayedNotes.length > 0) {
+      const focusedNoteIndex = displayedNotes.findIndex(note => note.id === focusedNoteId);
+      if (focusedNoteIndex >= 0 && focusedNoteIndex >= visibleNotesCount) {
+        // If focused note is beyond visible count, expand to show it
+        const newCount = Math.max(visibleNotesCount, focusedNoteIndex + 5); // Show 5 more notes after the focused one
+        setVisibleNotesCount(newCount);
+        setHasMoreNotes(newCount < displayedNotes.length);
+      }
+    }
+  }, [focusedNoteId, displayedNotes, visibleNotesCount]);
 
   const handleMcqOptionClick = useCallback((blockId: number | string, optionIndex: number, isCorrect: boolean) => {
     const blockKey = typeof blockId === 'number' ? blockId.toString() : blockId;
@@ -2911,7 +3007,10 @@ export default function NotesPage() {
           )}
           <div className="mt-6 space-y-8 md:space-y-10 w-full max-w-4xl mx-auto">
             {isLoading && displayedNotes.length === 0 && (
-              <p className="text-center text-neutral-500 py-10">Loading notes...</p>
+              <div className="text-center py-10">
+                <div className="w-8 h-8 border-4 border-neutral-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-neutral-500">Loading notes...</p>
+              </div>
             )}
             {!isLoading && displayedNotes.length === 0 && selectedSidebarCategory === "all" && !focusedNoteId && !searchQuery && (
               <div className="text-center text-neutral-400 py-10 text-lg">
@@ -2936,28 +3035,34 @@ export default function NotesPage() {
               <p className="text-center text-neutral-400 py-10 text-lg">Note not found or does not match category.</p>
             )}
 
-            <NotesList 
-              notes={displayedNotes}
-              focusedNoteId={focusedNoteId}
-              activeNoteRef={activeNoteRef}
-              theme={theme}
-              startEditingNote={startEditingNote}
-              handleDeleteNote={handleDeleteNote}
-              setNoteForFlashcards={setNoteForFlashcards}
-              setIsFlashcardsDialogOpen={setIsFlashcardsDialogOpen}
-              inlineEditingNoteId={inlineEditingNoteId}
-              handleSaveInlineEdit={handleSaveInlineEdit}
-              setInlineEditingNoteId={setInlineEditingNoteId}
-              mcqStates={mcqStates}
-              handleMcqOptionClick={handleMcqOptionClick}
-              shuffledMcqOptionsRef={shuffledMcqOptionsRef}
-              gapStates={gapStates}
-              setGapStates={setGapStates}
-              getSimilarity={getSimilarity}
-              dragDropStates={dragDropStates}
-              setDragDropStates={setDragDropStates}
-              onSelectNote={handleNoteSelectInSidebar}
-            />
+            {!isLoading && displayedNotes.length > 0 && (
+              <NotesList 
+                notes={displayedNotes}
+                focusedNoteId={focusedNoteId}
+                activeNoteRef={activeNoteRef}
+                theme={theme}
+                startEditingNote={startEditingNote}
+                handleDeleteNote={handleDeleteNote}
+                setNoteForFlashcards={setNoteForFlashcards}
+                setIsFlashcardsDialogOpen={setIsFlashcardsDialogOpen}
+                inlineEditingNoteId={inlineEditingNoteId}
+                handleSaveInlineEdit={handleSaveInlineEdit}
+                setInlineEditingNoteId={setInlineEditingNoteId}
+                mcqStates={mcqStates}
+                handleMcqOptionClick={handleMcqOptionClick}
+                shuffledMcqOptionsRef={shuffledMcqOptionsRef}
+                gapStates={gapStates}
+                setGapStates={setGapStates}
+                getSimilarity={getSimilarity}
+                dragDropStates={dragDropStates}
+                setDragDropStates={setDragDropStates}
+                onSelectNote={handleNoteSelectInSidebar}
+                visibleCount={visibleNotesCount}
+                isLoadingMore={isLoadingMore}
+                hasMoreNotes={hasMoreNotes}
+                loadMoreRef={loadMoreRef}
+              />
+            )}
           </div>
         </div>
 

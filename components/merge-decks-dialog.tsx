@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation"
 import { Combine, Search, Check, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/context/auth-context"
 
 interface MergeDecksDialogProps {
   isOpen: boolean
@@ -37,13 +38,14 @@ export function MergeDecksDialog({ isOpen, onOpenChange, onMergeSuccess }: Merge
   const [isLoading, setIsLoading] = React.useState(false)
   const [isFetchingDecks, setIsFetchingDecks] = React.useState(false)
   const router = useRouter()
+  const { user } = useAuth()
 
   React.useEffect(() => {
     async function fetchDecks() {
-      if (isOpen) {
+      if (isOpen && user) {
         setIsFetchingDecks(true)
         try {
-          const decks = await getDecks(supabase)
+          const decks = await getDecks(supabase, user.id)
           console.log("Fetched decks for merge dialog:", decks)
           setAllDecks(decks)
         } catch (error) {
@@ -52,10 +54,14 @@ export function MergeDecksDialog({ isOpen, onOpenChange, onMergeSuccess }: Merge
         } finally {
           setIsFetchingDecks(false)
         }
+      } else if (isOpen && !user) {
+        console.log("User not authenticated, cannot fetch decks")
+        setAllDecks([])
+        setIsFetchingDecks(false)
       }
     }
     fetchDecks()
-  }, [isOpen])
+  }, [isOpen, user])
 
   const handleDeckSelection = (deckId: string) => {
     console.log(`Toggle selection for deck ID: ${deckId}`)

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { parseMarkdownToFlashcards, parseTabDelimitedToFlashcards, parseCSVToFlashcards } from "@/lib/markdown-parser"
 import { importCardsFromMarkdown } from "@/lib/data"
+import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: Request) {
   try {
@@ -28,8 +29,11 @@ export async function POST(request: Request) {
         parsedDeck = parseMarkdownToFlashcards(fileContent)
     }
 
+    // Create Supabase client
+    const supabase = await createClient()
+
     // Import the cards to Supabase
-    const newDeck = await importCardsFromMarkdown(parsedDeck)
+    const newDeck = await importCardsFromMarkdown(supabase, parsedDeck)
 
     if (!newDeck) {
       return NextResponse.json({ error: "Failed to import flashcards" }, { status: 500 })

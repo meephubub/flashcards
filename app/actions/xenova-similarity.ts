@@ -1,31 +1,142 @@
-import { pipeline } from "@xenova/transformers";
+import { pipeline, env } from "@xenova/transformers";
 
 // Import a lightweight spell checker
 import { distance as levenshteinDistance } from 'fastest-levenshtein';
+
+// Configure environment for better performance
+env.allowLocalModels = false; // Use remote models for better caching
+env.allowRemoteModels = true;
+
+// Check if WebGL is available and configure accordingly
+const isWebGLAvailable = (() => {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext && 
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+  } catch (e) {
+    return false;
+  }
+})();
+
+// Check if running on mobile device
+const isMobileDevice = (() => {
+  if (typeof window === 'undefined') return false;
+  
+  const userAgent = navigator.userAgent.toLowerCase();
+  const mobileKeywords = [
+    'android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry', 
+    'windows phone', 'mobile', 'tablet'
+  ];
+  
+  return mobileKeywords.some(keyword => userAgent.includes(keyword)) ||
+         (window.innerWidth <= 768 && window.innerHeight <= 1024);
+})();
+
+// Model selection based on device type
+const getDefaultModel = () => {
+  if (isMobileDevice) {
+    // Use a smaller, faster model for mobile devices
+    return "Xenova/all-MiniLM-L6-v2"; // ~80MB, good balance of speed and quality
+  }
+  // Use the larger, more accurate model for desktop
+  return "Xenova/nomic-embed-text-v1"; // ~140MB, higher quality embeddings
+};
+
+// Configure execution provider based on WebGL availability
+if (isWebGLAvailable) {
+  env.backends.onnx.wasm.executionProviders = ['webgl'];
+  console.log('[xenova-similarity] WebGL backend enabled for ONNX execution');
+} else {
+  console.log('[xenova-similarity] WebGL not available, using CPU backend');
+}
+
+console.log(`[xenova-similarity] Device: ${isMobileDevice ? 'Mobile' : 'Desktop'}, WebGL: ${isWebGLAvailable ? 'Available' : 'Not available'}`);
+
 const extractorCache: {
   [model: string]: ((input: string | string[], options?: any) => Promise<any>) | null;
 } = {};
 
 /**
  * Get or initialize the feature extractor pipeline for a specific model.
- * @param modelName - The name of the model to use (defaults to 'Xenova/all-MiniLM-L3-v2').
+ * @param modelName - The name of the model to use (auto-selects based on device if not specified).
  */
-export async function getFeatureExtractor(modelName: string = "Xenova/nomic-embed-text-v1") {
-  if (!extractorCache[modelName]) {
-    console.log(`[xenova-similarity] Initializing feature extractor for model: ${modelName}...`);
-    extractorCache[modelName] = await pipeline("feature-extraction", modelName);
-    console.log(
-      `[xenova-similarity] Feature extractor initialized for model: ${modelName}:`,
-      typeof extractorCache[modelName],
-    );
+export async function getFeatureExtractor(modelName?: string) {
+  const selectedModel = modelName || getDefaultModel();
+  
+  if (!extractorCache[selectedModel]) {
+    console.log(`[xenova-similarity] Initializing feature extractor for model: ${selectedModel}...`);
+    console.log(`[xenova-similarity] Using ${isWebGLAvailable ? 'WebGL' : 'CPU'} backend`);
+    console.log(`[xenova-similarity] Device type: ${isMobileDevice ? 'Mobile' : 'Desktop'}`);
+    
+    try {
+      extractorCache[selectedModel] = await pipeline("feature-extraction", selectedModel, {
+        quantized: true, // Use quantized models for better performance
+        progress_callback: (progress: any) => {
+          if (progress.status === 'progress') {
+            console.log(`[xenova-similarity] Loading model: ${Math.round(progress.progress * 100)}%`);
+          }
+        }
+      });
+      
+      console.log(
+        `[xenova-similarity] Feature extractor initialized for model: ${selectedModel}:`,
+        typeof extractorCache[selectedModel],
+      );
+    } catch (error) {
+      console.error(`[xenova-similarity] Failed to initialize model ${selectedModel}:`, error);
+      throw error;
+    }
   }
-  return extractorCache[modelName]!;
+  return extractorCache[selectedModel]!;
+}
+
+/**
+ * Clear the model cache to free up memory.
+ * @param modelName - Optional specific model to clear, otherwise clears all models.
+ */
+export function clearModelCache(modelName?: string) {
+  if (modelName) {
+    if (extractorCache[modelName]) {
+      console.log(`[xenova-similarity] Clearing cache for model: ${modelName}`);
+      extractorCache[modelName] = null;
+    }
+  } else {
+    console.log('[xenova-similarity] Clearing all model caches');
+    Object.keys(extractorCache).forEach(key => {
+      extractorCache[key] = null;
+    });
+  }
+}
+
+/**
+ * Get information about cached models and WebGL availability.
+ */
+export function getModelInfo() {
+  const cachedModels = Object.keys(extractorCache).filter(key => extractorCache[key] !== null);
+  return {
+    webglAvailable: isWebGLAvailable,
+    isMobileDevice,
+    defaultModel: getDefaultModel(),
+    cachedModels,
+    cacheSize: cachedModels.length
+  };
+}
+
+/**
+ * Preload a model to ensure it's cached and ready for use.
+ * @param modelName - The name of the model to preload (auto-selects based on device if not specified).
+ */
+export async function preloadModel(modelName?: string) {
+  const selectedModel = modelName || getDefaultModel();
+  console.log(`[xenova-similarity] Preloading model: ${selectedModel}`);
+  await getFeatureExtractor(selectedModel);
+  console.log(`[xenova-similarity] Model preloaded: ${selectedModel}`);
 }
 
 /** 
  * Get a normalized sentence embedding for a given sentence. 
  * @param sentence - The input sentence to encode. 
- * @param modelName - The name of the model to use (optional, defaults to 'Xenova/all-MiniLM-L3-v2'). 
+ * @param modelName - The name of the model to use (auto-selects based on device if not specified). 
  * @returns A Float32Array representing the sentence embedding. 
  */ 
 export async function getSentenceEmbedding(

@@ -22,13 +22,25 @@ if (typeof window !== 'undefined') {
 
 interface LanguageCardProps {
   questionText: string;
+  correctAnswer?: string;
+  userAnswer?: string | null;
+  similarityScore?: number | null;
+  isAnswerChecked?: boolean;
   onSubmitAnswer: (userAnswer: string) => void;
   isSubmitting?: boolean;
 }
 
-export function LanguageCard({ questionText, onSubmitAnswer, isSubmitting }: LanguageCardProps) {
+export function LanguageCard({ 
+  questionText, 
+  correctAnswer, 
+  userAnswer, 
+  similarityScore, 
+  isAnswerChecked, 
+  onSubmitAnswer, 
+  isSubmitting 
+}: LanguageCardProps) {
   const { settings } = useSettings();
-  const [userAnswer, setUserAnswer] = useState('');
+  const [localUserAnswer, setLocalUserAnswer] = useState('');
   const [showExplanation, setShowExplanation] = useState(false);
   const [explanation, setExplanation] = useState('');
   const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false);
@@ -37,6 +49,13 @@ export function LanguageCard({ questionText, onSubmitAnswer, isSubmitting }: Lan
   const ttsInstance = useRef<any>(null);
   const isInitializingTTS = useRef<boolean>(false);
   const audioContext = useRef<AudioContext | null>(null);
+
+  // Update local state when props change (for new cards)
+  useEffect(() => {
+    if (!isAnswerChecked) {
+      setLocalUserAnswer('');
+    }
+  }, [questionText, isAnswerChecked]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -77,10 +96,10 @@ export function LanguageCard({ questionText, onSubmitAnswer, isSubmitting }: Lan
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (userAnswer.trim() === '?') {
+    if (localUserAnswer.trim() === '?') {
       generateExplanation();
-    } else if (userAnswer.trim()) {
-      onSubmitAnswer(userAnswer.trim());
+    } else if (localUserAnswer.trim()) {
+      onSubmitAnswer(localUserAnswer.trim());
     }
   };
 
@@ -109,7 +128,7 @@ export function LanguageCard({ questionText, onSubmitAnswer, isSubmitting }: Lan
   // Handle input change to detect '?' for immediate explanation
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setUserAnswer(value);
+    setLocalUserAnswer(value);
     
     // If user types just '?', prepare to show explanation
     if (value === '?') {
@@ -262,19 +281,54 @@ export function LanguageCard({ questionText, onSubmitAnswer, isSubmitting }: Lan
             ref={inputRef}
             id="answer"
             type="text"
-            value={userAnswer}
+            value={localUserAnswer}
             onChange={handleInputChange}
             placeholder="Type your answer (or ? for an explanation)..."
             aria-label="Your answer"
-            disabled={isSubmitting || isGeneratingExplanation}
+            disabled={isSubmitting || isGeneratingExplanation || isAnswerChecked}
             className="text-lg p-4"
           />
+          
+          {/* Show answer results after submission */}
+          {isAnswerChecked && correctAnswer && (
+            <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-md border">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">Answer Results</h3>
+                {similarityScore !== null && (
+                  <span className={`text-sm px-2 py-1 rounded-full ${
+                    similarityScore >= 0.75 
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                      : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                  }`}>
+                    {Math.round(similarityScore * 100)}% match
+                  </span>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Your answer:</label>
+                  <p className="text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 p-2 rounded border">
+                    {userAnswer || localUserAnswer}
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Correct answer:</label>
+                  <p className="text-gray-900 dark:text-gray-100 bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800">
+                    {correctAnswer}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <Button 
             type="submit" 
             className="w-full" 
-            disabled={isSubmitting || isGeneratingExplanation || !userAnswer.trim()}
+            disabled={isSubmitting || isGeneratingExplanation || !localUserAnswer.trim() || isAnswerChecked}
           >
-            {isSubmitting ? 'Checking...' : userAnswer.trim() === '?' ? 'Get Explanation' : 'Submit Answer'}
+            {isSubmitting ? 'Checking...' : localUserAnswer.trim() === '?' ? 'Get Explanation' : 'Submit Answer'}
           </Button>
         </form>
       </CardContent>

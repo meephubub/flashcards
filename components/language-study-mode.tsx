@@ -487,6 +487,10 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
         <LanguageCard
           key={currentCard.id} // Add key here to reset input on card change
           questionText={currentCard.front}
+          correctAnswer={currentCard.back}
+          userAnswer={userAnswer}
+          similarityScore={similarityScore}
+          isAnswerChecked={isAnswerChecked}
           onSubmitAnswer={handleAnswerSubmit}
           isSubmitting={isSubmitting}
         />

@@ -1,16 +1,20 @@
-import type { Card } from "@/lib/data"
+interface ParsedCard {
+  id: number
+  front: string
+  back: string
+}
 
 interface ParsedDeck {
   name: string
   description: string
-  cards: Card[]
+  cards: ParsedCard[]
 }
 
 export function parseMarkdownToFlashcards(markdown: string): ParsedDeck {
   // Default deck info
   let deckName = "Imported Deck"
   let deckDescription = ""
-  const cards: Card[] = []
+  const cards: ParsedCard[] = []
 
   // Split the markdown by lines
   const lines = markdown.split("\n")
@@ -78,7 +82,7 @@ export function parseTabDelimitedToFlashcards(text: string): ParsedDeck {
   // Default deck info
   let deckName = "Imported Deck"
   let deckDescription = ""
-  const cards: Card[] = []
+  const cards: ParsedCard[] = []
 
   // Split the text by lines
   const lines = text.split("\n")
@@ -121,7 +125,7 @@ export function parseCSVToFlashcards(text: string): ParsedDeck {
   // Default deck info
   let deckName = "Imported Deck"
   let deckDescription = ""
-  const cards: Card[] = []
+  const cards: ParsedCard[] = []
 
   // Split the text by lines
   const lines = text.split("\n")
@@ -132,29 +136,45 @@ export function parseCSVToFlashcards(text: string): ParsedDeck {
     const line = lines[i].trim()
     if (!line) continue
 
-    // Split the line by commas, handling quoted values
-    const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || []
-    const [front, back] = parts.map(part => {
-      // Remove quotes if present and trim
-      return part.replace(/^"|"$/g, "").trim()
-    })
+    // Parse CSV line properly, handling quoted values
+    const parts: string[] = []
+    let current = ""
+    let inQuotes = false
+    
+    for (let j = 0; j < line.length; j++) {
+      const char = line[j]
+      
+      if (char === '"') {
+        inQuotes = !inQuotes
+      } else if (char === ',' && !inQuotes) {
+        parts.push(current.trim())
+        current = ""
+      } else {
+        current += char
+      }
+    }
+    
+    // Add the last part
+    parts.push(current.trim())
+    
+    // Remove quotes from parts
+    const [front, back] = parts.map(part => part.replace(/^"|"$/g, "").trim())
 
     // Skip if we don't have both front and back
     if (!front || !back) continue
 
-    // If this is the first line and it looks like a header, use it as the deck name
-    if (i === 0 && !front.includes("?") && !front.includes(":")) {
+    if (i === 0) {
+      // First line is deck title and description
       deckName = front
       deckDescription = back
-      continue
+    } else {
+      // All other lines are cards
+      cards.push({
+        id: cardId++,
+        front,
+        back,
+      })
     }
-
-    // Add the card
-    cards.push({
-      id: cardId++,
-      front,
-      back,
-    })
   }
 
   return {
