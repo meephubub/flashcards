@@ -4,7 +4,7 @@ interface GenerateImageResponse {
   }>;
 }
 
-export type ImageModel = "flux" | "turbo" | "gptimage" | "together";
+export type ImageModel = "flux" | "turbo" | "gptimage" | "together" | "dall-e-3" | "sdxl-1.0" | "sdxl-l" | "sdxl-turbo" | "sd-3.5-large" | "flux-pro" | "flux-dev" | "flux-schnell" | "flux-canny" | "midjourney";
 
 export async function generateImage(prompt: string, model: ImageModel = "flux"): Promise<GenerateImageResponse> {
   if (model === "together") {

@@ -58,14 +58,14 @@ export async function generateFlashcards(
     includeImages: boolean = false
 ): Promise<GenerationResult> {
     try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "llama-3.3-70b-versatile",
+        // Try custom endpoint first with GPT-4o-mini
+        const customEndpoint = "https://flashcards-api-mhmd.onrender.com/v1/chat/completions";
+        let response;
+        let data;
+        
+        try {
+            console.log("Attempting to use custom endpoint with GPT-4o-mini for flashcard generation");
+            const customRequestBody = {
                 messages: [
                     {
                         role: "system",
@@ -90,16 +90,91 @@ Do not use any other format or prefixes. Each flashcard must start with "Q:" and
                         content: `Generate ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level. Make sure each flashcard follows the exact format specified.`
                     }
                 ],
+                model: "gpt-4o-mini",
                 temperature: 0.7,
-                max_completion_tokens: 4000,
-            }),
-        });
+                max_tokens: 4000,
+            };
+            
+            console.log("Custom endpoint request body:", JSON.stringify(customRequestBody, null, 2));
+            
+            response = await fetch(customEndpoint, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(customRequestBody),
+            });
 
-        if (!response.ok) {
-            throw new Error(`Failed to generate flashcards: ${response.statusText}`);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                console.error("Custom endpoint error response:", {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorData,
+                });
+                throw new Error(
+                    `Custom endpoint error: ${response.statusText}${
+                        errorData ? ` - ${JSON.stringify(errorData)}` : ""
+                    }`
+                );
+            }
+
+            data = await response.json();
+            console.log("Custom endpoint response:", data);
+        } catch (customError: any) {
+            console.error("Custom endpoint failed, falling back to Groq:", customError);
+            
+            // Fallback to Groq
+            const groqApiKey = process.env.GROQ_API_KEY;
+            if (!groqApiKey) {
+                throw new Error("GROQ_API_KEY is not defined in environment variables");
+            }
+
+            response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${groqApiKey}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: "llama-3.3-70b-versatile",
+                    messages: [
+                        {
+                            role: "system",
+                            content: `You are an expert educational content creator specializing in creating high-quality flashcards. Your task is to create ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level.
+
+Guidelines for creating effective flashcards:
+1. Questions should be clear, specific, and test understanding
+2. Answers should be concise but complete
+3. Use simple, direct language
+4. Focus on key concepts and important details
+5. Avoid overly complex or ambiguous questions
+6. if it's about a language, include just a word or sentence on one side and the translation on the other
+
+IMPORTANT: Format each flashcard EXACTLY like this:
+Q: [Your question here]
+A: [Your answer here]
+
+Do not use any other format or prefixes. Each flashcard must start with "Q:" and its answer must start with "A:".`
+                        },
+                        {
+                            role: "user",
+                            content: `Generate ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level. Make sure each flashcard follows the exact format specified.`
+                        }
+                    ],
+                    temperature: 0.7,
+                    max_completion_tokens: 4000,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to generate flashcards: ${response.statusText}`);
+            }
+
+            data = await response.json();
+            console.log("Groq fallback response:", data);
         }
 
-        const data = await response.json();
         const content = data.choices[0].message.content;
         console.log("Raw flashcard response:", content);
 
@@ -606,10 +681,9 @@ export async function generateMultipleChoiceQuestionsWithGroq(
     } catch (error) {
         console.log(
             "Failed to parse JSON for MCQs, attempting to fix format:",
-            response,
             error,
         );
-        const fixPrompt = `The following response needs to be formatted as valid JSON with an "mcqs" array containing objects with "question", "options" (array of 4 strings), "correctAnswer" (string), and "explanation" (string, optional) properties. Ensure the correctAnswer is one of the options. Please convert this to proper JSON format:\n\n${response}\n\nReturn ONLY valid JSON.`;
+        const fixPrompt = `The following response needs to be formatted as valid JSON with an "mcqs" array containing objects with "question", "options" (array of 4 strings), "correctAnswer" (string), and "explanation" (string, optional) properties. Ensure the correctAnswer is one of the options. Please convert this to proper JSON format:\n\n${error}\n\nReturn ONLY valid JSON.`;
         let fixedResponse: string = "[No response from fix attempt]";
         try {
             fixedResponse = await makeGroqRequest(
@@ -670,28 +744,27 @@ export async function generateMultipleChoiceQuestionsWithGroq(
 // Helper function to make a request to the Groq API
 export async function makeGroqRequest(
     prompt: string,
-    model: string = "llama-3.3-70b-versatile"
+    requireJson: boolean = false,
+    systemMessage: string = "You are a helpful assistant.",
+    forceJson: boolean = false
 ): Promise<string> {
-    const groq = new Groq({
-        apiKey: process.env.GROQ_API_KEY,
-    });
-
     try {
-        // Try custom endpoint first with GPT-4
+        // Try custom endpoint first with GPT-4o-mini
         const customEndpoint = "https://flashcards-api-mhmd.onrender.com/v1/chat/completions";
         try {
-            console.log("Attempting to use custom endpoint with GPT-4");
+            console.log("Attempting to use custom endpoint with GPT-4o-mini");
             const customRequestBody = {
                 messages: [
                     {
                         role: "system",
-                        content: "You are a helpful assistant.",
+                        content: systemMessage,
                     },
                     {
                         role: "user",
                         content: prompt,
                     },
                 ],
+                model: "gpt-4o-mini",
                 temperature: 0.6,
                 max_tokens: 3000,
             };
@@ -729,13 +802,14 @@ export async function makeGroqRequest(
                 messages: [
                     {
                         role: "system",
-                        content: "You are a helpful assistant.",
+                        content: systemMessage,
                     },
                     {
                         role: "user",
                         content: prompt,
                     },
                 ],
+                model: "llama-3.3-70b-versatile",
                 temperature: 0.6,
                 max_tokens: 3000,
             };
@@ -803,8 +877,8 @@ function processFlashcardResponse(
                 if (
                     parsedContent[key] &&
                     typeof parsedContent[key] === "object" &&
-                    parsedContent[key].front &&
-                    parsedContent[key].back
+                    parsedContent[key].question &&
+                    parsedContent[key].answer
                 ) {
                     cards.push(parsedContent[key]);
                 }
@@ -817,9 +891,9 @@ function processFlashcardResponse(
         }
     }
   
-    // Validate each card has front and back properties
+    // Validate each card has question and answer properties
     const validCards = cards.filter(
-        (card: any) => card && typeof card === "object" && card.front && card.back,
+        (card: any) => card && typeof card === "object" && card.question && card.answer,
     );
   
     // If no valid cards were found, create a fallback
@@ -829,10 +903,12 @@ function processFlashcardResponse(
   
     return {
         cards: validCards.map((card: any) => ({
-            front: card.front,
-            back: card.back,
+            question: card.question,
+            answer: card.answer,
         })),
         topic,
+        difficulty: "medium",
+        created: new Date().toISOString(),
     };
 }
 
@@ -840,20 +916,20 @@ function processFlashcardResponse(
 function extractCardsManually(responseText: string, topic: string): GenerationResult {
     const cards: GeneratedCard[] = [];
   
-    // Try to extract front/back pairs using regex patterns
-    const frontBackPairs = responseText.match(
-        /front["\s:]+([^"]+)["\s,]+back["\s:]+([^"]+)/gi,
+    // Try to extract question/answer pairs using regex patterns
+    const questionAnswerPairs = responseText.match(
+        /question["\s:]+([^"]+)["\s,]+answer["\s:]+([^"]+)/gi,
     );
   
-    if (frontBackPairs && frontBackPairs.length > 0) {
-        for (const pair of frontBackPairs) {
-            const frontMatch = pair.match(/front["\s:]+([^"]+)/i);
-            const backMatch = pair.match(/back["\s:]+([^"]+)/i);
+    if (questionAnswerPairs && questionAnswerPairs.length > 0) {
+        for (const pair of questionAnswerPairs) {
+            const questionMatch = pair.match(/question["\s:]+([^"]+)/i);
+            const answerMatch = pair.match(/answer["\s:]+([^"]+)/i);
   
-            if (frontMatch && frontMatch[1] && backMatch && backMatch[1]) {
+            if (questionMatch && questionMatch[1] && answerMatch && answerMatch[1]) {
                 cards.push({
-                    front: frontMatch[1].trim(),
-                    back: backMatch[1].trim(),
+                    question: questionMatch[1].trim(),
+                    answer: answerMatch[1].trim(),
                 });
             }
         }
@@ -873,8 +949,8 @@ function extractCardsManually(responseText: string, topic: string): GenerationRe
                 (nextLine.startsWith("A:") || nextLine.match(/^Answer:/i))
             ) {
                 cards.push({
-                    front: line.replace(/^Q:|\d+[.)]/, "").trim(),
-                    back: nextLine.replace(/^A:|Answer:/i, "").trim(),
+                    question: line.replace(/^Q:|\d+[.)]/, "").trim(),
+                    answer: nextLine.replace(/^A:|Answer:/i, "").trim(),
                 });
                 i++; // Skip the answer line since we've already processed it
             }
@@ -889,6 +965,8 @@ function extractCardsManually(responseText: string, topic: string): GenerationRe
     return {
         cards,
         topic,
+        difficulty: "medium",
+        created: new Date().toISOString(),
     };
 }
 
@@ -897,14 +975,16 @@ function createFallbackCards(topic: string): GenerationResult {
     return {
         cards: [
             {
-                front: `What is ${topic}?`,
-                back: "This card was generated as a fallback. Please try generating flashcards again.",
+                question: `What is ${topic}?`,
+                answer: "This card was generated as a fallback. Please try generating flashcards again.",
             },
             {
-                front: `Describe the key concepts of ${topic}.`,
-                back: "This card was generated as a fallback. Please try generating flashcards again.",
+                question: `Describe the key concepts of ${topic}.`,
+                answer: "This card was generated as a fallback. Please try generating flashcards again.",
             },
         ],
         topic,
+        difficulty: "medium",
+        created: new Date().toISOString(),
     };
 }

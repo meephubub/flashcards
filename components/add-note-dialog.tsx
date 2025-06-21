@@ -89,11 +89,43 @@ export function AddNoteDialog({
 
   const generateImageFromTag = async (prompt: string): Promise<string> => {
     try {
-      const result = await generateImage(prompt, selectedImageModel)
-      if (result.data && result.data.length > 0) {
-        return `data:image/png;base64,${result.data[0].b64_json}`
+      // Check if the selected model is one of the advanced models that need custom handling
+      const advancedModels = ["dall-e-3", "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large", "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney"];
+      
+      if (advancedModels.includes(selectedImageModel)) {
+        // Use custom image generation for advanced models
+        const response = await fetch("https://flashcards-api-mhmd.onrender.com/v1/images/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: prompt,
+            model: selectedImageModel,
+            response_format: "url"
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
+        }
+
+        const result = await response.json();
+        const generatedImageUrl = result.url || result.data?.[0]?.url;
+        if (!generatedImageUrl) {
+          throw new Error("No image URL found in response");
+        }
+        
+        return generatedImageUrl;
+      } else {
+        // Use the original generateImage function for basic models
+        const result = await generateImage(prompt, selectedImageModel as any)
+        if (result.data && result.data.length > 0) {
+          return `data:image/png;base64,${result.data[0].b64_json}`
+        }
+        throw new Error("No image data received")
       }
-      throw new Error("No image data received")
     } catch (error) {
       console.error("Error generating image:", error)
       throw error
@@ -178,49 +210,49 @@ export function AddNoteDialog({
             </ShadDialogTitle>
           </DialogHeader>
 
-          <div
-            className={`space-y-4 mb-6 p-4 border rounded-lg ${
-              theme === "dark" ? "border-neutral-700 bg-neutral-800/50" : "border-gray-200 bg-gray-50"
-            }`}
-          >
-            <p className={`text-sm font-medium ${theme === "dark" ? "text-neutral-300" : "text-gray-700"}`}>
-              Generate with AI ✨
-            </p>
-            <div className="flex space-x-2">
-              <Input
-                placeholder="Enter a topic for AI note generation..."
-                value={generationTopic}
-                onChange={(e) => setGenerationTopic(e.target.value)}
-                className={`flex-grow ${
-                  theme === "dark"
-                    ? "bg-neutral-700 border-neutral-600 text-neutral-100 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-neutral-500"
-                    : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"
-                }`}
-                disabled={isGeneratingNote}
-              />
-              <Button
-                onClick={handleGenerateNote}
-                disabled={isGeneratingNote || !generationTopic.trim()}
-                className={`font-semibold transition-all duration-150 whitespace-nowrap ${
-                  theme === "dark"
-                    ? "bg-neutral-800 hover:bg-neutral-700 text-neutral-100 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 focus:ring-offset-white border border-gray-300"
-                }`}
-              >
-                {isGeneratingNote ? (
-                  <>
-                    <SparklesIcon className="h-4 w-4 mr-2 animate-pulse" /> Generating...
-                  </>
-                ) : (
-                  <>
-                    <SparklesIcon className="h-4 w-4 mr-2" /> Generate Note
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div
+              className={`space-y-4 mb-6 p-4 border rounded-lg ${
+                theme === "dark" ? "border-neutral-700 bg-neutral-800/50" : "border-gray-200 bg-gray-50"
+              }`}
+            >
+              <p className={`text-sm font-medium ${theme === "dark" ? "text-neutral-300" : "text-gray-700"}`}>
+                Generate with AI ✨
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Enter a topic for AI note generation..."
+                  value={generationTopic}
+                  onChange={(e) => setGenerationTopic(e.target.value)}
+                  className={`flex-grow ${
+                    theme === "dark"
+                      ? "bg-neutral-700 border-neutral-600 text-neutral-100 placeholder:text-neutral-400 focus:border-neutral-500 focus:ring-neutral-500"
+                      : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500 focus:border-gray-400 focus:ring-gray-400"
+                  }`}
+                  disabled={isGeneratingNote}
+                />
+                <Button
+                  onClick={handleGenerateNote}
+                  disabled={isGeneratingNote || !generationTopic.trim()}
+                  className={`font-semibold transition-all duration-150 whitespace-nowrap ${
+                    theme === "dark"
+                      ? "bg-neutral-800 hover:bg-neutral-700 text-neutral-100 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-900 border border-neutral-700"
+                      : "bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 focus:ring-offset-white border border-gray-300"
+                  }`}
+                >
+                  {isGeneratingNote ? (
+                    <>
+                      <SparklesIcon className="h-4 w-4 mr-2 animate-pulse" /> Generating...
+                    </>
+                  ) : (
+                    <>
+                      <SparklesIcon className="h-4 w-4 mr-2" /> Generate Note
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
             <div>
               <Input
                 placeholder="Note Title"
@@ -256,6 +288,16 @@ export function AddNoteDialog({
                     <SelectItem value="turbo">Turbo</SelectItem>
                     <SelectItem value="gptimage">GPT Image</SelectItem>
                     <SelectItem value="together">Together AI</SelectItem>
+                    <SelectItem value="dall-e-3">Dall-E 3</SelectItem>
+                    <SelectItem value="sdxl-1.0">SDXL 1.0</SelectItem>
+                    <SelectItem value="sdxl-l">SDXL L</SelectItem>
+                    <SelectItem value="sdxl-turbo">SDXL Turbo</SelectItem>
+                    <SelectItem value="sd-3.5-large">SD 3.5 Large</SelectItem>
+                    <SelectItem value="flux-pro">Flux Pro</SelectItem>
+                    <SelectItem value="flux-dev">Flux Dev</SelectItem>
+                    <SelectItem value="flux-schnell">Flux Schnell</SelectItem>
+                    <SelectItem value="flux-canny">Flux Canny</SelectItem>
+                    <SelectItem value="midjourney">Midjourney</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button
