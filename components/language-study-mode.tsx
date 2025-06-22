@@ -493,6 +493,7 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
           isAnswerChecked={isAnswerChecked}
           onSubmitAnswer={handleAnswerSubmit}
           isSubmitting={isSubmitting}
+          onSkip={handleNextCard} // Pass skip handler
         />
       )}
        <div className="flex justify-center mt-4">

@@ -28,6 +28,7 @@ interface LanguageCardProps {
   isAnswerChecked?: boolean;
   onSubmitAnswer: (userAnswer: string) => void;
   isSubmitting?: boolean;
+  onSkip?: () => void;
 }
 
 export function LanguageCard({ 
@@ -37,7 +38,8 @@ export function LanguageCard({
   similarityScore, 
   isAnswerChecked, 
   onSubmitAnswer, 
-  isSubmitting 
+  isSubmitting, 
+  onSkip
 }: LanguageCardProps) {
   const { settings } = useSettings();
   const [localUserAnswer, setLocalUserAnswer] = useState('');
@@ -94,6 +96,13 @@ export function LanguageCard({
     };
   }, [settings.enableTTS]); 
 
+  // Always focus input when answer is checked so Enter can skip
+  useEffect(() => {
+    if (isAnswerChecked) {
+      inputRef.current?.focus();
+    }
+  }, [isAnswerChecked]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (localUserAnswer.trim() === '?') {
@@ -133,6 +142,14 @@ export function LanguageCard({
     // If user types just '?', prepare to show explanation
     if (value === '?') {
       // Don't auto-submit to allow user to decide when to hit enter
+    }
+  };
+
+  // Add keydown handler for Enter to skip if isAnswerChecked
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isAnswerChecked && e.key === "Enter" && onSkip) {
+      e.preventDefault();
+      onSkip();
     }
   };
 
@@ -283,9 +300,11 @@ export function LanguageCard({
             type="text"
             value={localUserAnswer}
             onChange={handleInputChange}
+            onKeyDown={handleInputKeyDown}
             placeholder="Type your answer (or ? for an explanation)..."
             aria-label="Your answer"
-            disabled={isSubmitting || isGeneratingExplanation || isAnswerChecked}
+            disabled={isSubmitting || isGeneratingExplanation}
+            readOnly={isAnswerChecked}
             className="text-lg p-4"
           />
           

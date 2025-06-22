@@ -38,6 +38,8 @@ export function StudyMode({ deckId }: StudyModeProps) {
   const [studyComplete, setStudyComplete] = useState(false)
   const [cardsToReview, setCardsToReview] = useState<number[]>([])
   const [reviewMode, setReviewMode] = useState(false)
+  const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null)
+  const FLIP_ANIMATION_DURATION = 500 // ms, should match CSS duration
   
   // Statistics tracking
   const [stats, setStats] = useState({
@@ -53,6 +55,9 @@ export function StudyMode({ deckId }: StudyModeProps) {
   
   // For rating button hover effect
   const [hoveredRating, setHoveredRating] = useState<ConfidenceRating | null>(null)
+
+  const [reviewIndices, setReviewIndices] = useState<number[]>([])
+  const [reviewCurrent, setReviewCurrent] = useState(0)
 
   // Function to shuffle an array (Fisher-Yates algorithm)
   const shuffleArray = (array: any[]) => {
@@ -129,37 +134,78 @@ export function StudyMode({ deckId }: StudyModeProps) {
   }
 
   const moveToNextCard = () => {
-    if (currentCardIndex < cards.length - 1) {
-      // Still have cards to go through in the main deck
-      setCurrentCardIndex((prev) => prev + 1)
+    if (reviewMode) {
+      // In review mode, move to next review card or end session if done
+      if (reviewIndices.length === 0) {
+        setStudyComplete(true)
+        return
+      }
+      if (reviewCurrent < reviewIndices.length - 1) {
+        setReviewCurrent((prev) => prev + 1)
+        setIsFlipped(false)
+      } else {
+        setReviewCurrent(0)
+        setIsFlipped(false)
+      }
+      return
+    }
+    if (isFlipped) {
       setIsFlipped(false)
-    } else if (!reviewMode && cardsToReview.length > 0) {
-      // Finished main deck, but have cards to review
-      setReviewMode(true)
-      // Sort the review cards to match their original order
-      const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
-      // Start with the first card that needs review
-      setCurrentCardIndex(sortedReviewIndices[0])
-      setIsFlipped(false)
-      // Update toast to indicate review mode
-      toast({
-        title: "Review Mode",
-        description: `Reviewing ${cardsToReview.length} cards that need attention`,
-      })
+      setPendingCardIndex(
+        currentCardIndex < cards.length - 1
+          ? currentCardIndex + 1
+          : !reviewMode && cardsToReview.length > 0
+            ? [...cardsToReview].sort((a, b) => a - b)[0]
+            : null
+      )
     } else {
-      // Completely done - either no cards to review or finished review mode
-      setStudyComplete(true)
+      if (currentCardIndex < cards.length - 1) {
+        setCurrentCardIndex((prev) => prev + 1)
+        setIsFlipped(false)
+      } else if (!reviewMode && cardsToReview.length > 0) {
+        setReviewMode(true)
+        const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
+        setReviewIndices(sortedReviewIndices)
+        setReviewCurrent(0)
+        setIsFlipped(false)
+        setStudyComplete(false)
+        toast({
+          title: "Review Mode",
+          description: `Reviewing ${cardsToReview.length} cards that need attention`,
+        })
+      } else {
+        setStudyComplete(true)
+      }
     }
   }
 
   const handleCardKnown = () => {
-    // Card is known, move to next card without adding to review list
     updateStats(true);
+    if (reviewMode) {
+      // Remove this card from reviewIndices
+      const idx = reviewIndices[reviewCurrent]
+      const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent)
+      setReviewIndices(newReviewIndices)
+      if (newReviewIndices.length === 0) {
+        setStudyComplete(true)
+        return
+      }
+      // If we removed the last card, go to the new last card
+      if (reviewCurrent >= newReviewIndices.length) {
+        setReviewCurrent(Math.max(0, newReviewIndices.length - 1))
+      }
+      setIsFlipped(false)
+      return
+    }
     moveToNextCard();
   }
 
   const handleCardNeedsReview = () => {
-    // Card needs review, add to review list
+    if (reviewMode) {
+      // Just go to next review card
+      moveToNextCard();
+      return
+    }
     if (!cardsToReview.includes(currentCardIndex)) {
       setCardsToReview(prev => [...prev, currentCardIndex])
     }
@@ -244,6 +290,29 @@ export function StudyMode({ deckId }: StudyModeProps) {
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isFlipped, currentCardIndex, isSpacedRepetitionEnabled, reviewMode, cards.length])
+
+  useEffect(() => {
+    if (pendingCardIndex !== null) {
+      const timer = setTimeout(() => {
+        if (!reviewMode && cardsToReview.length > 0 && pendingCardIndex !== null && pendingCardIndex >= cards.length) {
+          setReviewMode(true)
+          const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
+          setReviewIndices(sortedReviewIndices)
+          setReviewCurrent(0)
+          setIsFlipped(false)
+          toast({
+            title: "Review Mode",
+            description: `Reviewing ${cardsToReview.length} cards that need attention`,
+          })
+        } else if (pendingCardIndex !== null) {
+          setCurrentCardIndex(pendingCardIndex)
+          setIsFlipped(false)
+        }
+        setPendingCardIndex(null)
+      }, FLIP_ANIMATION_DURATION)
+      return () => clearTimeout(timer)
+    }
+  }, [pendingCardIndex, reviewMode, cardsToReview, cards.length, toast])
 
   if (loading) {
     return (
@@ -389,7 +458,9 @@ export function StudyMode({ deckId }: StudyModeProps) {
     }
   }
 
-  const currentCard = cards[currentCardIndex]
+  const currentCard = reviewMode
+    ? cards[reviewIndices[reviewCurrent]]
+    : cards[currentCardIndex]
   const isLastCard = currentCardIndex === cards.length - 1
 
   if (!currentCard) {
@@ -444,7 +515,7 @@ export function StudyMode({ deckId }: StudyModeProps) {
               {!reviewMode ? (
                 <>Card {currentCardIndex + 1} of {cards.length}</>
               ) : (
-                <>Review card {cardsToReview.indexOf(currentCardIndex) + 1} of {cardsToReview.length}</>
+                <>Review card {reviewCurrent + 1} of {reviewIndices.length}</>
               )}
             </div>
           </div>
@@ -818,10 +889,9 @@ export function StudyMode({ deckId }: StudyModeProps) {
                 variant="default"
                 onClick={() => {
                   setReviewMode(true)
-                  // Sort the review cards to match their original order
                   const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
-                  // Start with the first card that needs review
-                  setCurrentCardIndex(sortedReviewIndices[0])
+                  setReviewIndices(sortedReviewIndices)
+                  setReviewCurrent(0)
                   setIsFlipped(false)
                   setStudyComplete(false)
                 }}
