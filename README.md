@@ -17,6 +17,114 @@ A modern flashcard application built with Next.js, React, and Supabase for effec
 - **Notes System**: Create and organize study notes
 - **Progress Tracking**: Track your learning progress over time
 
+## Notes Page Syntax Guide
+
+The Notes page supports a rich set of Markdown-inspired and custom syntaxes for advanced note-taking, study, and interactive learning. Below are all supported features:
+
+### Headings
+```
+# Heading 1
+## Heading 2
+### Heading 3
+#### Heading 4
+```
+
+### Lists
+```
+- Item 1
+- Item 2
+  - Nested item
+* Item 3
+```
+
+### Tables
+```
+| Column 1 | Column 2 |
+|----------|----------|
+| Value 1  | Value 2  |
+```
+
+### Info Boxes
+```
+::blue
+This is a blue info box.
+::
+::green
+This is a green info box.
+::
+::amber
+This is an amber info box.
+::
+```
+
+### Math
+- **Inline:** `$E=mc^2$`
+- **Block:**
+  ```
+  $$
+  \int_0^1 x^2 dx
+  $$
+  ```
+
+### Multiple Choice Questions (MCQ)
+```
+?? What is the capital of France?
+[x] Paris
+[ ] London
+[ ] Berlin
+```
+
+### Fill-the-Gap
+```
+The mitochondria is the [gap:powerhouse] of the cell.
+```
+
+### Drag-and-Drop Matching
+```
+::dragdrop
+Question: Match the capitals
+- France => [drop:Paris]
+- Germany => [drop:Berlin]
+Options: Paris, Berlin, Rome
+::
+```
+
+### Images
+```
+![Alt text](image_url)
+![Alt text|maxheight=200](image_url)
+```
+
+### Links
+```
+[Link text](https://example.com)
+```
+
+### Text Formatting
+- **Bold:** `**bold**` or `__bold__`
+- *Italic:* `*italic*` or `_italic_`
+- ~~Strikethrough:~~ `~~strikethrough~~`
+- ==Highlight==: `==highlight==`
+- `Inline code`: `` `code` ``
+
+### Mermaid/Tree Diagrams
+```
+```mermaid
+flowchart TD
+  A[Start] --> B{Is it sunny?}
+  B -- Yes --> C[Go outside]
+  B -- No --> D[Stay inside]
+```
+```
+Or use ```tree for tree diagrams (same as mermaid):
+```
+```tree
+graph TD
+  Root --> Child1
+  Root --> Child2
+```
+```
+
 ## Tech Stack
 
 - **Frontend**: Next.js, React, TypeScript, Tailwind CSS, Radix UI

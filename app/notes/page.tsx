@@ -56,9 +56,40 @@ interface McqOption {
 import { ImageSearchDialog } from "@/components/image-search-dialog";
 import { AddNoteDialog } from "@/components/add-note-dialog";
 import { EditNoteDialog } from "@/components/edit-note-dialog";
+import mermaid from "mermaid";
 
 // Helper to generate slugs for IDs
 // Keep track of used slugs to avoid duplicates
+
+// Mermaid diagram renderer
+const MermaidDiagram = ({ code, theme }: { code: string; theme: string | undefined }) => {
+  const [svg, setSvg] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    mermaid.initialize({ startOnLoad: false, theme: theme === "dark" ? "dark" : "default" });
+    mermaid.render(`mermaid-${Math.random().toString(36).substr(2, 9)}`, code)
+      .then(({ svg }) => {
+        if (isMounted) {
+          setSvg(svg);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err?.message || "Failed to render diagram");
+        }
+      });
+    return () => { isMounted = false; };
+  }, [code, theme]);
+
+  if (error) {
+    return <div className="text-red-500">Diagram error: {error}</div>;
+  }
+  return <div className="w-full overflow-x-auto" dangerouslySetInnerHTML={{ __html: svg }} />;
+};
+
 const usedSlugs = new Map<string, number>();
 
 const generateSlug = (text: string) => {
@@ -274,7 +305,9 @@ const renderNoteContent = (
   setGapStates?: React.Dispatch<React.SetStateAction<Record<string, { value: string; similarity: number; isRevealed?: boolean }>>>,
   getSimilarity?: (input: string, answer: string) => Promise<number>,
   dragDropStates?: Record<string, { answers: Record<number, string>; showAnswers: boolean }>,
-  setDragDropStates?: React.Dispatch<React.SetStateAction<Record<string, { answers: Record<number, string>; showAnswers: boolean }>>>
+  setDragDropStates?: React.Dispatch<React.SetStateAction<Record<string, { answers: Record<number, string>; showAnswers: boolean }>>>,
+  noteCategory?: string,
+  getCategoryColorClass?: (category: string) => { bg: string, accent: string, border: string }
 ) => {
   console.log('[RAW CONTENT]', JSON.stringify(content));
   const lines = content.split('\n');
@@ -650,7 +683,46 @@ const renderNoteContent = (
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-
+       // Tree/Mermaid diagram block
+   if (line.startsWith("```tree") || line.startsWith("```mermaid")) {
+    processList();
+    processTable();
+    processInfoBox();
+    processMathBlock();
+    if (inMcqBlock) processMcqBlock();
+    let diagramLines: string[] = [];
+    let j = i + 1;
+    // Collect all lines until the closing ```
+    while (j < lines.length && !lines[j].trim().startsWith("```")) {
+      diagramLines.push(lines[j]);
+      j++;
+    }
+    // Skip the closing ``` line as well
+    i = j;
+    const diagramCode = diagramLines.join("\n");
+    // Get category color classes
+    const category = noteCategory || 'teal';
+    const { bg, accent, border } = getCategoryColorClass ? getCategoryColorClass(category) : { bg: 'bg-teal-100', accent: 'bg-teal-500', border: 'border-teal-300' };
+    elements.push(
+      <div
+        key={`tree-diagram-${elements.length}`}
+        className={`my-10 rounded-3xl border ${border} bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl shadow-2xl transition-all duration-200 hover:shadow-[0_8px_32px_0_rgba(31,41,55,0.18)] hover:${border} group`}
+        style={{ overflow: 'hidden', position: 'relative', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}
+      >
+        <div className={`flex items-center gap-3 px-8 pt-7 pb-3 border-b ${border} bg-gradient-to-r from-white/70 via-white/60 to-white/40 dark:from-neutral-900/80 dark:via-neutral-900/30 dark:to-neutral-900/60 backdrop-blur-md`}>
+          <div className={`flex items-center justify-center w-11 h-11 rounded-xl ${accent} group-hover:${accent} transition`}>
+            <svg xmlns='http://www.w3.org/2000/svg' className='w-6 h-6 text-white dark:text-neutral-100' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'><path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' /></svg>
+          </div>
+          <span className="font-semibold text-lg md:text-xl text-neutral-800 dark:text-neutral-100 tracking-tight drop-shadow-sm">Diagram</span>
+          <span className={`ml-auto text-xs ${accent} font-mono uppercase tracking-wider`}>Mermaid</span>
+        </div>
+        <div className="px-8 py-8 bg-transparent">
+          <MermaidDiagram code={diagramCode} theme={useTheme().theme} />
+        </div>
+      </div>
+    );
+    continue;
+  }
     // Handle drag and drop blocks first
     if (line.toLowerCase() === '::dragdrop') {
       processList();
@@ -1097,6 +1169,46 @@ const renderNoteContent = (
           {parseInlineMarkdown(line)}
         </p>,
       )
+    }
+    // Tree/Mermaid diagram block
+    if (line.startsWith("```tree") || line.startsWith("```mermaid")) {
+      processList();
+      processTable();
+      processInfoBox();
+      processMathBlock();
+      if (inMcqBlock) processMcqBlock();
+      let diagramLines: string[] = [];
+      let j = i + 1;
+      // Collect all lines until the closing ```
+      while (j < lines.length && !lines[j].trim().startsWith("```")) {
+        diagramLines.push(lines[j]);
+        j++;
+      }
+      // Skip the closing ``` line as well
+      i = j;
+      const diagramCode = diagramLines.join("\n");
+      // Get category color classes
+      const category = noteCategory || 'teal';
+      const { bg, accent, border } = getCategoryColorClass ? getCategoryColorClass(category) : { bg: 'bg-teal-100', accent: 'bg-teal-500', border: 'border-teal-300' };
+      elements.push(
+        <div
+          key={`tree-diagram-${elements.length}`}
+          className={`my-10 rounded-3xl border ${border} bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl shadow-2xl transition-all duration-200 hover:shadow-[0_8px_32px_0_rgba(31,41,55,0.18)] hover:${border} group`}
+          style={{ overflow: 'hidden', position: 'relative', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}
+        >
+          <div className={`flex items-center gap-3 px-8 pt-7 pb-3 border-b ${border} bg-gradient-to-r from-white/70 via-white/60 to-white/40 dark:from-neutral-900/80 dark:via-neutral-900/30 dark:to-neutral-900/60 backdrop-blur-md`}>
+            <div className={`flex items-center justify-center w-11 h-11 rounded-xl ${accent} group-hover:${accent} transition`}>
+              <svg xmlns='http://www.w3.org/2000/svg' className='w-6 h-6 text-white dark:text-neutral-100' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth='2'><path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' /></svg>
+            </div>
+            <span className="font-semibold text-lg md:text-xl text-neutral-800 dark:text-neutral-100 tracking-tight drop-shadow-sm">Diagram</span>
+            <span className={`ml-auto text-xs ${accent} font-mono uppercase tracking-wider`}>Mermaid</span>
+          </div>
+          <div className="px-8 py-8 bg-transparent">
+            <MermaidDiagram code={diagramCode} theme={useTheme().theme} />
+          </div>
+        </div>
+      );
+      continue;
     }
   }
   processList() // Process any remaining list items after the loop
@@ -1616,7 +1728,7 @@ const NoteCard = React.memo(function NoteCard({
               </div>
             ) : (
               <div id={`note-content-${note.id}`} className="mt-2">
-                {renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity, dragDropStates, setDragDropStates)}
+                {renderNoteContent(note.content, mcqStates, handleMcqOptionClick, shuffledMcqOptionsRef.current, gapStates, setGapStates, getSimilarity, dragDropStates, setDragDropStates, note.category, getCategoryColorClass)}
               </div>
             )}
           </div>
