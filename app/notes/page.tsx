@@ -31,7 +31,8 @@ import {
   XIcon,
   Menu,
   FlaskConical,
-  PanelLeft
+  PanelLeft,
+  Keyboard
 } from "lucide-react"
 import {
   Dialog,
@@ -57,6 +58,8 @@ import { ImageSearchDialog } from "@/components/image-search-dialog";
 import { AddNoteDialog } from "@/components/add-note-dialog";
 import { EditNoteDialog } from "@/components/edit-note-dialog";
 import mermaid from "mermaid";
+import { generateNoteWithGroq } from "@/lib/groq";
+import { formatNoteWithGroq } from "@/lib/groq";
 
 // Helper to generate slugs for IDs
 // Keep track of used slugs to avoid duplicates
@@ -706,7 +709,7 @@ const renderNoteContent = (
     elements.push(
       <div
         key={`tree-diagram-${elements.length}`}
-        className={`my-10 rounded-3xl border ${border} bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl shadow-2xl transition-all duration-200 hover:shadow-[0_8px_32px_0_rgba(31,41,55,0.18)] hover:${border} group`}
+        className={`my-10 rounded-3xl border ${border} bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl shadow-lg transition-all duration-200 hover:shadow-[0_8px_16px_0_rgba(31,41,55,0.10)] hover:${border} group`}
         style={{ overflow: 'hidden', position: 'relative', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}
       >
         <div className={`flex items-center gap-3 px-8 pt-7 pb-3 border-b ${border} bg-gradient-to-r from-white/70 via-white/60 to-white/40 dark:from-neutral-900/80 dark:via-neutral-900/30 dark:to-neutral-900/60 backdrop-blur-md`}>
@@ -1193,7 +1196,7 @@ const renderNoteContent = (
       elements.push(
         <div
           key={`tree-diagram-${elements.length}`}
-          className={`my-10 rounded-3xl border ${border} bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl shadow-2xl transition-all duration-200 hover:shadow-[0_8px_32px_0_rgba(31,41,55,0.18)] hover:${border} group`}
+          className={`my-10 rounded-3xl border ${border} bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl shadow-lg transition-all duration-200 hover:shadow-[0_8px_16px_0_rgba(31,41,55,0.10)] hover:${border} group`}
           style={{ overflow: 'hidden', position: 'relative', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}
         >
           <div className={`flex items-center gap-3 px-8 pt-7 pb-3 border-b ${border} bg-gradient-to-r from-white/70 via-white/60 to-white/40 dark:from-neutral-900/80 dark:via-neutral-900/30 dark:to-neutral-900/60 backdrop-blur-md`}>
@@ -1828,6 +1831,7 @@ export default function NotesPage() {
   const router = useRouter();
   const supabase = createClient();
   const { theme, setTheme } = useTheme();
+  const isDark = theme === "dark";
   const [allNotes, setAllNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [displayedNotes, setDisplayedNotes] = useState<Note[]>([]);
@@ -3022,6 +3026,204 @@ export default function NotesPage() {
     }
   };
 
+  const [isSyntaxHelpOpen, setIsSyntaxHelpOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey) {
+        if (e.key === "h" || e.key === "H") {
+          e.preventDefault();
+          setIsSyntaxHelpOpen(true);
+          return;
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [allNotes, inlineEditingNoteId, handleSaveInlineEdit, fetchNotes, supabase, focusedNoteId]);
+
+  // Helper: Syntax documentation content
+  const SyntaxDocs = ({ isDark }: { isDark: boolean }) => (
+    <div className="flex flex-col md:flex-row gap-0 md:gap-8 w-full">
+      {/* Sidebar: Syntax & Shortcuts */}
+      <aside className={`md:w-80 w-full md:rounded-l-2xl rounded-t-2xl md:rounded-t-none p-6 md:p-8 flex-shrink-0 border-r ${isDark ? 'bg-neutral-950/95 border-neutral-800' : 'bg-white/95 border-neutral-200'} shadow-none`}>
+        <h2 className="flex items-center gap-2 text-2xl font-extrabold mb-6 tracking-tight text-neutral-900 dark:text-neutral-100">
+          <SparklesIcon className={`inline-block h-6 w-6 ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`} /> Syntax Guide
+        </h2>
+        <ul className="mb-8 space-y-1 text-sm text-neutral-700 dark:text-neutral-300">
+          <li><b>Headings:</b> <code># Heading 1</code>, <code>## Heading 2</code>, <code>### Heading 3</code></li>
+          <li><b>Bold:</b> <code>**bold**</code> or <code>__bold__</code></li>
+          <li><b>Italic:</b> <code>*italic*</code> or <code>_italic_</code></li>
+          <li><b>Highlight:</b> <code>==highlight==</code></li>
+          <li><b>Strikethrough:</b> <code>~~strikethrough~~</code></li>
+          <li><b>Links:</b> <code>[text](url)</code></li>
+          <li><b>Images:</b> <code>![alt](url)</code> or <code>![alt|maxheight=300](url)</code></li>
+          <li><b>LaTeX Math:</b> <code>$inline$</code> or <code>$$block$$</code></li>
+          <li><b>Horizontal Rule:</b> <code>---</code></li>
+          <li><b>Info Boxes:</b> <code>::blue</code> ... <code>::</code> (also purple, green, amber, rose)</li>
+          <li><b>Tables:</b> <code>| Col1 | Col2 |</code></li>
+          <li><b>Lists:</b> <code>- item</code> or <code>* item</code></li>
+          <li><b>MCQ Block:</b> <code>?? Question</code> then <code>[x] Correct</code> <code>[ ] Incorrect</code></li>
+          <li><b>Fill-in-the-gap:</b> <code>[gap:answer]</code></li>
+          <li><b>Drag & Drop:</b> <code>::dragdrop</code> ... <code>::</code> (see docs)</li>
+          <li><b>Diagrams:</b> <code>{'```mermaid'}</code> ... <code>{'```'}</code></li>
+        </ul>
+        <h3 className="flex items-center gap-2 text-base font-semibold mb-3 text-neutral-900 dark:text-neutral-100">
+          <Keyboard className={`inline-block h-4 w-4 ${isDark ? 'text-neutral-400' : 'text-neutral-700'}`} /> Shortcuts
+        </h3>
+        <ul className="mb-2 space-y-1 text-sm text-neutral-700 dark:text-neutral-300">
+          <li><b>Ctrl+K</b>: AI chat about selected text</li>
+          <li><b>Ctrl+B</b>: Highlight/unhighlight selected text</li>
+          <li><b>Ctrl+E</b>: Edit note inline or toggle AI assistant</li>
+          <li><b>Ctrl+S</b>: Toggle sidebar</li>
+          <li><b>Ctrl+H</b>: Show this help</li>
+        </ul>
+      </aside>
+      {/* Main: Examples and AI Format */}
+      <main className={`flex-1 min-w-0 p-6 md:p-10 flex flex-col justify-between bg-neutral-50 dark:bg-neutral-950 rounded-b-2xl md:rounded-r-2xl md:rounded-bl-none`}> 
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-bold mb-4 text-neutral-900 dark:text-neutral-100">
+            <InfoIcon className={`inline-block h-5 w-5 ${isDark ? 'text-neutral-200' : 'text-neutral-800'}`} /> Examples
+          </h3>
+          <div
+            className={`rounded-xl border shadow overflow-x-auto p-4 mt-2 ${isDark ? 'bg-neutral-900/80 border-neutral-800' : 'bg-white/80 border-neutral-200'}`}
+            style={{
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              boxShadow: isDark
+                ? '0 4px 16px rgba(0,0,0,0.10), 0 1.5px 0 0 rgba(255,255,255,0.01)'
+                : '0 4px 16px rgba(0,0,0,0.04), 0 1.5px 0 0 rgba(0,0,0,0.01)',
+            }}
+          >
+            <pre className="text-xs leading-relaxed whitespace-pre-wrap break-words font-mono text-neutral-900 dark:text-neutral-100 bg-transparent">
+{`# Biology Notes
+
+## Cell Structure
+- Nucleus
+- Mitochondria
+
+?? What is the powerhouse of the cell?
+[x] Mitochondria
+[ ] Ribosome
+[ ] Chloroplast
+
+Fill in: The capital of France is [gap:Paris].
+
+::blue
+This is an info box!
+::
+
+// mermaid code block
+mermaid
+graph TD; A-->B;
+// end mermaid code block`}
+            </pre>
+          </div>
+        </div>
+        <div className="flex flex-col md:flex-row justify-end items-center gap-3 mt-10">
+          <Button
+            onClick={() => setIsSyntaxHelpOpen(false)}
+            className={`font-medium px-6 py-2 rounded-lg text-base border ${isDark ? 'bg-neutral-950 hover:bg-neutral-900 text-neutral-100 border-neutral-800' : 'bg-white hover:bg-neutral-100 text-neutral-900 border-neutral-300'}`}
+          >
+            Close
+          </Button>
+        </div>
+      </main>
+    </div>
+  );
+
+  // Replace the placeholder for AI format function
+  const handleAiFormatNote = async () => {
+    if (!focusedNoteId) return;
+    const note = allNotes.find(n => n.id === focusedNoteId);
+    if (!note) return;
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      // Provide more precise formatting guidelines for the AI
+      const formattingGuidelines = `
+# Formatting Guidelines for Flashcards App Notes
+
+- Use "# " for the main title (h1), "## " for major sections (h2), and more # for deeper subsections.
+- Use bullet lists with "- " or "* ", and numbered lists with "1. ", "2. ", etc.
+- Use info boxes for important points or summaries:
+  - Syntax: ::color (on its own line), then content, then :: (on its own line)
+  - Example:
+    ::blue
+    This is an info box.
+    ::
+  - Colors: blue, green, amber, rose, purple
+- Use bold (**text**) for emphasis, italic (*text*) for nuance, highlight (==text==) for key terms, and inline code (code) for technical references.
+- For LaTeX math:
+  - Inline: $E = mc^2$
+  - Block: $$\n\\frac{d}{dx}(x^n) = nx^{n-1}\n$$
+- For multiple choice questions (MCQ):
+  - Start with "?? " followed by the question
+  - List options with [x] for correct, [ ] for incorrect, e.g.:
+    ?? What is 2+2?
+    [x] 4
+    [ ] 3
+    [ ] 5
+- For fill-in-the-gap, embed [gap:answer] in the sentence, e.g.:
+  The capital of France is [gap:Paris].
+- For drag-and-drop (matching):
+  - Start with ::dragdrop (on its own line)
+  - Question: ...
+  - - Item => [drop:Answer]
+  - Options: Option1, Option2, ...
+  - End with :: (on its own line)
+  - Example:
+    ::dragdrop
+    Question: Match the capitals.
+    - France => [drop:Paris]
+    - Germany => [drop:Berlin]
+    Options: Paris, Berlin
+    ::
+- For images, use:
+  - ![alt text](url) for direct images
+  - !(img)[search term] for AI-generated/search images (e.g. !(img)[cat])
+- For tables, use Markdown table syntax:
+  | Header1 | Header2 |
+  |---------|---------|
+  | Row1    | Row2    |
+- Use --- (three dashes) for horizontal rules/section breaks.
+- Use [text](url) for links.
+- Make the note visually rich, easy to scan, and use all relevant formatting features from above where appropriate.
+- Do not remove any information from the original note, only improve structure, clarity, and formatting.
+`;
+      const aiNote = await formatNoteWithGroq(note.content, formattingGuidelines);
+      // Update the note in the database
+      const { error } = await supabase
+        .from("notes")
+        .update({ title: aiNote.title, content: aiNote.content, updated_at: new Date().toISOString() })
+        .eq("id", note.id);
+      if (error) {
+        setErrorMessage(`Error updating note: ${error.message}`);
+        return;
+      }
+      // Update local state immediately for responsiveness
+      setAllNotes(prevNotes => prevNotes.map(n =>
+        n.id === note.id
+          ? { ...n, title: aiNote.title, content: aiNote.content, updated_at: new Date().toISOString() }
+          : n
+      ));
+      setDisplayedNotes(prevNotes => prevNotes.map(n =>
+        n.id === note.id
+          ? { ...n, title: aiNote.title, content: aiNote.content, updated_at: new Date().toISOString() }
+          : n
+      ));
+      setErrorMessage("Note formatted with AI!");
+      setTimeout(() => setErrorMessage(null), 2000);
+      setIsSyntaxHelpOpen(false);
+    } catch (error: any) {
+      setErrorMessage(error.message || "Failed to format note with AI.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div
       className={`flex h-screen ${theme === "dark" ? "bg-neutral-950 text-neutral-100" : "bg-gray-50 text-gray-900"}`}
@@ -3180,51 +3382,50 @@ export default function NotesPage() {
 
         {/* Floating Bottom Nav Bar with enhanced frosted glass effect */}
         <div 
-          className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? 'left-1/2 -translate-x-1/2 w-[80%] max-w-4xl' : 'left-[calc(18rem+3rem)]'} ${isAiAssistantOpen ? 'right-[calc(350px+2rem)]' : 'right-6'} px-3 py-2.5 rounded-2xl backdrop-blur-3xl z-20 flex items-center gap-3 transition-all duration-500 ease-in-out overflow-hidden`}
+          className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? 'left-1/2 -translate-x-1/2 w-[80%] max-w-4xl' : 'left-[calc(18rem+3rem)]'} ${isAiAssistantOpen ? 'right-[calc(350px+2rem)]' : 'right-6'} px-4 py-3 rounded-2xl z-40 flex items-center gap-3 transition-all duration-500 ease-in-out overflow-hidden border backdrop-blur-[32px] shadow-2xl`}
           style={{
-            background: theme === "dark" 
-              ? 'linear-gradient(135deg, rgba(23, 23, 23, 0.45) 0%, rgba(38, 38, 38, 0.35) 100%)' 
-              : 'linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.4) 100%)',
+            background: theme === "dark"
+              ? 'linear-gradient(120deg, rgba(20,20,22,0.68) 0%, rgba(38,38,40,0.52) 100%)'
+              : 'linear-gradient(120deg, rgba(255,255,255,0.58) 0%, rgba(245,245,250,0.38) 100%)',
             boxShadow: theme === "dark"
-              ? '0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.08)'
-              : '0 8px 32px rgba(0, 0, 0, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 0.8)',
+               ? '0 8px 32px 0 rgba(0,0,0,0.32), 0 1.5px 0 0 rgba(255,255,255,0.04)'
+               : '0 8px 32px 0 rgba(180,180,200,0.10), 0 1.5px 0 0 rgba(255,255,255,0.10)',
             border: theme === "dark"
-              ? '1px solid rgba(255, 255, 255, 0.12)'
-              : '1px solid rgba(255, 255, 255, 0.8)'
+              ? '1.5px solid rgba(120,120,140,0.32)'
+              : '1.5px solid rgba(200,200,220,0.42)',
+            backdropFilter: 'blur(32px) saturate(1.2)',
+            WebkitBackdropFilter: 'blur(32px) saturate(1.2)',
           }}
         >
           {/* Glass reflection effect */}
           <div 
-            className="absolute inset-0 z-[-1]"
+            className="absolute inset-0 z-[-1] pointer-events-none"
             style={{
               background: theme === "dark"
-                ? 'linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 0%, transparent 50%)'
-                : 'linear-gradient(to bottom, rgba(255, 255, 255, 0.6) 0%, transparent 60%)'
+                ? 'linear-gradient(120deg, rgba(255,255,255,0.10) 0%, transparent 60%)'
+                : 'linear-gradient(120deg, rgba(255,255,255,0.32) 0%, transparent 80%)',
             }}
-          ></div>
-          
-          {/* Top-left corner glow */}
+          />
+          {/* Top-left corner blue glow (more distinct) */}
           <div 
-            className="absolute top-0 left-0 w-20 h-20 z-[-1] rounded-full opacity-60 blur-md"
+            className="absolute top-[-32px] left-[-32px] w-40 h-40 z-[-1] rounded-full opacity-60 blur-[48px] pointer-events-none"
             style={{
               background: theme === "dark" 
-                ? 'radial-gradient(circle, rgba(103, 232, 249, 0.3) 0%, transparent 70%)' 
-                : 'radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%)',
-              transform: 'translate(-30%, -30%)'
+                ? 'radial-gradient(circle, rgba(59,130,246,0.22) 0%, transparent 80%)' 
+                : 'radial-gradient(circle, rgba(59,130,246,0.18) 0%, transparent 80%)',
+              transform: 'translate(-10%, -10%)'
             }}
-          ></div>
-          
-          {/* Bottom-right corner glow */}
+          />
+          {/* Bottom-right corner pink glow (more distinct) */}
           <div 
-            className="absolute bottom-0 right-0 w-20 h-20 z-[-1] rounded-full opacity-60 blur-md"
+            className="absolute bottom-[-32px] right-[-32px] w-56 h-40 z-[-1] rounded-full opacity-60 blur-[56px] pointer-events-none"
             style={{
               background: theme === "dark" 
-                ? 'radial-gradient(circle, rgba(217, 70, 239, 0.3) 0%, transparent 70%)' 
-                : 'radial-gradient(circle, rgba(236, 72, 153, 0.3) 0%, transparent 70%)',
-              transform: 'translate(30%, 30%)'
+                ? 'radial-gradient(circle, rgba(236,72,153,0.22) 0%, transparent 80%)' 
+                : 'radial-gradient(circle, rgba(236,72,153,0.16) 0%, transparent 80%)',
+              transform: 'translate(10%, 10%)'
             }}
-          ></div>
-          
+          />
           <div className="flex items-center space-x-1.5">
             <Button
               variant="ghost"
@@ -3525,6 +3726,27 @@ export default function NotesPage() {
         error={imageSearchError}
         onImageSelect={handleImageSelectedFromDialog}
       />
+
+      <Dialog open={isSyntaxHelpOpen} onOpenChange={setIsSyntaxHelpOpen}>
+        <DialogContent
+          className={`max-w-4xl w-full rounded-2xl shadow-2xl p-0 sm:p-0 overflow-y-auto max-h-[90vh] border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950`}
+          style={{
+            boxShadow: isDark
+              ? '0 8px 32px rgba(0,0,0,0.7), 0 1.5px 0 0 rgba(255,255,255,0.04)'
+              : '0 8px 32px rgba(0,0,0,0.10), 0 1.5px 0 0 rgba(0,0,0,0.01)',
+            border: isDark ? '1.5px solid #23272e' : '1.5px solid #e5e7eb',
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
+            padding: 0,
+          }}
+        >
+          <div className="relative flex flex-col md:flex-row w-full min-h-[500px]">
+            <div className="flex-1 flex flex-col md:flex-row w-full z-10">
+              <SyntaxDocs isDark={isDark} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import type { Note } from "@/lib/supabase"
 import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
 import { generateImage, type ImageModel } from "../lib/generate-image"
+import { formatNoteWithGroq } from "../lib/groq"
 
 interface EditNoteDialogProps {
   open: boolean
@@ -33,13 +34,14 @@ export function EditNoteDialog({
   noteToEdit,
   onUpdateNote,
   availableCategories,
-  theme,
+  theme = "dark",
   isLoading,
 }: EditNoteDialogProps) {
   const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux")
   const [isGeneratingImages, setIsGeneratingImages] = useState(false)
+  const [isFormatting, setIsFormatting] = useState(false)
 
   useEffect(() => {
     setEditingNote(noteToEdit)
@@ -134,6 +136,28 @@ export function EditNoteDialog({
     }
   }
 
+  const handleFormatWithAI = async () => {
+    if (!editingNote) return;
+    setIsFormatting(true);
+    try {
+      const result = await formatNoteWithGroq(editingNote.content);
+      setEditingNote(prev => prev ? { ...prev, title: result.title, content: result.content } : null);
+      toast({
+        title: "Note formatted",
+        description: "The note has been formatted with AI.",
+      });
+    } catch (err) {
+      console.error("Error formatting note with AI:", err);
+      toast({
+        title: "Error",
+        description: "Failed to format note with AI.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFormatting(false);
+    }
+  };
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingNote) return;
@@ -162,11 +186,15 @@ export function EditNoteDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`bg-neutral-900 border-neutral-800 text-neutral-100 max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0`}
+        className={
+          `${theme === "light"
+            ? "bg-white border-neutral-200 text-neutral-900"
+            : "bg-neutral-900 border-neutral-800 text-neutral-100"} max-w-2xl rounded-xl shadow-2xl p-0 sm:p-0`
+        }
       >
-        <div className="p-6 sm:p-8">
+        <div className={theme === "light" ? "p-6 sm:p-8 bg-white" : "p-6 sm:p-8 bg-neutral-900"}>
           <DialogHeader className="mb-6">
-            <ShadDialogTitle className="text-2xl font-bold text-neutral-100">Edit Note</ShadDialogTitle>
+            <ShadDialogTitle className={theme === "light" ? "text-2xl font-bold text-neutral-900" : "text-2xl font-bold text-neutral-100"}>Edit Note</ShadDialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -175,7 +203,9 @@ export function EditNoteDialog({
                 placeholder="Note Title"
                 value={editingNote.title || ""}
                 onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
-                className="bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500"
+                className={theme === "light"
+                  ? "bg-white border-neutral-200 text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:ring-neutral-400"
+                  : "bg-neutral-800 border-neutral-700 text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:ring-neutral-500"}
               />
             </div>
             
@@ -187,14 +217,14 @@ export function EditNoteDialog({
                   setEditingNote({ ...editingNote, content: newValue })
                 }}
                 placeholder="Edit your note here..."
-                className="min-h-[300px]"
+                className={theme === "light" ? "min-h-[300px] bg-white text-neutral-900 border-neutral-200" : "min-h-[300px] bg-neutral-900 text-neutral-100 border-neutral-700"}
               />
               <div className="flex gap-2">
                 <Select
                   value={selectedImageModel}
                   onValueChange={(value: ImageModel) => setSelectedImageModel(value)}
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className={theme === "light" ? "w-[180px] bg-white border-neutral-200 text-neutral-900" : "w-[180px] bg-neutral-900 border-neutral-700 text-neutral-100"}>
                     <SelectValue placeholder="Select model" />
                   </SelectTrigger>
                   <SelectContent>
@@ -222,6 +252,14 @@ export function EditNoteDialog({
                 >
                   {isGeneratingImages ? "Generating Images..." : "Generate Images from Tags"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleFormatWithAI}
+                  disabled={isFormatting || !editingNote}
+                >
+                  {isFormatting ? "Formatting..." : "Format with AI"}
+                </Button>
               </div>
             </div>
             
@@ -233,11 +271,12 @@ export function EditNoteDialog({
                 placeholder="Select or create category..."
                 inputPlaceholder="Search/Create category..."
                 emptyPlaceholder="Type to create new category."
+                theme={theme}
               />
             </div>
 
             {errorMessage && (
-              <div className="text-red-400 text-sm p-3 bg-red-900/40 border border-red-700/60 rounded-md">
+              <div className={theme === "light" ? "text-red-600 text-sm p-3 bg-red-100 border border-red-300 rounded-md" : "text-red-400 text-sm p-3 bg-red-900/40 border border-red-700/60 rounded-md"}>
                 {errorMessage}
               </div>
             )}
@@ -246,14 +285,18 @@ export function EditNoteDialog({
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
+                className={theme === "light"
+                  ? "bg-white border border-neutral-200 text-neutral-900 hover:bg-neutral-100 hover:text-neutral-900"
+                  : "bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="bg-neutral-900 dark:bg-neutral-800 hover:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 dark:focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 dark:focus:ring-offset-neutral-900 border border-neutral-200 dark:border-neutral-700"
+                className={theme === "light"
+                  ? "bg-neutral-900 hover:bg-neutral-800 text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 border border-neutral-200"
+                  : "bg-neutral-900 dark:bg-neutral-800 hover:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-900 dark:text-neutral-100 font-semibold py-2.5 rounded-lg shadow-md transition-colors duration-150 focus:ring-2 focus:ring-neutral-600 dark:focus:ring-neutral-600 focus:ring-offset-2 focus:ring-offset-neutral-100 dark:focus:ring-offset-neutral-900 border border-neutral-200 dark:border-neutral-700"}
               >
                 {isLoading ? "Updating Note..." : "Update Note"}
               </Button>

@@ -988,3 +988,74 @@ function createFallbackCards(topic: string): GenerationResult {
         created: new Date().toISOString(),
     };
 }
+
+/**
+ * Format an existing note using Groq AI, given the note's current content and formatting guidelines.
+ * Returns: { title: string, content: string }
+ */
+export async function formatNoteWithGroq(
+  noteContent: string,
+  formattingGuidelines?: string
+): Promise<GeneratedNote> {
+  const prompt = `You are an expert in Markdown note formatting. Your task is to take the following note and reformat it to be clearer, more visually structured, and easier to study from, following the provided formatting guidelines. Do not remove any information, but improve the structure, clarity, and Markdown usage. If the note lacks a clear title, generate one based on the content. If the note already has a good title, keep it. Use all relevant formatting features (headings, lists, info boxes, math, MCQ, fill-in-the-gap, dragdrop, etc.) where appropriate.
+
+Formatting Guidelines:
+${formattingGuidelines || `- Use # for main title, ## for sections, and further # for subsections
+- Use bullet and numbered lists for lists
+- Use info boxes (::color ... ::) for important points
+- Use bold, italic, highlight, and inline code for emphasis
+- Use LaTeX for math
+- Use MCQ, fill-in-the-gap, and dragdrop blocks as in the app's syntax
+- Use images as ![alt](url) or !(img)[query]
+- Use tables for tabular data
+- Use --- for section breaks
+- Use links for references
+- Make the note visually rich and easy to scan
+`}
+
+Here is the note to format:
+"""
+${noteContent}
+"""
+
+IMPORTANT: Output a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties. The response must be valid JSON that can be parsed by JSON.parse().`;
+
+  const systemMessage =
+    "You are an expert Markdown formatter. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. The response must be valid JSON that can be parsed by JSON.parse().";
+
+  try {
+    const response = await makeGroqRequest(prompt, false, systemMessage, true);
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(response);
+      if (
+        parsedContent &&
+        typeof parsedContent.title === "string" &&
+        typeof parsedContent.content === "string"
+      ) {
+        return {
+          title: parsedContent.title,
+          content: unescapeGeneratedContent(parsedContent.content),
+        };
+      }
+      throw new Error("Invalid note structure in JSON response");
+    } catch (error) {
+      // Try to extract title and content from the response
+      const titleMatch = response.match(/"title"\s*:\s*"([^"]+)"/);
+      const contentMatch = response.match(/"content"\s*:\s*"([^"]+)"/);
+      if (titleMatch && contentMatch) {
+        return {
+          title: titleMatch[1],
+          content: unescapeGeneratedContent(contentMatch[1]),
+        };
+      }
+      throw new Error("Failed to parse formatted note JSON");
+    }
+  } catch (error) {
+    console.error("Error formatting note with Groq:", error);
+    return {
+      title: "Formatted Note (Error)",
+      content: `An error occurred while formatting the note. Please try again.\n\nOriginal content:\n${noteContent}`,
+    };
+  }
+}
