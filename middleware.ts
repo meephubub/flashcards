@@ -68,23 +68,21 @@ export async function middleware(request: NextRequest) {
   // Get the user's session
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Define protected routes
-  const protectedRoutes = ['/settings', '/notes', '/decks', '/study']
-  const isProtectedRoute = protectedRoutes.some(route => 
-    request.nextUrl.pathname.startsWith(route)
+  // Define public routes that do not require authentication
+  const publicRoutes = ['/home', '/login', '/signup', '/reset-password', '/api/auth/callback']
+  const isPublicRoute = publicRoutes.some(route =>
+    request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
   )
 
-  // Redirect to login if user is not authenticated and trying to access a protected route
-  if (isProtectedRoute && !session) {
-    const redirectUrl = new URL('/login', request.url)
-    redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
+  // Redirect to /home if user is not authenticated and trying to access a non-public route
+  if (!session && !isPublicRoute) {
+    return NextResponse.redirect(new URL('/home', request.url))
   }
 
-  // Redirect to home if user is authenticated and trying to access auth pages
-  const authRoutes = ['/login', '/signup', '/reset-password']
-  const isAuthRoute = authRoutes.some(route => 
-    request.nextUrl.pathname.startsWith(route)
+  // Redirect to main app page (/) if user is authenticated and trying to access auth or public pages
+  const authRoutes = ['/login', '/signup', '/reset-password', '/home']
+  const isAuthRoute = authRoutes.some(route =>
+    request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
   )
 
   if (isAuthRoute && session) {
