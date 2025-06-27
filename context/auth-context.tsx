@@ -13,6 +13,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithGitHub: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -158,8 +160,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const signInWithGoogle = async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        console.error('Error signing in with Google:', error);
+        throw error;
+      }
+    } catch (e: any) {
+      console.error('Error signing in with Google:', e.message);
+      setError(e.message || 'An error occurred during Google sign in');
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signInWithGitHub = async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        console.error('Error signing in with GitHub:', error);
+        throw error;
+      }
+    } catch (e: any) {
+      console.error('Error signing in with GitHub:', e.message);
+      setError(e.message || 'An error occurred during GitHub sign in');
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user, isLoading, error, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ session, user, isLoading, error, signIn, signUp, signOut, signInWithGoogle, signInWithGitHub }}>
       {children}
     </AuthContext.Provider>
   );
