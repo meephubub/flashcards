@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
     );
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      // Redirect to a protected route or the home page after successful auth
-      return NextResponse.redirect(`${origin}/notes`);
+      // Redirect to the home page after successful auth
+      return NextResponse.redirect(`${origin}/`);
     }
   }
 

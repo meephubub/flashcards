@@ -26,7 +26,7 @@ export function LoginForm({
     setIsSubmitting(true);
     try {
       await signIn(email, password);
-      router.push("/notes");
+      router.push("/");
     } catch (error) {
       console.error("Sign in error:", error);
     } finally {

@@ -30,9 +30,8 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     setLoading(true);
     try {
       await signUp(email, password);
-      setSuccess("Please check your email for the confirmation link.");
-      // Optionally, redirect if you want to skip email confirmation:
-      // router.push("/notes");
+      // Redirect immediately after signup
+      router.push("/");
     } catch (err: any) {
       setError(err.message || "Signup failed");
     } finally {
