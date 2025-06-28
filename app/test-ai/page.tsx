@@ -390,10 +390,17 @@ export default function TestAIPage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
+      
+      // Determine the correct endpoint for debug info
+      const advancedModels = ["gptimage", "dall-e-3", "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large", "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney"];
+      const endpoint = advancedModels.includes(selectedModel) 
+        ? "https://flashcards-api-mhmd.onrender.com/v1/images/generate"
+        : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+      
       setDebugInfo({
         request: { prompt },
         response: null,
-        endpoint: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`,
+        endpoint,
         timestamp: new Date().toISOString(),
         error: errorMessage,
       });

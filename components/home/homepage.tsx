@@ -9,12 +9,12 @@ import Navbar from "./navbar";
 export function Homepage() {
   return (
     <div className="min-h-screen bg-white">
+      <Navbar />
       <HeroSection />
       <BentoFeatures />
       <ModernStudyModes />
       <InteractiveShowcase />
       <CTASection />
-      <Navbar />
       <Footer />
     </div>
   );
