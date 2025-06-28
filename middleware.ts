@@ -69,7 +69,7 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
 
   // Define public routes that do not require authentication
-  const publicRoutes = ['/home', '/login', '/signup', '/reset-password', '/api/auth/callback']
+  const publicRoutes = ['/home', '/login', '/signup', '/reset-password', '/api/auth/callback', '/auth/callback']
   const isPublicRoute = publicRoutes.some(route =>
     request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
   )
@@ -100,8 +100,9 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - api/auth/callback (Supabase auth callbacks)
+     * - auth/callback (Custom auth callbacks)
      * - public folder
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/auth/callback).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/auth/callback|auth/callback).*)',
   ],
 }
