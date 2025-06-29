@@ -50,7 +50,7 @@ export async function GET() {
     let imageApiError = null;
     
     try {
-      const imageResponse = await fetch('https://flashcards-api-mhmd.onrender.com/v1/images/generate', {
+      const imageResponse = await fetch('https://flashcards-api-1.onrender.com/v1/images/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

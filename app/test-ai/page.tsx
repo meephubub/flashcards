@@ -57,7 +57,7 @@ export default function TestAIPage() {
   const [togetherN, setTogetherN] = useState(1);
 
   // Text generation parameters
-  const [textModel, setTextModel] = useState("openai");
+  const [textModel, setTextModel] = useState("default");
   const [textSeed, setTextSeed] = useState<string>("");
   const [temperature, setTemperature] = useState(0.7);
   const [topP, setTopP] = useState(1.0);
@@ -86,7 +86,7 @@ export default function TestAIPage() {
 
   useEffect(() => {
     // Ping the root endpoint to wake up the Render server
-    fetch("https://flashcards-api-mhmd.onrender.com/").catch(() => {}); // Ignore errors
+    fetch("https://flashcards-api-1.onrender.com").catch(() => {}); // Ignore errors
   }, []);
 
   const handleDownloadImage = () => {
@@ -115,144 +115,71 @@ export default function TestAIPage() {
     setError(null);
     setDebugInfo(null);
     try {
-      const params = new URLSearchParams({
-        model: textModel,
-        temperature: temperature.toString(),
-        top_p: topP.toString(),
-        presence_penalty: presencePenalty.toString(),
-        frequency_penalty: frequencyPenalty.toString(),
-        json: jsonResponse.toString(),
-        private: privateText.toString(),
+      const messages = [];
+      
+      if (systemPrompt) {
+        messages.push({
+          role: "system",
+          content: systemPrompt
+        });
+      }
+      
+      messages.push({
+        role: "user",
+        content: prompt
       });
 
-      if (textSeed) params.append("seed", textSeed);
-      if (systemPrompt) params.append("system", systemPrompt);
+      const requestBody: any = {
+        messages: messages,
+        model: textModel,
+        temperature: temperature,
+        top_p: topP,
+        presence_penalty: presencePenalty,
+        frequency_penalty: frequencyPenalty,
+        json: jsonResponse,
+        private: privateText,
+      };
 
-      // Get API key from environment variables
-      const apiKey = process.env.NEXT_PUBLIC_POLLINATIONS_API;
-      if (!apiKey) {
-        throw new Error("NEXT_PUBLIC_POLLINATIONS_API is not defined in environment variables");
+      if (textSeed) requestBody.seed = textSeed;
+
+      const endpoint = "https://flashcards-api-1.onrender.com/v1/chat/completions";
+      
+      console.log("Attempting to fetch from:", endpoint);
+      
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log("Response status:", response.status);
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
       }
 
-      // Add API key to the URL instead of headers
-      params.append("api_key", apiKey);
-      const endpoint = `https://text.pollinations.ai/${encodeURIComponent(prompt)}?${params.toString()}`;
+      const result = await response.json();
+      setResponse(result.choices[0].message.content);
 
-      try {
-        // Try using allorigins.win as a CORS proxy
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(endpoint)}`;
-        
-        console.log("Attempting to fetch from:", proxyUrl);
-        
-        const response = await fetch(proxyUrl, {
-          method: "GET",
-          headers: {
-            "Accept": "application/json",
-          },
-        });
-
-        console.log("Response status:", response.status);
-        console.log("Response headers:", Object.fromEntries(response.headers.entries()));
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Error response:", errorText);
-          throw new Error(`API error: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""}`);
-        }
-
-        const result = await response.text();
-        setResponse(result);
-
-        // Capture debug info
-        setDebugInfo({
-          request: { prompt, ...Object.fromEntries(params) },
-          response: result,
-          endpoint: proxyUrl,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (fetchError: unknown) {
-        console.error("Fetch error details:", {
-          error: fetchError,
-          type: fetchError instanceof Error ? fetchError.constructor.name : typeof fetchError,
-          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
-          stack: fetchError instanceof Error ? fetchError.stack : undefined
-        });
-
-        // Try alternative proxy
-        try {
-          const altProxyUrl = `https://cors-anywhere.herokuapp.com/${endpoint}`;
-          console.log("Trying alternative proxy:", altProxyUrl);
-
-          const altResponse = await fetch(altProxyUrl, {
-            method: "GET",
-            headers: {
-              "Accept": "application/json",
-              "X-Requested-With": "XMLHttpRequest",
-            },
-          });
-
-          if (!altResponse.ok) {
-            const errorText = await altResponse.text();
-            throw new Error(`Alternative proxy error: ${altResponse.status} ${altResponse.statusText}${errorText ? ` - ${errorText}` : ""}`);
-          }
-
-          const result = await altResponse.text();
-          setResponse(result);
-
-          setDebugInfo({
-            request: { prompt, ...Object.fromEntries(params) },
-            response: result,
-            endpoint: altProxyUrl,
-            timestamp: new Date().toISOString(),
-          });
-        } catch (altError: unknown) {
-          console.error("Alternative proxy error details:", {
-            error: altError,
-            type: altError instanceof Error ? altError.constructor.name : typeof altError,
-            message: altError instanceof Error ? altError.message : String(altError),
-            stack: altError instanceof Error ? altError.stack : undefined
-          });
-
-          // Try direct fetch as last resort
-          try {
-            console.log("Attempting direct fetch as last resort");
-            const directResponse = await fetch(endpoint, {
-              method: "GET",
-              headers: {
-                "Accept": "application/json",
-              },
-            });
-
-            if (!directResponse.ok) {
-              throw new Error(`Direct fetch failed: ${directResponse.status} ${directResponse.statusText}`);
-            }
-
-            const result = await directResponse.text();
-            setResponse(result);
-
-            setDebugInfo({
-              request: { prompt, ...Object.fromEntries(params) },
-              response: result,
-              endpoint,
-              timestamp: new Date().toISOString(),
-            });
-          } catch (directError: unknown) {
-            throw new Error(
-              `All fetch attempts failed:\n` +
-              `1. First proxy error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}\n` +
-              `2. Alternative proxy error: ${altError instanceof Error ? altError.message : String(altError)}\n` +
-              `3. Direct fetch error: ${directError instanceof Error ? directError.message : String(directError)}`
-            );
-          }
-        }
-      }
+      // Capture debug info
+      setDebugInfo({
+        request: requestBody,
+        response: result,
+        endpoint: endpoint,
+        timestamp: new Date().toISOString(),
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
       setDebugInfo({
-        request: { prompt },
+        request: { messages: [{ role: "user", content: prompt }], model: textModel },
         response: null,
-        endpoint: `https://text.pollinations.ai/${encodeURIComponent(prompt)}`,
+        endpoint: "https://flashcards-api-1.onrender.com/v1/chat/completions",
         timestamp: new Date().toISOString(),
         error: errorMessage,
       });
@@ -394,7 +321,7 @@ export default function TestAIPage() {
       // Determine the correct endpoint for debug info
       const advancedModels = ["gptimage", "dall-e-3", "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large", "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney"];
       const endpoint = advancedModels.includes(selectedModel) 
-        ? "https://flashcards-api-mhmd.onrender.com/v1/images/generate"
+        ? "https://flashcards-api-1.onrender.com/v1/images/generate"
         : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
       
       setDebugInfo({
@@ -421,7 +348,7 @@ export default function TestAIPage() {
       
       let requestBody: any;
       let response;
-      let endpoint = "https://flashcards-api-mhmd.onrender.com/v1/images/generate";
+      let endpoint = "https://flashcards-api-1.onrender.com/v1/images/generate";
       let fetchOptions: RequestInit = {};
 
       if (selectedModel === "flux-canny") {
@@ -497,7 +424,7 @@ export default function TestAIPage() {
       setDebugInfo({
         request: { prompt, model: selectedModel, response_format: "url" },
         response: null,
-        endpoint: "https://flashcards-api-mhmd.onrender.com/v1/images/generate",
+        endpoint: "https://flashcards-api-1.onrender.com/v1/images/generate",
         timestamp: new Date().toISOString(),
         error: errorMessage,
       });
@@ -771,8 +698,13 @@ export default function TestAIPage() {
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="mistral">Mistral</SelectItem>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="gpt-4">GPT-4</SelectItem>
+                  <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                  <SelectItem value="gpt-4.5">GPT-4.5</SelectItem>
+                  <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
+                  <SelectItem value="claude-3-7-sonnet">Claude 3.7 Sonnet</SelectItem>
+                  <SelectItem value="o3">O3</SelectItem>
                 </SelectContent>
               </Select>
             </div>

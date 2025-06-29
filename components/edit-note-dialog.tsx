@@ -64,7 +64,7 @@ export function EditNoteDialog({
       
       if (advancedModels.includes(selectedImageModel)) {
         // Use custom image generation for advanced models
-        const response = await fetch("https://flashcards-api-mhmd.onrender.com/v1/images/generate", {
+        const response = await fetch("https://flashcards-api-1.onrender.com/v1/images/generate", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

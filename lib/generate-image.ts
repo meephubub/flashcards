@@ -44,7 +44,7 @@ export async function generateImage(prompt: string, model: ImageModel = "flux"):
   const advancedModels = ["gptimage", "dall-e-3", "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large", "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney"];
   
   if (advancedModels.includes(model)) {
-    const response = await fetch("https://flashcards-api-mhmd.onrender.com/v1/images/generate", {
+    const response = await fetch("https://flashcards-api-1.onrender.com/v1/images/generate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

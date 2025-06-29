@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const testQuery = 'test';
-  const searxngUrl = `https://flashcards-api-mhmd.onrender.com/v1/searxng/search?q=!images%20${encodeURIComponent(testQuery)}&format=json`;
+  const searxngUrl = `https://flashcards-api-1.onrender.com/v1/searxng/search?q=!images%20${encodeURIComponent(testQuery)}&format=json`;
   
   try {
     const startTime = Date.now();

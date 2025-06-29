@@ -41,7 +41,7 @@ export async function GET() {
         }
       },
       textGeneration: {
-        path: "https://flashcards-api-mhmd.onrender.com/v1/chat/completions",
+        path: "https://flashcards-api-1.onrender.com/v1/chat/completions",
         method: "POST",
         description: "Text generation using GPT-4o-mini (primary) with Groq fallback",
         headers: {
@@ -73,7 +73,7 @@ export async function GET() {
         }
       },
       imageGeneration: {
-        path: "https://flashcards-api-mhmd.onrender.com/v1/images/generate",
+        path: "https://flashcards-api-1.onrender.com/v1/images/generate",
         method: "POST",
         description: "Image generation with multiple model support",
         headers: {
@@ -312,7 +312,7 @@ export async function GET() {
     },
     examples: {
       curl: {
-        textGeneration: `curl -X POST "https://flashcards-api-mhmd.onrender.com/v1/chat/completions" \\
+        textGeneration: `curl -X POST "https://flashcards-api-1.onrender.com/v1/chat/completions" \\
   -H "Content-Type: application/json" \\
   -d '{
     "messages": [
@@ -323,7 +323,7 @@ export async function GET() {
     ],
     "model": "gpt-4o-mini"
   }'`,
-        imageGeneration: `curl -X POST "https://flashcards-api-mhmd.onrender.com/v1/images/generate" \\
+        imageGeneration: `curl -X POST "https://flashcards-api-1.onrender.com/v1/images/generate" \\
   -H "Content-Type: application/json" \\
   -d '{
     "prompt": "A beautiful sunset",

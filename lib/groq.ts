@@ -59,7 +59,7 @@ export async function generateFlashcards(
 ): Promise<GenerationResult> {
     try {
         // Try custom endpoint first with GPT-4o-mini
-        const customEndpoint = "https://flashcards-api-mhmd.onrender.com/v1/chat/completions";
+        const customEndpoint = "https://flashcards-api-1.onrender.com/v1/chat/completions";
         let response;
         let data;
         
@@ -749,8 +749,8 @@ export async function makeGroqRequest(
     forceJson: boolean = false
 ): Promise<string> {
     try {
-        // Try custom endpoint first with GPT-4o-mini
-        const customEndpoint = "https://flashcards-api-mhmd.onrender.com/v1/chat/completions";
+        // Try custom endpoint first with GPT-4o
+        const customEndpoint = "https://flashcards-api-1.onrender.com/v1/chat/completions";
         try {
             console.log("Attempting to use custom endpoint with GPT-4o-mini");
             const customRequestBody = {
@@ -764,7 +764,7 @@ export async function makeGroqRequest(
                         content: prompt,
                     },
                 ],
-                model: "gpt-4o-mini",
+                model: "gpt-4o",
                 temperature: 0.6,
                 max_tokens: 3000,
             };
