@@ -705,6 +705,7 @@ export default function TestAIPage() {
                   <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
                   <SelectItem value="claude-3-7-sonnet">Claude 3.7 Sonnet</SelectItem>
                   <SelectItem value="o3">O3</SelectItem>
+                  <SelectItem value="grok-3">Grok-3</SelectItem>
                 </SelectContent>
               </Select>
             </div>
