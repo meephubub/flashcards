@@ -1,11 +1,5 @@
-import { pipeline, env } from "@xenova/transformers";
-
 // Import a lightweight spell checker
 import { distance as levenshteinDistance } from 'fastest-levenshtein';
-
-// Configure environment for better performance
-env.allowLocalModels = false; // Use remote models for better caching
-env.allowRemoteModels = true;
 
 // Check if WebGL is available and configure accordingly
 const isWebGLAvailable = (() => {
@@ -42,16 +36,6 @@ const getDefaultModel = () => {
   return "Xenova/nomic-embed-text-v1"; // ~140MB, higher quality embeddings
 };
 
-// Configure execution provider based on WebGL availability
-if (isWebGLAvailable) {
-  env.backends.onnx.wasm.executionProviders = ['webgl'];
-  console.log('[xenova-similarity] WebGL backend enabled for ONNX execution');
-} else {
-  console.log('[xenova-similarity] WebGL not available, using CPU backend');
-}
-
-console.log(`[xenova-similarity] Device: ${isMobileDevice ? 'Mobile' : 'Desktop'}, WebGL: ${isWebGLAvailable ? 'Available' : 'Not available'}`);
-
 const extractorCache: {
   [model: string]: ((input: string | string[], options?: any) => Promise<any>) | null;
 } = {};
@@ -61,13 +45,28 @@ const extractorCache: {
  * @param modelName - The name of the model to use (auto-selects based on device if not specified).
  */
 export async function getFeatureExtractor(modelName?: string) {
+  const { pipeline, env } = await import("@xenova/transformers");
+
+  // Configure environment for better performance (only once)
+  if (typeof env._configured === 'undefined') {
+    env.allowLocalModels = false; // Use remote models for better caching
+    env.allowRemoteModels = true;
+    env._configured = true;
+  }
+
+  // Configure execution provider based on WebGL availability
+  if (isWebGLAvailable) {
+    env.backends.onnx.wasm.executionProviders = ['webgl'];
+    console.log('[xenova-similarity] WebGL backend enabled for ONNX execution');
+  } else {
+    console.log('[xenova-similarity] WebGL not available, using CPU backend');
+  }
+
   const selectedModel = modelName || getDefaultModel();
-  
   if (!extractorCache[selectedModel]) {
     console.log(`[xenova-similarity] Initializing feature extractor for model: ${selectedModel}...`);
     console.log(`[xenova-similarity] Using ${isWebGLAvailable ? 'WebGL' : 'CPU'} backend`);
     console.log(`[xenova-similarity] Device type: ${isMobileDevice ? 'Mobile' : 'Desktop'}`);
-    
     try {
       extractorCache[selectedModel] = await pipeline("feature-extraction", selectedModel, {
         quantized: true, // Use quantized models for better performance
@@ -77,7 +76,6 @@ export async function getFeatureExtractor(modelName?: string) {
           }
         }
       });
-      
       console.log(
         `[xenova-similarity] Feature extractor initialized for model: ${selectedModel}:`,
         typeof extractorCache[selectedModel],
