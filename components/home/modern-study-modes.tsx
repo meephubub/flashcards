@@ -10,6 +10,7 @@ import {
   Trophy,
   Globe,
 } from "lucide-react";
+import Link from "next/link";
 
 export function ModernStudyModes() {
   return (
@@ -65,10 +66,12 @@ export function ModernStudyModes() {
                       <span>Review scheduling</span>
                     </div>
                   </div>
-                  <Button className="w-full bg-black hover:bg-gray-800 group">
-                    Start Regular Study
-                    <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </Button>
+                  <Link href="/signup" passHref legacyBehavior>
+                    <Button className="w-full bg-black hover:bg-gray-800 group">
+                      Start Regular Study
+                      <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                  </Link>
                 </div>
                 <div className="lg:w-1/3 bg-gradient-to-br from-gray-100 to-gray-50 p-8 flex items-center justify-center">
                   <div className="text-center">
@@ -113,12 +116,14 @@ export function ModernStudyModes() {
                   </span>
                 </div>
               </div>
-              <Button
-                variant="secondary"
-                className="w-full bg-white text-black hover:bg-gray-200"
-              >
-                Try Exam Mode
-              </Button>
+              <Link href="/signup" passHref legacyBehavior>
+                <Button
+                  variant="secondary"
+                  className="w-full bg-white text-black hover:bg-gray-200"
+                >
+                  Try Exam Mode
+                </Button>
+              </Link>
             </CardContent>
           </Card>
 
@@ -174,10 +179,12 @@ export function ModernStudyModes() {
                       </span>
                     </div>
                   </div>
-                  <Button className="bg-black hover:bg-gray-800 group">
-                    Explore Language Mode
-                    <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </Button>
+                  <Link href="/signup" passHref legacyBehavior>
+                    <Button className="bg-black hover:bg-gray-800 group">
+                      Explore Language Mode
+                      <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </CardContent>

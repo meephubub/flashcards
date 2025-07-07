@@ -14,6 +14,7 @@ import {
   Zap,
   ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 
 export function AIFeatures() {
   return (
@@ -73,10 +74,12 @@ export function AIFeatures() {
                     </p>
                   </div>
                 </div>
-                <Button className="w-full sm:w-auto bg-black hover:bg-gray-800">
-                  Try AI Generation
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                <Link href="/signup" passHref legacyBehavior>
+                  <Button className="w-full sm:w-auto bg-black hover:bg-gray-800">
+                    Try AI Generation
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
 

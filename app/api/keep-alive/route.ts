@@ -79,7 +79,7 @@ export async function GET() {
     let textApiError = null;
     
     try {
-      const textResponse = await fetch('https://flashcards-api-mhmd.onrender.com/v1/chat/completions', {
+      const textResponse = await fetch('https://flashcards-api-1.onrender.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

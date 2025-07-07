@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Brain, Sparkles, Play } from "lucide-react";
+import Link from "next/link";
 
 export function HeroSection() {
   return (
@@ -43,14 +44,16 @@ export function HeroSection() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button
-                  size="lg"
-                  className="px-8 py-4 text-lg bg-black hover:bg-gray-800 group"
-                >
-                  <Brain className="mr-2 h-5 w-5 group-hover:rotate-12 transition-transform" />
-                  Start Learning Free
-                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
+                <Link href="/signup" passHref legacyBehavior>
+                  <Button
+                    size="lg"
+                    className="px-8 py-4 text-lg bg-black hover:bg-gray-800 group"
+                  >
+                    <Brain className="mr-2 h-5 w-5 group-hover:rotate-12 transition-transform" />
+                    Start Learning Free
+                    <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </Link>
                 <Button
                   variant="outline"
                   size="lg"
