@@ -492,7 +492,15 @@ export default function ChatPage() {
                       <div key={idx} className="w-full">
                         <div className="py-4">
                           <div className="prose prose-invert max-w-none text-lg font-medium text-left w-full">
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            <ReactMarkdown
+                              components={{
+                                img: ({node, ...props}) => (
+                                  <img {...props} className="rounded-md" />
+                                )
+                              }}
+                            >
+                              {msg.content}
+                            </ReactMarkdown>
                           </div>
                           <div className={`text-xs mt-3 ${theme.textMuted} text-left`}>
                             {new Date(msg.created_at).toLocaleTimeString([], {
@@ -510,7 +518,15 @@ export default function ChatPage() {
                     <div className="w-full">
                       <div className="py-4">
                         <div className={`prose prose-invert max-w-none text-lg font-medium text-left w-full ${theme.text}`}>
-                          <ReactMarkdown>{streamingMsg}</ReactMarkdown>
+                          <ReactMarkdown
+                            components={{
+                              img: ({node, ...props}) => (
+                                <img {...props} className="rounded-md" />
+                              )
+                            }}
+                          >
+                            {streamingMsg}
+                          </ReactMarkdown>
                           <span className={`inline-block w-2 h-5 ${theme.textSecondary} animate-pulse ml-1`} />
                         </div>
                       </div>
