@@ -196,6 +196,54 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_conversations: {
+        Row: {
+          id: string;
+          session_id: string;
+          user_id: string | null;
+          title: string | null;
+          messages: {
+            role: "user" | "assistant";
+            content: string;
+            created_at: string;
+          }[];
+          agent_type: string | null;
+          status: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id?: string;
+          user_id?: string | null;
+          title?: string | null;
+          messages?: {
+            role: "user" | "assistant";
+            content: string;
+            created_at: string;
+          }[];
+          agent_type?: string | null;
+          status?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          session_id?: string;
+          user_id?: string | null;
+          title?: string | null;
+          messages?: {
+            role: "user" | "assistant";
+            content: string;
+            created_at: string;
+          }[];
+          agent_type?: string | null;
+          status?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      },
     }
     Views: {
       [_ in never]: never
