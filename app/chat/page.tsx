@@ -96,6 +96,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [streamingMsg, setStreamingMsg] = useState("")
+  const [streamingEvents, setStreamingEvents] = useState<any[]>([]); // For agent tool events
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Model selection
@@ -176,6 +177,7 @@ export default function ChatPage() {
     setInput("")
     setIsSending(true)
     setStreamingMsg("")
+    setStreamingEvents([]); // Clear previous events
     // Add user message locally
     const updatedMessages = [...convo.messages, userMsg]
     setSelectedConvo({ ...convo, messages: updatedMessages })
@@ -183,6 +185,7 @@ export default function ChatPage() {
     const history = updatedMessages.map((m) => ({ role: m.role, content: m.content }))
     // Stream from API
     let response;
+    let fullMsg = "";
     if (selectedModel === "agent") {
       response = await fetch("https://flashcards-api-1.onrender.com/agent", {
         method: "POST",
@@ -200,18 +203,37 @@ export default function ChatPage() {
       setIsSending(false)
       return
     }
-    let fullMsg = "";
     if (selectedModel === "agent") {
-      // Stream plain text response
+      // Stream JSON events response
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = "";
+      let events: any[] = [];
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        fullMsg += chunk;
-        setStreamingMsg(fullMsg);
+        buffer += decoder.decode(value, { stream: true });
+        let lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // keep incomplete line for next chunk
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            events.push(event);
+            if (event.event === "llm") {
+              fullMsg += event.content;
+              setStreamingMsg(fullMsg);
+            } else if (event.event === "tool_call") {
+              setStreamingEvents((prev) => [...prev, { type: "tool_call", tool: event.tool, args: event.arguments }]);
+            } else if (event.event === "tool_result") {
+              setStreamingEvents((prev) => [...prev, { type: "tool_result", tool: event.tool, args: event.arguments, result: event.result }]);
+            }
+          } catch (e) {
+            // ignore malformed lines
+          }
+        }
       }
+      setStreamingEvents([]); // Clear after streaming
     } else {
       const reader = response.body.getReader();
       let buffer = "";
@@ -512,6 +534,22 @@ export default function ChatPage() {
                     </div>
                     )
                   ))}
+
+                  {/* Streaming agent tool events (agent model only) */}
+                  {isSending && selectedModel === "agent" && streamingEvents.length > 0 && (
+                    <div className="w-full">
+                      {streamingEvents.map((ev, i) => (
+                        <div key={i} className="py-2 text-xs text-blue-500">
+                          {ev.type === "tool_call" && (
+                            <span>Calling tool <b>{ev.tool}</b> with <code>{JSON.stringify(ev.args)}</code>...</span>
+                          )}
+                          {ev.type === "tool_result" && (
+                            <span>Tool <b>{ev.tool}</b> result: <code>{typeof ev.result === 'string' ? ev.result : JSON.stringify(ev.result)}</code></span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Streaming assistant message as last message */}
                   {isSending && streamingMsg && (
