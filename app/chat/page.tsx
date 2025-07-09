@@ -191,8 +191,8 @@ export default function ChatPage() {
       });
     } else {
       response = await fetch("https://text.pollinations.ai/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: selectedModel, messages: history, stream: true }),
       });
     }
@@ -216,7 +216,7 @@ export default function ChatPage() {
       const reader = response.body.getReader();
       let buffer = "";
       const decoder = new TextDecoder();
-      while (true) {
+    while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -343,9 +343,9 @@ export default function ChatPage() {
                         {convo.title || "New Chat"}
                       </span>
                       <div className="flex items-center gap-2">
-                        {isSelected && (
-                          <div className={`w-2 h-2 ${currentTheme === "dark" ? "bg-black" : "bg-white"} rounded-full`} />
-                        )}
+                      {isSelected && (
+                        <div className={`w-2 h-2 ${currentTheme === "dark" ? "bg-black" : "bg-white"} rounded-full`} />
+                      )}
                         <button
                           className={`ml-2 p-1 rounded hover:${theme.bgHover} ${theme.textMuted} hover:${theme.text}`}
                           title="Delete chat"
@@ -474,11 +474,11 @@ export default function ChatPage() {
                   {selectedConvo.messages.map((msg, idx) => (
                     msg.role === "user" ? (
                       <div key={idx} className="flex justify-end">
-                        <div
+                      <div
                           className={`max-w-[80%] rounded-2xl px-6 py-4 ${theme.message.user} rounded-br-md`}
-                        >
-                          <div className="whitespace-pre-wrap break-words">{msg.content}</div>
-                          <div
+                      >
+                        <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                        <div
                             className={`text-xs mt-3 ${currentTheme === "dark" ? "text-white/80" : "text-black/80"}`}
                           >
                             {new Date(msg.created_at).toLocaleTimeString([], {
@@ -503,13 +503,13 @@ export default function ChatPage() {
                             </ReactMarkdown>
                           </div>
                           <div className={`text-xs mt-3 ${theme.textMuted} text-left`}>
-                            {new Date(msg.created_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </div>
+                          {new Date(msg.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </div>
                       </div>
+                    </div>
                     )
                   ))}
 
@@ -576,10 +576,10 @@ export default function ChatPage() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                     <textarea
-                      value={input}
+                    value={input}
                       onChange={e => setInput(e.target.value)}
                       placeholder="Ask anything"
-                      disabled={isSending}
+                    disabled={isSending}
                       rows={1}
                       className="flex-1 bg-transparent border-none outline-none text-base px-2 py-3 focus:ring-0 placeholder:text-neutral-400 resize-none overflow-auto min-h-[48px] max-h-40"
                       style={{ minWidth: 0 }}
@@ -588,16 +588,16 @@ export default function ChatPage() {
                         target.style.height = 'auto';
                         target.style.height = target.scrollHeight + 'px';
                       }}
-                    />
-                    <Button
-                      type="submit"
-                      size="icon"
-                      disabled={isSending || !input.trim()}
+                  />
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={isSending || !input.trim()}
                       className="h-10 w-10 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 shadow-none border-none flex items-center justify-center"
-                    >
-                      {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                    </Button>
-                  </form>
+                  >
+                    {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                  </Button>
+                </form>
                 </div>
               </div>
             </div>

@@ -94,15 +94,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - api/auth/callback (Supabase auth callbacks)
-     * - auth/callback (Custom auth callbacks)
-     * - public folder
-     */
-    '/((?!_next/static|_next/image|favicon.ico|api/auth/callback|auth/callback).*)',
+    // Exclude all /api/* routes from middleware
+    '/((?!_next/static|_next/image|favicon.ico|api/|auth/callback|api/auth/callback).*)',
   ],
 }
