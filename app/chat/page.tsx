@@ -67,10 +67,20 @@ const themes = {
   },
 }
 
+// 1. Add ToolEvent type
+type ToolEvent = {
+  tool: string;
+  args?: string;
+  id?: string;
+  result?: string;
+};
+
 type Message = {
   role: "user" | "assistant"
   content: string
   created_at: string
+  toolEvents?: ToolEvent[]
+  responseTime?: number; // Time in milliseconds
 }
 
 type AgentConversation = {
@@ -78,6 +88,17 @@ type AgentConversation = {
   title: string | null
   created_at: string
   messages: Message[]
+}
+
+// Add a type for streaming events
+interface StreamingEvent {
+  type: 'tool_call' | 'tool_result' | 'final' | 'error';
+  tool?: string;
+  args?: string;
+  id?: string;
+  result?: string;
+  content?: string;
+  error?: string;
 }
 
 // Helper to generate a unique session_id (UUID)
@@ -89,6 +110,150 @@ function generateSessionId() {
   return Math.random().toString(36).slice(2) + Date.now()
 }
 
+// ChatInputBar component
+function ChatInputBar({
+  input,
+  setInput,
+  isSending,
+  handleSend,
+  selectedModel,
+  setSelectedModel,
+  modelOptions,
+  theme
+}: {
+  input: string,
+  setInput: (v: string) => void,
+  isSending: boolean,
+  handleSend: (e: React.FormEvent) => void,
+  selectedModel: string,
+  setSelectedModel: (v: string) => void,
+  modelOptions: { label: string, value: string }[],
+  theme: any
+}) {
+  // Handle Enter to send, Shift+Enter for newline
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!isSending && input.trim()) {
+        // Create a fake event to pass to handleSend
+        handleSend({ preventDefault: () => {} } as any);
+      }
+    }
+  };
+  return (
+    <div className="relative w-full flex justify-center mt-4">
+      <div className="w-[90%] max-w-3xl mx-auto pointer-events-auto pb-10">
+        <form onSubmit={handleSend} className={`flex items-center gap-2 rounded-3xl ${theme.bg} ${theme.border} border px-4 py-2 w-full shadow-lg`}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className={`h-10 px-2 rounded-full ${theme.bgSecondary} ${theme.text} border ${theme.border} transition-colors`} style={{ background: 'inherit' }}>
+                {modelOptions.find((m) => m.value === selectedModel)?.label || selectedModel}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className={`${theme.bg} ${theme.text} border ${theme.border}`}> 
+              <DropdownMenuLabel className={theme.text}>Select Model</DropdownMenuLabel>
+              <DropdownMenuSeparator className={theme.border} />
+              <DropdownMenuRadioGroup value={selectedModel} onValueChange={setSelectedModel}>
+                {modelOptions.map((model) => (
+                  <DropdownMenuRadioItem key={model.value} value={model.value} className={`${theme.bg} ${theme.text} hover:${theme.bgHover}`}>
+                    {model.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Ask anything"
+            disabled={isSending}
+            rows={1}
+            className={`flex-1 bg-transparent border-none outline-none text-base px-2 py-3 focus:ring-0 placeholder:${theme.textMuted} resize-none overflow-auto min-h-[48px] max-h-40 ${theme.text}`}
+            style={{ minWidth: 0 }}
+            onInput={e => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = target.scrollHeight + 'px';
+            }}
+            onKeyDown={handleKeyDown}
+          />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={isSending || !input.trim()}
+            className={`h-10 w-10 rounded-full ${theme.bgSecondary} hover:${theme.bgHover} ${theme.text} shadow-none border-none flex items-center justify-center`}
+          >
+            {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+          </Button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// New ToolEventsDropdown component
+function ToolEventsDropdown({
+  toolEvents,
+  theme,
+  currentTheme,
+  responseTime,
+}: {
+  toolEvents: ToolEvent[] | undefined; // Allow undefined
+  theme: any;
+  currentTheme: string;
+  responseTime?: number;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (!toolEvents || toolEvents.length === 0) return null;
+
+  return (
+    <div className={`mt-4 w-full px-4 py-3 rounded-lg ${theme.bgSecondary} border ${theme.border} overflow-hidden`}>
+      <div
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className={`font-medium ${theme.textSecondary}`}>
+          Tools Used ({toolEvents.length})
+        </span>
+        <div className="flex items-center gap-2">
+          {responseTime !== undefined && (
+            <span className={`text-xs ${theme.textMuted}`}>{responseTime} ms</span>
+          )}
+          <svg
+            className={`h-5 w-5 transition-transform ${isOpen ? "rotate-180" : ""} ${theme.textSecondary}`}
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="mt-4 pt-4 border-t" style={{ borderColor: theme.borderHover }}>
+          {toolEvents.map((ev, i) => (
+            <div key={ev.id || i} className="mb-4 last:mb-0 p-3 rounded-md bg-opacity-10" style={{ backgroundColor: theme.bgHover }}>
+              <div className={`font-semibold ${theme.text}`}>Tool: {ev.tool}</div>
+              {ev.args && (
+                <div className={`text-sm ${theme.textMuted} mt-1`}>
+                  Args: <code className={`font-mono ${theme.textFaint} text-xs block p-2 rounded ${theme.bgSelected}`}>{ev.args}</code>
+                </div>
+              )}
+              <div className={`text-sm ${theme.textMuted} mt-2`}>Result:</div>
+              <div className={`bg-neutral-800 text-sm text-green-300 p-2 rounded font-mono whitespace-pre-wrap overflow-x-auto`} style={{ backgroundColor: currentTheme === 'dark' ? '#262626' : '#e5e5e5', color: currentTheme === 'dark' ? '#86efac' : '#16a34a' }}>
+                {ev.result}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const { user, isLoading: authLoading } = useAuth()
   const [convos, setConvos] = useState<AgentConversation[]>([])
@@ -96,7 +261,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [streamingMsg, setStreamingMsg] = useState("")
-  const [streamingEvents, setStreamingEvents] = useState<any[]>([]); // For agent tool events
+  const [streamingEvents, setStreamingEvents] = useState<StreamingEvent[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Model selection
@@ -107,7 +272,8 @@ export default function ChatPage() {
     { label: "Agent", value: "agent" },
   ]
 
-  const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark")
+  // Theme management
+  const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark") // Default to dark
   const theme = themes[currentTheme]
 
   const toggleTheme = () => {
@@ -152,6 +318,8 @@ export default function ChatPage() {
     e.preventDefault()
     if (!input.trim() || !user) return
 
+    const startTime = Date.now(); // Record start time
+
     // If no chat is selected, create a new one first
     let convo = selectedConvo
     if (!convo) {
@@ -177,7 +345,7 @@ export default function ChatPage() {
     setInput("")
     setIsSending(true)
     setStreamingMsg("")
-    setStreamingEvents([]); // Clear previous events
+    setStreamingEvents([])
     // Add user message locally
     const updatedMessages = [...convo.messages, userMsg]
     setSelectedConvo({ ...convo, messages: updatedMessages })
@@ -185,60 +353,127 @@ export default function ChatPage() {
     const history = updatedMessages.map((m) => ({ role: m.role, content: m.content }))
     // Stream from API
     let response;
-    let fullMsg = "";
     if (selectedModel === "agent") {
-      response = await fetch("https://flashcards-api-1.onrender.com/agent", {
+      console.log("Calling agent API with:", { prompt: input.trim(), history, stream: true });
+      response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: input.trim() }),
+        body: JSON.stringify({ prompt: input.trim(), history, stream: true }),
       });
-    } else {
-      response = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: selectedModel, messages: history, stream: true }),
-      });
-    }
-    if (!response.body) {
-      setIsSending(false)
-      return
-    }
-    if (selectedModel === "agent") {
-      // Stream JSON events response
+      console.log("Agent API response status:", response.status);
+      if (!response.ok) {
+        console.error("Agent API error:", response.statusText);
+        setIsSending(false)
+        return
+      }
+      if (!response.body) {
+        console.error("No response body from agent API");
+        setIsSending(false)
+        return
+      }
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let events: any[] = [];
+      let fullMsg = "";
+      // This array will reliably collect all raw events from the stream
+      const rawStreamEvents: StreamingEvent[] = [];
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // keep incomplete line for next chunk
+        buffer = lines.pop() || "";
+
         for (const line of lines) {
           if (!line.trim()) continue;
+          //console.log("Parsing line:", line);
           try {
-            const event = JSON.parse(line);
-            events.push(event);
-            if (event.event === "llm") {
-              fullMsg += event.content;
+            const event: StreamingEvent = JSON.parse(line);
+            //console.log("Parsed event:", event);
+            console.log("[AGENT-STREAM]", event); // Keep this log for debugging
+
+            rawStreamEvents.push(event); // Collect all raw events
+
+            if (event.type === "tool_call") {
+              // Update streamingEvents for immediate UI display
+              setStreamingEvents(prev => [...prev, event]);
+            } else if (event.type === "tool_result") {
+              // Update streamingEvents to replace tool_call with result for immediate UI display
+              setStreamingEvents(prev =>
+                prev.map(e => (e.type === "tool_call" && e.id === event.id ? { ...event, type: "tool_result" } : e))
+              );
+            } else if (event.type === "final") {
+              fullMsg += event.content || "";
               setStreamingMsg(fullMsg);
-            } else if (event.event === "tool_call") {
-              setStreamingEvents((prev) => [...prev, { type: "tool_call", tool: event.tool, args: event.arguments }]);
-            } else if (event.event === "tool_result") {
-              setStreamingEvents((prev) => [...prev, { type: "tool_result", tool: event.tool, args: event.arguments, result: event.result }]);
+            } else if (event.type === "error") {
+              setStreamingMsg(event.error || "Error");
+              console.error("Error event:", event.error);
             }
-          } catch (e) {
-            // ignore malformed lines
+          } catch (err) {
+            console.error("Failed to parse stream line:", line, err);
           }
         }
       }
-      setStreamingEvents([]); // Clear after streaming
+
+      // After the stream is fully received, process all raw events to build toolEventsToStore
+      console.log("Raw events collected after stream completion:", rawStreamEvents);
+      const toolEventsToStore: ToolEvent[] = [];
+      const calls = rawStreamEvents.filter(ev => ev.type === "tool_call");
+      const results = rawStreamEvents.filter(ev => ev.type === "tool_result");
+
+      for (const call of calls) {
+        const result = results.find(r => r.id === call.id);
+        if (result) { // Only store if there's a corresponding result
+          toolEventsToStore.push({
+            tool: call.tool || '',
+            args: call.args,
+            id: call.id,
+            result: result.result,
+          });
+        }
+      }
+
+      const endTime = Date.now(); // Record end time
+      const responseTime = endTime - startTime; // Calculate time taken
+
+      setIsSending(false);
+      setStreamingMsg(""); // Clear streaming message as final message is about to be added
+      setStreamingEvents([]); // Clear streaming tool events
+
+      const assistantMsg: Message = {
+        role: "assistant",
+        content: fullMsg,
+        created_at: new Date().toISOString(),
+        toolEvents: toolEventsToStore.length > 0 ? toolEventsToStore : undefined,
+        responseTime: responseTime, // Make sure responseTime is passed here
+      };
+      console.log("Final Assistant message to store:", assistantMsg);
+
+      const finalMessages = [...updatedMessages, assistantMsg];
+      await supabase.from("agent_conversations").update({ messages: finalMessages }).eq("id", convo.id);
+      setSelectedConvo({ ...convo, messages: finalMessages });
+      setConvos((prev) => prev.map((c) => (c.id === convo.id ? { ...c, messages: finalMessages } : c)));
+      return;
     } else {
+      // Existing streaming logic for other models
+      const endTime = Date.now(); // Record end time
+      const responseTime = endTime - startTime; // Calculate time taken
+      response = await fetch("https://text.pollinations.ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: selectedModel, messages: history, stream: true }),
+      });
+      if (!response.body) {
+        setIsSending(false)
+        return
+      }
       const reader = response.body.getReader();
       let buffer = "";
       const decoder = new TextDecoder();
-    while (true) {
+      let fullMsg = "";
+      while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -261,20 +496,21 @@ export default function ChatPage() {
           }
         }
       }
+      setIsSending(false)
+      setStreamingMsg("")
+      const assistantMsg: Message = {
+        role: "assistant",
+        content: fullMsg,
+        created_at: new Date().toISOString(),
+        responseTime: responseTime,
+      }
+      const finalMessages = [...updatedMessages, assistantMsg]
+      // Save both user and assistant messages to Supabase
+      await supabase.from("agent_conversations").update({ messages: finalMessages }).eq("id", convo.id)
+      // Update local state
+      setSelectedConvo({ ...convo, messages: finalMessages })
+      setConvos((prev) => prev.map((c) => (c.id === convo.id ? { ...c, messages: finalMessages } : c)))
     }
-    setIsSending(false)
-    setStreamingMsg("")
-    const assistantMsg: Message = {
-      role: "assistant",
-      content: fullMsg,
-      created_at: new Date().toISOString(),
-    }
-    const finalMessages = [...updatedMessages, assistantMsg]
-    // Save both user and assistant messages to Supabase
-    await supabase.from("agent_conversations").update({ messages: finalMessages }).eq("id", convo.id)
-    // Update local state
-    setSelectedConvo({ ...convo, messages: finalMessages })
-    setConvos((prev) => prev.map((c) => (c.id === convo.id ? { ...c, messages: finalMessages } : c)))
   }
 
   // Delete a conversation
@@ -469,23 +705,16 @@ export default function ChatPage() {
 
                 {/* Input for new chat */}
                 <div className="mt-8">
-                  <form onSubmit={handleSend} className="flex gap-3">
-                    <Input
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      placeholder="Type your message..."
-                      disabled={isSending}
-                      className={`flex-1 ${theme.input} focus:ring-0 rounded-xl h-12`}
-                    />
-                    <Button
-                      type="submit"
-                      size="icon"
-                      disabled={isSending || !input.trim()}
-                      className={`h-12 w-12 ${theme.button} rounded-xl`}
-                    >
-                      <Send className="h-5 w-5" />
-                    </Button>
-                  </form>
+                  <ChatInputBar
+                    input={input}
+                    setInput={setInput}
+                    isSending={isSending}
+                    handleSend={handleSend}
+                    selectedModel={selectedModel}
+                    setSelectedModel={setSelectedModel}
+                    modelOptions={modelOptions}
+                    theme={theme}
+                  />
                 </div>
               </div>
             </div>
@@ -524,6 +753,8 @@ export default function ChatPage() {
                               {msg.content}
                             </ReactMarkdown>
                           </div>
+                          {/* Tool events dropdown */}
+                          <ToolEventsDropdown toolEvents={msg.toolEvents} theme={theme} currentTheme={currentTheme} responseTime={msg.responseTime} />
                           <div className={`text-xs mt-3 ${theme.textMuted} text-left`}>
                           {new Date(msg.created_at).toLocaleTimeString([], {
                             hour: "2-digit",
@@ -534,22 +765,6 @@ export default function ChatPage() {
                     </div>
                     )
                   ))}
-
-                  {/* Streaming agent tool events (agent model only) */}
-                  {isSending && selectedModel === "agent" && streamingEvents.length > 0 && (
-                    <div className="w-full">
-                      {streamingEvents.map((ev, i) => (
-                        <div key={i} className="py-2 text-xs text-blue-500">
-                          {ev.type === "tool_call" && (
-                            <span>Calling tool <b>{ev.tool}</b> with <code>{JSON.stringify(ev.args)}</code>...</span>
-                          )}
-                          {ev.type === "tool_result" && (
-                            <span>Tool <b>{ev.tool}</b> result: <code>{typeof ev.result === 'string' ? ev.result : JSON.stringify(ev.result)}</code></span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
 
                   {/* Streaming assistant message as last message */}
                   {isSending && streamingMsg && (
@@ -575,7 +790,7 @@ export default function ChatPage() {
                   {isSending && !streamingMsg && (
                     <div className="w-full">
                       <div className="py-4">
-                        <div className="flex items-center gap-2 text-left">
+                        <div className="flex items-center gap-2 text-left ml-10">
                           <div className="flex gap-1">
                             <div className={`w-2 h-2 ${theme.textSecondary} rounded-full animate-bounce [animation-delay:-.32s]`} />
                             <div className={`w-2 h-2 ${theme.textSecondary} rounded-full animate-bounce [animation-delay:-.16s]`} />
@@ -592,52 +807,16 @@ export default function ChatPage() {
               </div>
 
               {/* Input bar (floating, modern style) */}
-              <div className="relative w-full flex justify-center mt-4">
-                <div className="w-[90%] max-w-3xl mx-auto pointer-events-auto pb-10">
-                  <form onSubmit={handleSend} className="flex items-center gap-2 rounded-3xl bg-white shadow-lg border border-neutral-200 px-4 py-2 w-full">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-10 px-2 rounded-full text-neutral-500 hover:bg-neutral-100">
-                          {modelOptions.find((m) => m.value === selectedModel)?.label || selectedModel}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuLabel>Select Model</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuRadioGroup value={selectedModel} onValueChange={setSelectedModel}>
-                          {modelOptions.map((model) => (
-                            <DropdownMenuRadioItem key={model.value} value={model.value}>
-                              {model.label}
-                            </DropdownMenuRadioItem>
-                          ))}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <textarea
-                    value={input}
-                      onChange={e => setInput(e.target.value)}
-                      placeholder="Ask anything"
-                    disabled={isSending}
-                      rows={1}
-                      className="flex-1 bg-transparent border-none outline-none text-base px-2 py-3 focus:ring-0 placeholder:text-neutral-400 resize-none overflow-auto min-h-[48px] max-h-40"
-                      style={{ minWidth: 0 }}
-                      onInput={e => {
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = 'auto';
-                        target.style.height = target.scrollHeight + 'px';
-                      }}
-                  />
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={isSending || !input.trim()}
-                      className="h-10 w-10 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 shadow-none border-none flex items-center justify-center"
-                  >
-                    {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                  </Button>
-                </form>
-                </div>
-              </div>
+              <ChatInputBar
+                input={input}
+                setInput={setInput}
+                isSending={isSending}
+                handleSend={handleSend}
+                selectedModel={selectedModel}
+                setSelectedModel={setSelectedModel}
+                modelOptions={modelOptions}
+                theme={theme}
+              />
             </div>
           )}
         </div>
