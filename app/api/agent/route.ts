@@ -7,6 +7,9 @@ import { z } from "zod";
 import { config } from "dotenv";
 config();
 
+// Add Supabase client
+import { createClient } from "@/lib/supabase/server";
+
 // Simple calc tool
 const calc = tool(
     async (input: string) => {
@@ -335,8 +338,7 @@ const synonyms = tool(
   }
 );
 
-// 10. Fan On Tool
-const fanOn = tool(
+export const fanOn = tool(
   async () => {
     try {
       const response = await fetch("https://api-v2.voicemonkey.io/trigger?token=814e797e65ae46a6828e1001150bd8ac_0a30f8185cdd6014f8a9b1d0ef1b326a&device=fan-on");
@@ -353,8 +355,7 @@ const fanOn = tool(
   }
 );
 
-// 11. Fan Off Tool
-const fanOff = tool(
+export const fanOff = tool(
   async () => {
     try {
       const response = await fetch("https://api-v2.voicemonkey.io/trigger?token=814e797e65ae46a6828e1001150bd8ac_0a30f8185cdd6014f8a9b1d0ef1b326a&device=fan-off");
@@ -371,7 +372,76 @@ const fanOff = tool(
   }
 );
 
-const tools = [calc, webSearch, imageGen, newsApi, dictionary, wikipedia, unitConvert, currencyConvert, weather, joke, translate, dateTime, synonyms, fanOn, fanOff];
+// 12. Schedule Tool
+const schedule = tool(
+  async (input: string) => {
+    // Input format: "{ \"action\": \"fanOn\", \"run_at\": \"YYYY-MM-DDTHH:MM:SSZ\", \"params\": \"{}\" }"
+    try {
+      const parsedInput = JSON.parse(input);
+      const { action, run_at } = parsedInput;
+      let params = parsedInput.params;
+
+      // If params is a string, attempt to parse it as JSON
+      if (typeof params === 'string') {
+        try {
+          params = JSON.parse(params);
+        } catch (e) {
+          // If parsing fails, treat it as an empty object
+          params = {};
+        }
+      }
+
+      if (!["fanOn", "fanOff"].includes(action)) {
+        return `Unsupported action: ${action}. Only 'fanOn' and 'fanOff' are supported.`;
+      }
+
+      // Validate run_at is a valid date-time string
+      if (isNaN(new Date(run_at).getTime())) {
+        return `Invalid run_at time: ${run_at}. Please use ISO 8601 format (e.g., '2024-12-31T23:59:59Z').`;
+      }
+
+      // Initialize Supabase client
+      const supabase = await createClient(); // Use the server-side client
+
+      // Check if an identical task already exists
+      const { data: existingTasks, error: checkError } = await supabase
+        .from("tasks")
+        .select("id")
+        .eq("action", action)
+        .eq("run_at", run_at)
+        .eq("params", JSON.stringify(params));
+
+      if (checkError) {
+        console.error("Supabase check error:", checkError);
+        return `Failed to check for existing tasks: ${checkError.message}`;
+      }
+
+      if (existingTasks && existingTasks.length > 0) {
+        return `Task '${action}' to run at ${run_at} is already scheduled.`;
+      }
+
+      // Insert into tasks table
+      const { data, error } = await supabase.from("tasks").insert([
+        { action, run_at, params: params || {} }, // Ensure params is an object, default to empty if null/undefined
+      ]);
+
+      if (error) {
+        console.error("Supabase insert error:", error);
+        return `Failed to schedule task: ${error.message}`;
+      }
+      return `Task '${action}' scheduled successfully to run at ${run_at}.`;
+    } catch (err) {
+      return `Schedule tool error: ${err}. Input format: '{\"action\": \"fanOn\", \"run_at\": \"YYYY-MM-DDTHH:MM:SSZ\", \"params\": \"{}\" }'`;
+    }
+  },
+  {
+    name: "schedule",
+    description: "Schedule a task (fanOn or fanOff) to run at a specific time. Input is a JSON string with 'action' (fanOn/fanOff), 'run_at' (ISO 8601 datetime, e.g., '2024-12-31T23:59:59Z'), and optional 'params' (JSON object).",
+    schema: z.string(),
+  }
+);
+
+const tools = [calc, webSearch, imageGen, newsApi, dictionary, wikipedia, unitConvert, currencyConvert, weather, joke, translate, dateTime, synonyms, fanOn, fanOff, schedule];
 const llm = new ChatOpenAI({
   model: "openai",           // or your desired model
   temperature: 0.2,
@@ -387,7 +457,7 @@ const agent = createReactAgent({
 })
 
 // Add system prompt
-const systemPrompt = "If the user asks for a calculation or math expression, always use the calc tool. Do not attempt to answer math questions yourself.";
+const systemPrompt = "If the user asks for a calculation or math expression, always use the calc tool. Do not attempt to answer math questions yourself. Use the schedule tool if the user asks to schedule an action like turning on/off the fan at a specific time. The schedule tool requires an 'action' (fanOn or fanOff), 'run_at' (an ISO 8601 formatted datetime string, like '2024-12-31T23:59:59Z'), and optionally 'params' (a JSON object, default to {} if not provided). For example, to turn the fan on tomorrow at 9 AM, use: schedule({\"action\": \"fanOn\", \"run_at\": \"2024-01-01T09:00:00Z\", \"params\": \"{}\"}).";
 
 export async function POST(req: Request) {
   console.log("[POST] /api/agent called");
@@ -531,6 +601,8 @@ export async function POST(req: Request) {
                         toolResult = await fanOn.invoke(toolArgs) as string;
                       } else if (toolName === "fanOff") {
                         toolResult = await fanOff.invoke(toolArgs) as string;
+                      } else if (toolName === "schedule") {
+                        toolResult = await schedule.invoke(toolArgs) as string;
                       } else {
                         toolResult = `Tool ${toolName} not implemented.`;
                       }
@@ -676,6 +748,8 @@ export async function POST(req: Request) {
                 toolResult = await fanOn.invoke(toolArgs);
               } else if (toolName === "fanOff") {
                 toolResult = await fanOff.invoke(toolArgs);
+              } else if (toolName === "schedule") {
+                toolResult = await schedule.invoke(toolArgs);
               } else {
                 toolResult = `Tool ${toolName} not implemented.`;
               }

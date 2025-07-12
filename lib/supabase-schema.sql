@@ -70,6 +70,15 @@ CREATE TABLE IF NOT EXISTS agent_tools (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create tasks table for scheduled actions
+CREATE TABLE IF NOT EXISTS tasks (
+  id SERIAL PRIMARY KEY,
+  run_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  action TEXT NOT NULL,
+  params JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Add indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cards_deck_id ON cards(deck_id);
 CREATE INDEX IF NOT EXISTS idx_card_progress_card_id ON card_progress(card_id);
@@ -88,6 +97,7 @@ ALTER TABLE card_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_tools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for public access (you may want to restrict this in a real app)
 CREATE POLICY "Allow public access to decks" ON decks FOR ALL USING (true);
@@ -96,6 +106,7 @@ CREATE POLICY "Allow public access to card_progress" ON card_progress FOR ALL US
 CREATE POLICY "Allow public access to notes" ON notes FOR ALL USING (true);
 CREATE POLICY "Allow public access to agent_conversations" ON agent_conversations FOR ALL USING (true);
 CREATE POLICY "Allow public access to agent_tools" ON agent_tools FOR ALL USING (true);
+CREATE POLICY "Allow public access to tasks" ON tasks FOR ALL USING (true);
 
 -- Insert some default agent tools
 INSERT INTO agent_tools (name, description, tool_type, config) VALUES
