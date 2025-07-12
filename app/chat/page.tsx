@@ -128,7 +128,9 @@ function ChatInputBar({
   selectedModel,
   setSelectedModel,
   modelOptions,
-  theme
+  theme,
+  isEditing,
+  setIsEditing,
 }: {
   input: string,
   setInput: (v: string) => void,
@@ -137,7 +139,9 @@ function ChatInputBar({
   selectedModel: string,
   setSelectedModel: (v: string) => void,
   modelOptions: { label: string, value: string }[],
-  theme: any
+  theme: any,
+  isEditing: boolean,
+  setIsEditing: (v: boolean) => void,
 }) {
   // Handle Enter to send, Shift+Enter for newline
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -174,7 +178,7 @@ function ChatInputBar({
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="Ask anything"
+            placeholder={isEditing ? "Edit your message..." : "Ask anything"}
             disabled={isSending}
             rows={1}
             className={`flex-1 bg-transparent border-none outline-none text-base px-2 py-3 focus:ring-0 placeholder:${theme.textMuted} resize-none overflow-auto min-h-[48px] max-h-40 ${theme.text}`}
@@ -274,12 +278,17 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
 
+  // State for editing messages
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedMessageId, setEditedMessageId] = useState<string | null>(null)
+
   // Model selection
   const [selectedModel, setSelectedModel] = useState("gpt-4o")
   const modelOptions = [
     { label: "GPT-4o", value: "gpt-4o" },
     { label: "GPT-3.5 Turbo", value: "gpt-3.5-turbo" },
-    { label: "Agent", value: "agent" },
+    { label: "Agent Large", value: "agent-large", model: "openai", baseURL: "https://text.pollinations.ai/openai/" },
+    { label: "Agent Small", value: "agent-small", model: "llama-3.3-70b-versatile", baseURL: "https://api.groq.com/openai/v1" },
   ]
 
   // Theme management
@@ -323,6 +332,15 @@ export default function ChatPage() {
     }
   }
 
+  // Handle editing a message
+  const handleEditMessage = (messageToEdit: Message) => {
+    setInput(messageToEdit.content);
+    setEditedMessageId(messageToEdit.created_at);
+    setIsEditing(true);
+    // Scroll to the input area
+    window.scrollTo({ behavior: "smooth", top: document.body.scrollHeight });
+  };
+
   // Send message and stream response
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -356,19 +374,38 @@ export default function ChatPage() {
     setIsSending(true)
     setStreamingMsg("")
     setStreamingEvents([])
-    // Add user message locally
-    const updatedMessages = [...convo.messages, userMsg]
-    setSelectedConvo({ ...convo, messages: updatedMessages })
-    // Prepare messages for API
-    const history = updatedMessages.map((m) => ({ role: m.role, content: m.content }))
+
+    let messagesForApi = [];
+    let messagesToUpdateState = [];
+
+    if (isEditing && editedMessageId) {
+      // If editing, find and update the existing message
+      messagesToUpdateState = convo.messages.map(msg =>
+        msg.created_at === editedMessageId ? { ...msg, content: userMsg.content } : msg
+      );
+      setIsEditing(false);
+      setEditedMessageId(null);
+    } else {
+      // Otherwise, add new user message locally
+      messagesToUpdateState = [...convo.messages, userMsg];
+    }
+    setSelectedConvo({ ...convo, messages: messagesToUpdateState });
+
+    // Prepare messages for API (always use the potentially updated history)
+    const history = messagesToUpdateState.map((m) => ({ role: m.role, content: m.content }))
     // Stream from API
     let response;
-    if (selectedModel === "agent") {
-      console.log("Calling agent API with:", { prompt: input.trim(), history, stream: true });
+    // Determine the API endpoint and model to use
+    const selectedModelOption = modelOptions.find(option => option.value === selectedModel);
+    const apiEndpoint = selectedModelOption?.baseURL || "https://text.pollinations.ai/";
+    const apiModel = selectedModelOption?.model || selectedModel;
+
+    if (selectedModel === "agent-large" || selectedModel === "agent-small") {
+      console.log("Calling agent API with:", { prompt: input.trim(), history, stream: true, model: apiModel, baseURL: apiEndpoint });
       response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: input.trim(), history, stream: true }),
+        body: JSON.stringify({ prompt: input.trim(), history, stream: true, model: apiModel, baseURL: apiEndpoint }),
       });
       console.log("Agent API response status:", response.status);
       if (!response.ok) {
@@ -463,19 +500,19 @@ export default function ChatPage() {
       };
       console.log("Final Assistant message to store:", assistantMsg);
 
-      const finalMessages = [...updatedMessages, assistantMsg];
-      await supabase.from("agent_conversations").update({ messages: finalMessages }).eq("id", convo.id);
-      setSelectedConvo({ ...convo, messages: finalMessages });
-      setConvos((prev) => prev.map((c) => (c.id === convo.id ? { ...c, messages: finalMessages } : c)));
+      const finalMessagesToStore = [...messagesToUpdateState, assistantMsg];
+      await supabase.from("agent_conversations").update({ messages: finalMessagesToStore }).eq("id", convo.id);
+      setSelectedConvo({ ...convo, messages: finalMessagesToStore });
+      setConvos((prev) => prev.map((c) => (c.id === convo.id ? { ...c, messages: finalMessagesToStore } : c)));
       return;
     } else {
       // Existing streaming logic for other models
       const endTime = Date.now(); // Record end time
       const responseTime = endTime - startTime; // Calculate time taken
-      response = await fetch("https://text.pollinations.ai/", {
+      response = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: selectedModel, messages: history, stream: true }),
+        body: JSON.stringify({ model: apiModel, messages: history, stream: true }),
       });
       if (!response.body) {
         setIsSending(false)
@@ -516,7 +553,7 @@ export default function ChatPage() {
         created_at: new Date().toISOString(),
         responseTime: responseTime,
       }
-      const finalMessages = [...updatedMessages, assistantMsg]
+      const finalMessages = [...messagesToUpdateState, assistantMsg]
       // Save both user and assistant messages to Supabase
       await supabase.from("agent_conversations").update({ messages: finalMessages }).eq("id", convo.id)
       // Update local state
@@ -824,6 +861,8 @@ export default function ChatPage() {
                     setSelectedModel={setSelectedModel}
                     modelOptions={modelOptions}
                     theme={theme}
+                    isEditing={isEditing}
+                    setIsEditing={setIsEditing}
                   />
                 </div>
               </div>
@@ -848,6 +887,13 @@ export default function ChatPage() {
                             })}
                           </div>
                         </div>
+                        <button
+                          className={`ml-2 p-1 rounded hover:${theme.bgHover} ${theme.textMuted} hover:${theme.text}`}
+                          title="Edit message"
+                          onClick={() => handleEditMessage(msg)}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+                        </button>
                       </div>
                     ) : (
                       <div key={idx} className="w-full">
@@ -926,6 +972,8 @@ export default function ChatPage() {
                 setSelectedModel={setSelectedModel}
                 modelOptions={modelOptions}
                 theme={theme}
+                isEditing={isEditing}
+                setIsEditing={setIsEditing}
               />
             </div>
           )}

@@ -469,12 +469,28 @@ export async function POST(req: Request) {
     console.error("[POST] Failed to parse JSON body:", err);
     return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: { "Content-Type": "application/json" } });
   }
-  const { prompt, history, stream = true } = body || {};
-  console.log("[POST] Extracted:", { prompt, history, stream });
+  const { prompt, history, stream = true, model, baseURL } = body || {}; // Destructure model and baseURL
+  console.log("[POST] Extracted:", { prompt, history, stream, model, baseURL });
   if (!prompt) {
     console.warn("[POST] Missing prompt");
     return new Response(JSON.stringify({ error: "Missing prompt" }), { status: 400, headers: { "Content-Type": "application/json" } });
   }
+
+  // Dynamically create LLM and agent based on model and baseURL
+  const dynamicLlm = new ChatOpenAI({
+    model: model || "openai", // Use provided model or default to "openai"
+    temperature: 0.2,
+    configuration: {
+      baseURL: baseURL || "https://text.pollinations.ai/openai/", // Use provided baseURL or default
+    },
+    apiKey: baseURL === "https://api.groq.com/openai/v1" ? process.env.GROQ_API_KEY : undefined, // Use GROQ_API_KEY for Groq
+  }).bindTools(tools);
+
+  const dynamicAgent = createReactAgent({
+    llm: dynamicLlm,
+    tools,
+    stateSchema: MessagesAnnotation,
+  });
 
   // Build message history with system prompt
   let messages: BaseMessage[];
@@ -531,7 +547,7 @@ export async function POST(req: Request) {
           loopCount++;
           let agentStream;
           try {
-            agentStream = await agent.stream({ messages: currentMessages });
+            agentStream = await dynamicAgent.stream({ messages: currentMessages }); // Use dynamicAgent
           } catch (err) {
             controller.enqueue(encoder.encode(JSON.stringify({ type: "error", error: "Failed to create agent stream" }) + "\n"));
             controller.close();
@@ -670,7 +686,7 @@ export async function POST(req: Request) {
       loopCount++;
       let agentStream;
       try {
-        agentStream = await agent.stream({ messages: currentMessages });
+        agentStream = await dynamicAgent.stream({ messages: currentMessages }); // Use dynamicAgent
         console.log(`[nostream] agent.stream created (loop ${loopCount})`);
       } catch (err) {
         console.error(`[nostream] Error creating agent stream (loop ${loopCount}):`, err);
