@@ -335,7 +335,43 @@ const synonyms = tool(
   }
 );
 
-const tools = [calc, webSearch, imageGen, newsApi, dictionary, wikipedia, unitConvert, currencyConvert, weather, joke, translate, dateTime, synonyms];
+// 10. Fan On Tool
+const fanOn = tool(
+  async () => {
+    try {
+      const response = await fetch("https://api-v2.voicemonkey.io/trigger?token=814e797e65ae46a6828e1001150bd8ac_0a30f8185cdd6014f8a9b1d0ef1b326a&device=fan-on");
+      if (!response.ok) return "Failed to turn fan on.";
+      return "Fan turned on successfully.";
+    } catch (err) {
+      return `Fan on error: ${err}`;
+    }
+  },
+  {
+    name: "fanOn",
+    description: "Turns the fan on. Input is ignored.",
+    schema: z.string(),
+  }
+);
+
+// 11. Fan Off Tool
+const fanOff = tool(
+  async () => {
+    try {
+      const response = await fetch("https://api-v2.voicemonkey.io/trigger?token=814e797e65ae46a6828e1001150bd8ac_0a30f8185cdd6014f8a9b1d0ef1b326a&device=fan-off");
+      if (!response.ok) return "Failed to turn fan off.";
+      return "Fan turned off successfully.";
+    } catch (err) {
+      return `Fan off error: ${err}`;
+    }
+  },
+  {
+    name: "fanOff",
+    description: "Turns the fan off. Input is ignored.",
+    schema: z.string(),
+  }
+);
+
+const tools = [calc, webSearch, imageGen, newsApi, dictionary, wikipedia, unitConvert, currencyConvert, weather, joke, translate, dateTime, synonyms, fanOn, fanOff];
 const llm = new ChatOpenAI({
   model: "openai",           // or your desired model
   temperature: 0.2,
@@ -491,6 +527,10 @@ export async function POST(req: Request) {
                         toolResult = await dateTime.invoke(toolArgs) as string;
                       } else if (toolName === "synonyms") {
                         toolResult = await synonyms.invoke(toolArgs) as string;
+                      } else if (toolName === "fanOn") {
+                        toolResult = await fanOn.invoke(toolArgs) as string;
+                      } else if (toolName === "fanOff") {
+                        toolResult = await fanOff.invoke(toolArgs) as string;
                       } else {
                         toolResult = `Tool ${toolName} not implemented.`;
                       }
@@ -632,6 +672,10 @@ export async function POST(req: Request) {
                 toolResult = await dateTime.invoke(toolArgs);
               } else if (toolName === "synonyms") {
                 toolResult = await synonyms.invoke(toolArgs);
+              } else if (toolName === "fanOn") {
+                toolResult = await fanOn.invoke(toolArgs);
+              } else if (toolName === "fanOff") {
+                toolResult = await fanOff.invoke(toolArgs);
               } else {
                 toolResult = `Tool ${toolName} not implemented.`;
               }

@@ -15,7 +15,7 @@ import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePathname } from "next/navigation"
 
-export function Sidebar() {
+export function Sidebar({ onLinkClick }: { onLinkClick?: () => void }) {
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isGenerateOpen, setIsGenerateOpen] = useState(false)
@@ -74,7 +74,7 @@ export function Sidebar() {
                   className="w-full justify-start text-left font-normal h-auto py-2"
                   asChild
                 >
-                  <Link href={`/deck/${deck.id}`}>
+                  <Link href={`/deck/${deck.id}`} onClick={onLinkClick}>
                     <div className="flex flex-col items-start">
                       <span>{deck.name}</span>
                       <span className="text-xs text-gray-500">{deck.card_count || 0} cards</span>
@@ -92,31 +92,40 @@ export function Sidebar() {
             className={`w-full justify-start gap-2 ${pathname === "/notes" ? "bg-accent" : ""}`}
             asChild
           >
-            <Link href="/notes">
+            <Link href="/notes" onClick={onLinkClick}>
               <BookText className="h-4 w-4" />
               Notes
             </Link>
           </Button>
-          <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => setIsGenerateOpen(true)}>
+          <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => {
+            setIsGenerateOpen(true);
+            onLinkClick?.();
+          }}>
             <Sparkles className="h-4 w-4" />
             AI Generate
           </Button>
-          <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => setIsImportOpen(true)}>
+          <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => {
+            setIsImportOpen(true);
+            onLinkClick?.();
+          }}>
             <FileUp className="h-4 w-4" />
             Import Markdown
           </Button>
-          <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => setIsMergeDecksOpen(true)}>
+          <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => {
+            setIsMergeDecksOpen(true);
+            onLinkClick?.();
+          }}>
             <CombineIcon className="h-4 w-4" />
             Merge Decks
           </Button>
           <Button
             variant="ghost"
-            className={`w-full justify-start gap-2 ${pathname === "/test-ai" ? "bg-accent" : ""}`}
+            className={`w-full justify-start gap-2 ${pathname === "/chat" ? "bg-accent" : ""}`}
             asChild
           >
-            <Link href="/test-ai">
+            <Link href="/chat" onClick={onLinkClick}>
               <Sparkles className="h-4 w-4" />
-              Test AI
+              Chat
             </Link>
           </Button>
           <Button
@@ -124,7 +133,7 @@ export function Sidebar() {
             className={`w-full justify-start gap-2 ${pathname === "/settings" ? "bg-accent" : ""}`}
             asChild
           >
-            <Link href="/settings">
+            <Link href="/settings" onClick={onLinkClick}>
               <Settings className="h-4 w-4" />
               Settings
             </Link>

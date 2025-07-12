@@ -6,7 +6,7 @@ import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Loader2, Send, Plus, MessageSquare, UserCircle, Sparkles, Trash2, Sun, Moon } from "lucide-react"
+import { Loader2, Send, Plus, MessageSquare, UserCircle, Sparkles, Trash2, Sun, Moon, PanelLeft } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import {
   DropdownMenu,
@@ -18,6 +18,15 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu"
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetClose,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 // Theme definitions
 const themes = {
@@ -263,6 +272,7 @@ export default function ChatPage() {
   const [streamingMsg, setStreamingMsg] = useState("")
   const [streamingEvents, setStreamingEvents] = useState<StreamingEvent[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isMobile = useIsMobile()
 
   // Model selection
   const [selectedModel, setSelectedModel] = useState("gpt-4o")
@@ -273,7 +283,7 @@ export default function ChatPage() {
   ]
 
   // Theme management
-  const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark") // Default to dark
+  const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("light") // Default to light
   const theme = themes[currentTheme]
 
   const toggleTheme = () => {
@@ -428,7 +438,9 @@ export default function ChatPage() {
         if (result) { // Only store if there's a corresponding result
           toolEventsToStore.push({
             tool: call.tool || '',
-            args: call.args,
+            args: typeof call.args === 'object' && call.args !== null
+                  ? JSON.stringify(call.args, null, 2)
+                  : call.args,
             id: call.id,
             result: result.result,
           });
@@ -548,7 +560,7 @@ export default function ChatPage() {
   return (
     <div className={`flex h-screen ${theme.bg} ${theme.text}`}>
       {/* Sidebar: Chat list */}
-      <aside className={`w-80 ${theme.border} border-r ${theme.bg} flex flex-col`}>
+      <aside className={`w-80 ${theme.border} border-r ${theme.bg} flex-col hidden sm:flex`}>
         <div className={`p-6 ${theme.border} border-b`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -627,12 +639,110 @@ export default function ChatPage() {
         </div>
       </aside>
 
+
       {/* Main chat area */}
       <main className="flex-1 flex flex-col h-full">
         {/* Header */}
         <header className={`${theme.border} border-b ${theme.bg}/50 backdrop-blur-sm`}>
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
+              {isMobile && (
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className={`h-8 w-8 ${theme.bgHover} ${theme.borderHover} border`}
+                    >
+                      <PanelLeft className="h-4 w-4" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className={`p-0 ${theme.bg} ${theme.text} w-80`}>
+                    <aside className={`w-full h-full ${theme.bg} flex flex-col`}>
+                      <div className={`p-6 ${theme.border} border-b`}>
+                        <div className="flex items-center justify-between mb-4">
+                          <SheetHeader>
+                            <SheetTitle>Conversations</SheetTitle>
+                          </SheetHeader>
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-8 h-8 ${currentTheme === "dark" ? "bg-white" : "bg-black"} rounded-lg flex items-center justify-center`}
+                            >
+                              <MessageSquare className={`h-4 w-4 ${currentTheme === "dark" ? "text-black" : "text-white"}`} />
+                            </div>
+                            <span className="font-semibold text-lg">Conversations</span>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={handleNewChat}
+                            className={`h-8 w-8 ${theme.bgHover} ${theme.borderHover} border`}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 overflow-auto">
+                        {convos.length === 0 ? (
+                          <div className="p-6 text-center">
+                            <div
+                              className={`w-12 h-12 ${theme.bgSecondary} rounded-full flex items-center justify-center mx-auto mb-3`}
+                            >
+                              <MessageSquare className={`h-6 w-6 ${theme.textFaint}`} />
+                            </div>
+                            <p className={`${theme.textMuted} text-sm`}>No conversations yet</p>
+                            <p className={`${theme.textFaint} text-xs mt-1`}>Start a new chat to begin</p>
+                          </div>
+                        ) : (
+                          <div className="p-2">
+                            {convos.map((convo) => {
+                              const lastMsg = convo.messages[convo.messages.length - 1]?.content || ""
+                              const isSelected = selectedConvo?.id === convo.id
+                              return (
+                                <SheetClose asChild key={convo.id}>
+                                  <div
+                                    className={`p-4 cursor-pointer rounded-lg mb-2 transition-all duration-200 group ${
+                                      isSelected
+                                        ? `${theme.bgSelected} ${theme.textSelected}`
+                                        : `hover:${theme.bgSecondary} ${theme.border} border border-transparent hover:${theme.borderHover}`
+                                    }`}
+                                    onClick={() => setSelectedConvo(convo)}
+                                  >
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className={`font-medium truncate ${isSelected ? theme.textSelected : theme.text}`}>
+                                        {convo.title || "New Chat"}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                      {isSelected && (
+                                        <div className={`w-2 h-2 ${currentTheme === "dark" ? "bg-black" : "bg-white"} rounded-full`} />
+                                      )}
+                                        <button
+                                          className={`ml-2 p-1 rounded hover:${theme.bgHover} ${theme.textMuted} hover:${theme.text}`}
+                                          title="Delete chat"
+                                          onClick={e => { e.stopPropagation(); handleDeleteConvo(convo.id) }}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <p className={`text-xs truncate ${isSelected ? theme.textSelectedSecondary : theme.textMuted}`}>
+                                      {lastMsg || "No messages yet"}
+                                    </p>
+                                    <p className={`text-xs mt-1 ${isSelected ? theme.textSelectedMuted : theme.textFaint}`}>
+                                      {new Date(convo.created_at).toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </SheetClose>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </aside>
+                  </SheetContent>
+                </Sheet>
+              )}
               <div className={`w-8 h-8 ${theme.bgHover} rounded-full flex items-center justify-center`}>
                 <Sparkles className={`h-4 w-4 ${theme.text}`} />
               </div>
@@ -669,7 +779,7 @@ export default function ChatPage() {
         {/* Chat area */}
         <div className="flex-1 overflow-auto">
           {!selectedConvo ? (
-            <div className="flex flex-col justify-center items-center h-full px-6">
+            <div className="flex flex-col justify-center items-center h-full px-4 sm:px-6">
               <div className="max-w-2xl w-full text-center space-y-8">
                 <div className="space-y-4">
                   <div
@@ -720,7 +830,7 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="flex flex-col h-full">
-              <div className="flex-1 overflow-auto px-6 py-6">
+              <div className="flex-1 overflow-auto px-4 py-6 sm:px-6">
                 <div className="max-w-4xl mx-auto space-y-6">
                   {selectedConvo.messages.map((msg, idx) => (
                     msg.role === "user" ? (

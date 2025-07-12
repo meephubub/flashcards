@@ -5,6 +5,10 @@ import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from "@/components/sidebar"
 import { DeckGrid } from "@/components/deck-grid"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Button } from "@/components/ui/button"
+import { Menu } from "lucide-react"
 
 export default function Home() {
   const { session, isLoading, error: authError, signIn, signUp } = useAuth();
@@ -13,6 +17,17 @@ export default function Home() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const router = useRouter();
+  const isMobile = useIsMobile();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && !session) {
+      setShowAuthModal(true);
+    } else if (session) {
+      setShowAuthModal(false);
+    }
+  }, [session, isLoading]);
 
   const handleAuth = async (e: FormEvent) => {
     e.preventDefault();
@@ -52,7 +67,7 @@ export default function Home() {
 
   return (
     <div className="relative flex h-screen bg-[#f5f5f7]">
-      {!session && (
+      {showAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md p-8 mx-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             <div className="text-center">
@@ -128,8 +143,27 @@ export default function Home() {
         </div>
       )}
     
-      <Sidebar />
+      {isMobile ? (
+        <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+          <SheetContent side="left" className="p-0 w-64 bg-white dark:bg-gray-800">
+            <Sidebar onLinkClick={() => setIsSidebarOpen(false)} />
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Sidebar />
+      )}
+
       <main className={`flex-1 p-6 overflow-auto ${!session ? 'opacity-30 pointer-events-none' : ''}`}>
+        {isMobile && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="fixed top-4 left-4 z-40 md:hidden"
+            onClick={() => setIsSidebarOpen(true)}
+          >
+            <Menu className="h-6 w-6" />
+          </Button>
+        )}
         <DeckGrid />
       </main>
     </div>
