@@ -583,7 +583,7 @@ const agent = createReactAgent({
 })
 
 // Add system prompt
-const systemPrompt = "If the user asks for a calculation or math expression, always use the calc tool and never answer it directly; use the schedule tool for actions like turning the fan on or off at a specific time—provide action (fanOn or fanOff), run_at (ISO 8601 datetime like 2024-12-31T23:59:59Z), and optional params (JSON object, default to {}); if the user says something like turn off in 5 minutes, get the current time and schedule for current time plus 5 minutes.";
+const systemPrompt = "Use the calc tool for calculations. Use the schedule tool for fan on/off actions; it requires 'action' (fanOn/fanOff), 'run_at' (ISO 8601 datetime), and optional 'params' (JSON object). When the user specifies a relative time (e.g., 'in 5 minutes'), use the current time to calculate 'run_at'.";
 
 export async function POST(req: Request) {
   console.log("[POST] /api/agent called");
@@ -621,15 +621,14 @@ export async function POST(req: Request) {
   // Build message history with system prompt
   let messages: BaseMessage[];
   try {
+    const limitedHistory = Array.isArray(history) ? history.slice(-4) : []; // Limit history to last 4 messages
     messages = [
       new SystemMessage(systemPrompt),
-      ...(Array.isArray(history)
-        ? history.map((m: any) =>
+      ...limitedHistory.map((m: any) =>
             m.role === "user"
               ? new HumanMessage(m.content)
               : new AIMessage(m.content)
-          )
-        : []),
+          ),
       new HumanMessage(prompt),
     ];
     console.log("[POST] Built messages:", messages);
