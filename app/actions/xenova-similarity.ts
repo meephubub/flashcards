@@ -48,15 +48,16 @@ export async function getFeatureExtractor(modelName?: string) {
   const { pipeline, env } = await import("@xenova/transformers");
 
   // Configure environment for better performance (only once)
-  if (typeof env._configured === 'undefined') {
+  // Check if env.configured is already set to prevent re-configuration
+  if (!env.configured) {
     env.allowLocalModels = false; // Use remote models for better caching
     env.allowRemoteModels = true;
-    env._configured = true;
+    env.configured = true;
   }
 
   // Configure execution provider based on WebGL availability
   if (isWebGLAvailable) {
-    env.backends.onnx.wasm.executionProviders = ['webgl'];
+    env.set('XENOVA_ONNX_EXECUTION_PROVIDERS', ['webgl']);
     console.log('[xenova-similarity] WebGL backend enabled for ONNX execution');
   } else {
     console.log('[xenova-similarity] WebGL not available, using CPU backend');

@@ -10,6 +10,10 @@ config();
 // Add Supabase client
 import { createClient } from "@/lib/supabase/server";
 
+// Import new web search tools
+import { POST as scrapeWebContent } from "./tools/websearch/scrape/route";
+import { GET as googleSearch } from "./tools/websearch/google/route";
+
 // Simple calc tool
 const calc = tool(
     async (input: string) => {
@@ -338,6 +342,86 @@ const synonyms = tool(
   }
 );
 
+// 6. Sitemap Tool
+const sitemap = tool(
+  async (input: string) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/agent/tools/websearch/sitemap`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: input }),
+      });
+
+      if (!response.ok) {
+        return `Failed to fetch sitemap: ${response.statusText}`;
+      }
+
+      const sitemapText = await response.text();
+      return sitemapText;
+    } catch (err) {
+      return `Sitemap error: ${err}`;
+    }
+  },
+  {
+    name: "sitemap",
+    description: "Get the sitemap XML for a given website URL. Input is the base URL of the website (e.g., 'https://example.com').",
+    schema: z.string(),
+  }
+);
+
+// New Web Search Tool (Scrape)
+const webPageScrape = tool(
+  async (input: string) => {
+    try {
+      const { url, prompt } = JSON.parse(input);
+      const request = new Request("http://localhost", { // Base URL doesn't matter for internal fetch
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, prompt }),
+      });
+      const response = await scrapeWebContent(request);
+      const data = await response.json();
+      if (response.ok) {
+        return data.answer || data.message || "No answer found.";
+      } else {
+        return `Scrape failed: ${data.error || response.statusText}`;
+      }
+    } catch (err) {
+      return `Web page scrape error: ${err}`;
+    }
+  },
+  {
+    name: "webPageScrape",
+    description: "Scrape a webpage for content and find a specific answer based on a prompt. Input is a JSON string with 'url' and 'prompt' properties.",
+    schema: z.string(),
+  }
+);
+
+// New Google Search Tool
+const googleWebSearch = tool(
+  async (input: string) => {
+    try {
+      const request = new Request(`http://localhost?query=${encodeURIComponent(input)}`); // Base URL doesn't matter for internal fetch
+      const response = await googleSearch(request);
+      const data = await response.json();
+      if (response.ok) {
+        return data.links.join("\n");
+      } else {
+        return `Google search failed: ${data.error || response.statusText}`;
+      }
+    } catch (err) {
+      return `Google search error: ${err}`;
+    }
+  },
+  {
+    name: "googleWebSearch",
+    description: "Search Google for links. Input is a search query string.",
+    schema: z.string(),
+  }
+);
+
 export const fanOn = tool(
   async () => {
     try {
@@ -441,7 +525,27 @@ const schedule = tool(
   }
 );
 
-const tools = [calc, webSearch, imageGen, newsApi, dictionary, wikipedia, unitConvert, currencyConvert, weather, joke, translate, dateTime, synonyms, fanOn, fanOff, schedule];
+const tools = [
+  calc,
+  webSearch,
+  imageGen,
+  newsApi,
+  dictionary,
+  wikipedia,
+  unitConvert,
+  currencyConvert,
+  weather,
+  sitemap, // Add the new sitemap tool here
+  joke,
+  translate,
+  dateTime,
+  synonyms,
+  fanOn,
+  fanOff,
+  schedule,
+  webPageScrape, // Add the new webPageScrape tool
+  googleWebSearch, // Add the new googleWebSearch tool
+];
 const llm = new ChatOpenAI({
   model: "openai",           // or your desired model
   temperature: 0.2,
@@ -457,7 +561,7 @@ const agent = createReactAgent({
 })
 
 // Add system prompt
-const systemPrompt = "If the user asks for a calculation or math expression, always use the calc tool. Do not attempt to answer math questions yourself. Use the schedule tool if the user asks to schedule an action like turning on/off the fan at a specific time. The schedule tool requires an 'action' (fanOn or fanOff), 'run_at' (an ISO 8601 formatted datetime string, like '2024-12-31T23:59:59Z'), and optionally 'params' (a JSON object, default to {} if not provided). For example, to turn the fan on tomorrow at 9 AM, use: schedule({\"action\": \"fanOn\", \"run_at\": \"2024-01-01T09:00:00Z\", \"params\": \"{}\"}).";
+const systemPrompt = "If the user asks for a calculation or math expression, always use the calc tool and never answer it directly; use the schedule tool for actions like turning the fan on or off at a specific time—provide action (fanOn or fanOff), run_at (ISO 8601 datetime like 2024-12-31T23:59:59Z), and optional params (JSON object, default to {}); if the user says something like turn off in 5 minutes, get the current time and schedule for current time plus 5 minutes.";
 
 export async function POST(req: Request) {
   console.log("[POST] /api/agent called");
@@ -619,6 +723,12 @@ export async function POST(req: Request) {
                         toolResult = await fanOff.invoke(toolArgs) as string;
                       } else if (toolName === "schedule") {
                         toolResult = await schedule.invoke(toolArgs) as string;
+                      } else if (toolName === "sitemap") {
+                        toolResult = await sitemap.invoke(toolArgs) as string;
+                      } else if (toolName === "webPageScrape") {
+                        toolResult = await webPageScrape.invoke(toolArgs) as string;
+                      } else if (toolName === "googleWebSearch") {
+                        toolResult = await googleWebSearch.invoke(toolArgs) as string;
                       } else {
                         toolResult = `Tool ${toolName} not implemented.`;
                       }
@@ -766,6 +876,12 @@ export async function POST(req: Request) {
                 toolResult = await fanOff.invoke(toolArgs);
               } else if (toolName === "schedule") {
                 toolResult = await schedule.invoke(toolArgs);
+              } else if (toolName === "sitemap") {
+                toolResult = await sitemap.invoke(toolArgs);
+              } else if (toolName === "webPageScrape") {
+                toolResult = await webPageScrape.invoke(toolArgs);
+              } else if (toolName === "googleWebSearch") {
+                toolResult = await googleWebSearch.invoke(toolArgs);
               } else {
                 toolResult = `Tool ${toolName} not implemented.`;
               }
