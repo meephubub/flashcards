@@ -14,12 +14,18 @@ const nextConfig = {
     if (!isServer) {
       config.resolve.alias['sharp'] = false;
     }
-    // Add a rule to ignore PDF files in node_modules during server-side build
+
     if (isServer) {
       config.module.rules.push({
         test: /\.pdf$/,
         loader: 'ignore-loader',
       });
+      config.module.rules.push({
+        test: /test\/.*/,
+        loader: 'ignore-loader',
+      });
+      // Mark pdf-parse as external for server build
+      config.externals.push('pdf-parse');
     }
     return config;
   },
