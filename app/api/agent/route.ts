@@ -5,6 +5,7 @@ import { tool } from "@langchain/core/tools"
 import { MessagesAnnotation } from "@langchain/langgraph"
 import { z } from "zod";
 import { config } from "dotenv";
+import pdfParse from "pdf-parse";
 config();
 
 // Add Supabase client
@@ -422,6 +423,26 @@ const googleWebSearch = tool(
   }
 );
 
+// 10. PDF Read Tool
+const pdfRead = tool(
+  async (input: string) => {
+    try {
+      const response = await fetch(input);
+      if (!response.ok) return `Failed to fetch PDF: ${response.statusText}`;
+      const arrayBuffer = await response.arrayBuffer();
+      const data = await pdfParse(Buffer.from(arrayBuffer));
+      return data.text;
+    } catch (err) {
+      return `PDF read error: ${err}`;
+    }
+  },
+  {
+    name: "pdfRead",
+    description: "Read the text content of a PDF file from a given URL. Input is the URL of the PDF.",
+    schema: z.string(),
+  }
+);
+
 export const fanOn = tool(
   async () => {
     try {
@@ -545,6 +566,7 @@ const tools = [
   schedule,
   webPageScrape, // Add the new webPageScrape tool
   googleWebSearch, // Add the new googleWebSearch tool
+  pdfRead,
 ];
 const llm = new ChatOpenAI({
   model: "openai",           // or your desired model
@@ -729,6 +751,8 @@ export async function POST(req: Request) {
                         toolResult = await webPageScrape.invoke(toolArgs) as string;
                       } else if (toolName === "googleWebSearch") {
                         toolResult = await googleWebSearch.invoke(toolArgs) as string;
+                      } else if (toolName === "pdfRead") {
+                        toolResult = await pdfRead.invoke(toolArgs) as string;
                       } else {
                         toolResult = `Tool ${toolName} not implemented.`;
                       }
@@ -882,6 +906,8 @@ export async function POST(req: Request) {
                 toolResult = await webPageScrape.invoke(toolArgs);
               } else if (toolName === "googleWebSearch") {
                 toolResult = await googleWebSearch.invoke(toolArgs);
+              } else if (toolName === "pdfRead") {
+                toolResult = await pdfRead.invoke(toolArgs);
               } else {
                 toolResult = `Tool ${toolName} not implemented.`;
               }

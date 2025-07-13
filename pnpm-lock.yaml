@@ -19,7 +19,7 @@ importers:
         version: 3.6.1
       '@langchain/community':
         specifier: ^0.3.48
-        version: 0.3.48(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.2)(deepmerge@4.3.1)(dotenv@17.1.0)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(zod@3.25.76))(@huggingface/transformers@3.6.1)(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.62(openai@5.8.3(ws@8.18.3)(zod@3.25.76)))(@supabase/supabase-js@2.50.3)(axios@1.10.0)(cheerio@1.1.0)(ibm-cloud-sdk-core@5.4.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(playwright@1.53.2)(weaviate-client@3.6.2)(ws@8.18.3)
+        version: 0.3.48(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.2)(deepmerge@4.3.1)(dotenv@17.1.0)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(zod@3.25.76))(@huggingface/transformers@3.6.1)(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.62(openai@5.8.3(ws@8.18.3)(zod@3.25.76)))(@supabase/supabase-js@2.50.3)(axios@1.10.0)(cheerio@1.1.0)(ibm-cloud-sdk-core@5.4.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(pdf-parse@1.1.1)(playwright@1.53.2)(weaviate-client@3.6.2)(ws@8.18.3)
       '@langchain/core':
         specifier: ^0.3.62
         version: 0.3.62(openai@5.8.3(ws@8.18.3)(zod@3.25.76))
@@ -242,6 +242,9 @@ importers:
       path:
         specifier: latest
         version: 0.12.7
+      pdf-parse:
+        specifier: ^1.1.1
+        version: 1.1.1
       react:
         specifier: ^19.1.0
         version: 19.1.0
@@ -3328,6 +3331,14 @@ packages:
   dayjs@1.11.13:
     resolution: {integrity: sha512-oaMBel6gjolK862uaPQOVTA7q3TZhuSvuMQAAglQDOWYO9A91IrAOUJEyKVlqJlHE0vq5p5UXxzdPfMH/x6xNg==}
 
+  debug@3.2.7:
+    resolution: {integrity: sha512-CFjzYYAi4ThfiQvizrFQevTTXHtnCqWfe7x1AhgEscTz6ZbLbfoLRLPugTQyBth6f8ZERVUSyWHFD/7Wu4t1XQ==}
+    peerDependencies:
+      supports-color: '*'
+    peerDependenciesMeta:
+      supports-color:
+        optional: true
+
   debug@4.4.1:
     resolution: {integrity: sha512-KcKCqiftBJcZr++7ykoDIEwSa3XWowTfNPo92BYxjXiyYEVrUQh2aLyhxBCwww+heortUFxEJYcRzosstTEBYQ==}
     engines: {node: '>=6.0'}
@@ -4432,6 +4443,9 @@ packages:
     engines: {node: '>=10.5.0'}
     deprecated: Use your platform's native DOMException instead
 
+  node-ensure@0.0.0:
+    resolution: {integrity: sha512-DRI60hzo2oKN1ma0ckc6nQWlHU69RH6xN0sjQTjMpChPfTYvKZdcQFfdYK2RWbJcKyUizSIy/l8OTGxMAM1QDw==}
+
   node-fetch@2.7.0:
     resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
     engines: {node: 4.x || >=6.0.0}
@@ -4602,6 +4616,10 @@ packages:
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
+
+  pdf-parse@1.1.1:
+    resolution: {integrity: sha512-v6ZJ/efsBpGrGGknjtq9J/oC8tZWq0KWL5vQrk2GlzLEQPUDB1ex+13Rmidl1neNN358Jn9EHZw5y07FFtaC7A==}
+    engines: {node: '>=6.8.1'}
 
   peek-readable@4.1.0:
     resolution: {integrity: sha512-ZI3LnwUv5nOGbQzD9c2iDG6toheuXSZP5esSHBjopsXH4dg19soufvpUGA3uohi5anFtGb2lhAVdHzH6R/Evvg==}
@@ -6090,7 +6108,7 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@langchain/community@0.3.48(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.2)(deepmerge@4.3.1)(dotenv@17.1.0)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(zod@3.25.76))(@huggingface/transformers@3.6.1)(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.62(openai@5.8.3(ws@8.18.3)(zod@3.25.76)))(@supabase/supabase-js@2.50.3)(axios@1.10.0)(cheerio@1.1.0)(ibm-cloud-sdk-core@5.4.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(playwright@1.53.2)(weaviate-client@3.6.2)(ws@8.18.3)':
+  '@langchain/community@0.3.48(@browserbasehq/sdk@2.6.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.53.2)(deepmerge@4.3.1)(dotenv@17.1.0)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(zod@3.25.76))(@huggingface/transformers@3.6.1)(@ibm-cloud/watsonx-ai@1.6.8)(@langchain/core@0.3.62(openai@5.8.3(ws@8.18.3)(zod@3.25.76)))(@supabase/supabase-js@2.50.3)(axios@1.10.0)(cheerio@1.1.0)(ibm-cloud-sdk-core@5.4.0)(jsonwebtoken@9.0.2)(lodash@4.17.21)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(pdf-parse@1.1.1)(playwright@1.53.2)(weaviate-client@3.6.2)(ws@8.18.3)':
     dependencies:
       '@browserbasehq/stagehand': 1.14.0(@playwright/test@1.53.2)(deepmerge@4.3.1)(dotenv@17.1.0)(openai@5.8.3(ws@8.18.3)(zod@3.25.76))(zod@3.25.76)
       '@ibm-cloud/watsonx-ai': 1.6.8
@@ -6114,6 +6132,7 @@ snapshots:
       cheerio: 1.1.0
       jsonwebtoken: 9.0.2
       lodash: 4.17.21
+      pdf-parse: 1.1.1
       playwright: 1.53.2
       weaviate-client: 3.6.2
       ws: 8.18.3
@@ -8261,6 +8280,10 @@ snapshots:
 
   dayjs@1.11.13: {}
 
+  debug@3.2.7:
+    dependencies:
+      ms: 2.1.3
+
   debug@4.4.1:
     dependencies:
       ms: 2.1.3
@@ -9626,6 +9649,8 @@ snapshots:
 
   node-domexception@1.0.0: {}
 
+  node-ensure@0.0.0: {}
+
   node-fetch@2.7.0:
     dependencies:
       whatwg-url: 5.0.0
@@ -9798,6 +9823,13 @@ snapshots:
       util: 0.10.4
 
   pathe@2.0.3: {}
+
+  pdf-parse@1.1.1:
+    dependencies:
+      debug: 3.2.7
+      node-ensure: 0.0.0
+    transitivePeerDependencies:
+      - supports-color
 
   peek-readable@4.1.0: {}
 

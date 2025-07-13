@@ -89,6 +89,7 @@
     "onnxruntime-web": "^1.22.0",
     "openai": "^5.8.3",
     "path": "latest",
+    "pdf-parse": "^1.1.1",
     "react": "^19.1.0",
     "react-beautiful-dnd": "latest",
     "react-confetti": "^6.4.0",
