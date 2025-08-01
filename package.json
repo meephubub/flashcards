@@ -7,6 +7,7 @@
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
     "build": "next build",
+    "deploy": "next build && git add . && git commit -m 'Build and deploy' && git push origin HEAD",
     "start": "next start",
     "lint": "next lint"
   },
@@ -78,6 +79,7 @@
     "fuzzysort": "^3.1.0",
     "groq": "^3.99.0",
     "groq-sdk": "^0.25.0",
+    "ignore-loader": "^0.1.2",
     "input-otp": "1.4.1",
     "katex": "^0.16.22",
     "kokoro-js": "^1.2.1",

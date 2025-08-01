@@ -566,16 +566,6 @@ export function StudyMode({ deckId }: StudyModeProps) {
         <div className="card-flip-inner relative h-[350px] w-full transition-transform duration-500 ease-in-out">
           <Card className="card-front absolute w-full h-full flex items-center justify-center p-8 cursor-pointer bg-gradient-to-br from-background to-background/80 border-2 hover:border-primary/30 transition-all duration-300">
             <div className="text-center text-xl space-y-6 max-w-[90%]">
-              {currentCard.img_url && (
-                <div className="relative w-full flex justify-center items-center bg-white/10 rounded-lg p-3 shadow-inner">
-                  <img 
-                    src={currentCard.img_url} 
-                    alt="Card image" 
-                    className="max-h-[220px] w-auto object-contain rounded-md shadow-md transform transition-transform duration-300 hover:scale-[1.02]" 
-                    style={{ mixBlendMode: 'multiply' }}
-                  />
-                </div>
-              )}
               <div className="font-medium text-2xl">{currentCard.front}</div>
               <div className="text-xs text-muted-foreground mt-4 absolute bottom-3 left-0 right-0 text-center">
                 Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Space</kbd> to flip
