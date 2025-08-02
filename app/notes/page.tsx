@@ -17,6 +17,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
 import { AIAssistantSidebar } from "@/components/ai-assistant-sidebar"
+import { CreateExamFromNotesDialog } from "@/components/create-exam-from-notes-dialog"
 import {
   SparklesIcon,
   PlusCircleIcon,
@@ -32,7 +33,8 @@ import {
   Menu,
   FlaskConical,
   PanelLeft,
-  Keyboard
+  Keyboard,
+  Brain
 } from "lucide-react"
 import {
   Dialog,
@@ -1487,6 +1489,8 @@ interface NoteCardProps {
   handleDeleteNote: (noteId: string) => void
   setNoteForFlashcards: (note: Note | null) => void
   setIsFlashcardsDialogOpen: (open: boolean) => void
+  setNoteForExam: (note: Note | null) => void
+  setIsExamDialogOpen: (open: boolean) => void
   inlineEditingNoteId: string | null
   handleSaveInlineEdit: (noteId: string, content: string) => Promise<void>
   setInlineEditingNoteId: (noteId: string | null) => void
@@ -1511,6 +1515,8 @@ const NoteCard = React.memo(function NoteCard({
   handleDeleteNote,
   setNoteForFlashcards,
   setIsFlashcardsDialogOpen,
+  setNoteForExam,
+  setIsExamDialogOpen,
   inlineEditingNoteId,
   handleSaveInlineEdit,
   setInlineEditingNoteId,
@@ -1682,6 +1688,20 @@ const NoteCard = React.memo(function NoteCard({
                   aria-label="Create flashcards from note"
                 >
                   <FlaskConical className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setNoteForExam(note);
+                    setIsExamDialogOpen(true);
+                  }}
+                  className={`p-2 rounded-full ${isDark 
+                    ? "text-neutral-400 hover:text-green-300 hover:bg-green-950/30" 
+                    : "text-neutral-500 hover:text-green-600 hover:bg-green-50"} 
+                    transition-colors cursor-pointer`}
+                  aria-label="Create exam from note"
+                >
+                  <Brain className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -1890,6 +1910,8 @@ export default function NotesPage() {
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null)
   const [isFlashcardsDialogOpen, setIsFlashcardsDialogOpen] = useState(false)
   const [noteForFlashcards, setNoteForFlashcards] = useState<Note | null>(null)
+  const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
+  const [noteForExam, setNoteForExam] = useState<Note | null>(null)
   const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
 
   // State for Image Search
@@ -3359,6 +3381,8 @@ graph TD; A-->B;
                 handleDeleteNote={handleDeleteNote}
                 setNoteForFlashcards={setNoteForFlashcards}
                 setIsFlashcardsDialogOpen={setIsFlashcardsDialogOpen}
+                setNoteForExam={setNoteForExam}
+                setIsExamDialogOpen={setIsExamDialogOpen}
                 inlineEditingNoteId={inlineEditingNoteId}
                 handleSaveInlineEdit={handleSaveInlineEdit}
                 setInlineEditingNoteId={setInlineEditingNoteId}
@@ -3659,6 +3683,17 @@ graph TD; A-->B;
         }}
         noteContent={noteForFlashcards?.content}
         noteTitle={noteForFlashcards?.title}
+      />
+
+      {/* Create Exam from Notes Dialog */}
+      <CreateExamFromNotesDialog
+        open={isExamDialogOpen}
+        onOpenChange={(open) => {
+          setIsExamDialogOpen(open);
+          if (!open) setNoteForExam(null);
+        }}
+        notesContent={noteForExam?.content || ""}
+        noteTitle={noteForExam?.title}
       />
 
       {/* Delete Confirmation Dialog */}
