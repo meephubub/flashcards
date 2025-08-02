@@ -16,6 +16,7 @@
     "@flags-sdk/statsig": "^0.2.2",
     "@hookform/resolvers": "^3.10.0",
     "@huggingface/transformers": "^3.5.1",
+    "@iconify/utils": "2.1.19",
     "@langchain/community": "^0.3.48",
     "@langchain/core": "^0.3.62",
     "@langchain/langgraph": "^0.3.7",
@@ -118,14 +119,11 @@
     "@types/node": "^22.15.21",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
+    "patch-package": "^8.0.0",
     "postcss": "^8.5.3",
+    "postinstall-postinstall": "^2.1.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "wrangler": "^4.20.1"
-  },
-  "pnpm": {
-    "overrides": {
-      "@iconify/utils": "3.0.0-beta.1"
-    }
   }
 }
