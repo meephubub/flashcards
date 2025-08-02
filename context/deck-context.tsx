@@ -40,7 +40,8 @@ interface DeckContextType {
 const DeckContext = createContext<DeckContextType | undefined>(undefined)
 
 export function DeckProvider({ children }: { children: ReactNode }) {
-  const { user, isLoading: authIsLoading, session } = useAuth();
+  const authContext = useAuth();
+  const { user, isLoading: authIsLoading, session } = authContext;
   const [decks, setDecks] = useState<Deck[]>([])
   const [loading, setLoading] = useState(true) // This loading is for decks data
   const [dueCardsCache, setDueCardsCache] = useState<Record<number, Card[]>>({})
@@ -130,6 +131,12 @@ export function DeckProvider({ children }: { children: ReactNode }) {
 
 
   useEffect(() => {
+    // Only proceed if auth context is properly initialized (not the default SSR values)
+    if (authContext.isLoading === true && authContext.user === null && authContext.session === null) {
+      // This is the default SSR state, don't do anything yet
+      return;
+    }
+    
     // Refresh decks when the user state from AuthContext changes and auth is no longer loading.
     if (!authIsLoading && user && session) {
       console.log("DeckProvider: Auth state confirmed (user present), refreshing decks.");
@@ -142,7 +149,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     }
     // Intentionally not reacting to `session` directly if `user` is the primary gate for data fetching.
     // If session presence without a user object means something, adjust logic.
-  }, [user, authIsLoading, session, refreshDecks]);
+  }, [user, authIsLoading, session, refreshDecks, authContext]);
 
   const addDeck = async (name: string, description: string, tag: string | null = null): Promise<Deck> => {
     if (!user) throw new Error("User not authenticated");
@@ -356,7 +363,20 @@ export function DeckProvider({ children }: { children: ReactNode }) {
 export function useDecks() {
   const context = useContext(DeckContext)
   if (context === undefined) {
-    throw new Error("useDecks must be used within a DeckProvider")
+    // Return default values for SSR compatibility
+    return {
+      decks: [],
+      loading: true,
+      refreshDecks: async () => {},
+      addDeck: async () => {},
+      updateDeck: async () => {},
+      deleteDeck: async () => {},
+      addCard: async () => {},
+      updateCard: async () => {},
+      deleteCard: async () => {},
+      getDeck: async () => null,
+      getDueCards: async () => [],
+    }
   }
   return context
 }

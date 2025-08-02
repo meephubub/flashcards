@@ -7,9 +7,10 @@
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
     "build": "next build",
-    "deploy": "next build && git add . && git commit -m 'Build and deploy' && git push origin HEAD",
+    "deploy": "pnpm install && next build && git add . && git commit -m 'Build and deploy' && git push origin HEAD",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "push": "git add . && git commit -m \"Build and deploy\" && git push origin HEAD --force"
   },
   "dependencies": {
     "@flags-sdk/statsig": "^0.2.2",
@@ -85,13 +86,14 @@
     "kokoro-js": "^1.2.1",
     "langchain": "^0.3.29",
     "lucide-react": "^0.454.0",
-    "mermaid": "^11.6.0",
+    "mermaid": "^11.9.0",
     "next": "15.2.4",
     "next-themes": "latest",
     "onnxruntime-web": "^1.22.0",
     "openai": "^5.8.3",
     "path": "latest",
     "pdf-parse": "^1.1.1",
+    "picocolors": "^1.1.1",
     "react": "^19.1.0",
     "react-beautiful-dnd": "latest",
     "react-confetti": "^6.4.0",
@@ -103,6 +105,7 @@
     "react-resizable-panels": "^2.1.9",
     "recharts": "2.15.0",
     "remark-gfm": "^4.0.1",
+    "semver": "^7.7.2",
     "sonner": "^1.7.4",
     "supabase": "2.23.4",
     "tailwind-merge": "^2.6.0",
@@ -119,5 +122,10 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "wrangler": "^4.20.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "@iconify/utils": "3.0.0-beta.1"
+    }
   }
 }

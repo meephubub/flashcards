@@ -166,7 +166,22 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 export function useSettings() {
   const context = useContext(SettingsContext)
   if (context === undefined) {
-    throw new Error("useSettings must be used within a SettingsProvider")
+    // Return default values for SSR compatibility
+    return {
+      settings: {
+        theme: "system",
+        studySettings: {
+          autoPlay: false,
+          showAnswer: false,
+          shuffleCards: false,
+          studyMode: "spaced-repetition",
+        },
+      },
+      loading: true,
+      updateSettings: async () => {},
+      updateStudySettings: async () => {},
+      resetSettings: async () => {},
+    }
   }
   return context
 }
