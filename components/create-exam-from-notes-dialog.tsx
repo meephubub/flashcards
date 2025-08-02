@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -53,8 +53,13 @@ export function CreateExamFromNotesDialog({
   const [examPreview, setExamPreview] = useState<ExamPreview | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
+  // Clean notes content by removing image tags for better performance
+  const cleanNotesContent = useMemo(() => {
+    return notesContent.replace(/!\[.*?\]\(.*?\)/g, '').replace(/<img.*?\/?>/g, '')
+  }, [notesContent])
+
   const handleGeneratePreview = async () => {
-    if (!notesContent.trim()) {
+    if (!cleanNotesContent.trim()) {
       toast({
         title: "No content",
         description: "Please provide notes content to generate an exam.",
@@ -66,7 +71,7 @@ export function CreateExamFromNotesDialog({
     setIsGenerating(true)
     try {
       const questions = await generateQuestionsFromNotes(
-        notesContent,
+        cleanNotesContent,
         Math.min(questionCount, 5), // Generate fewer questions for preview
         { difficulty }
       )
@@ -105,7 +110,7 @@ export function CreateExamFromNotesDialog({
     setIsGenerating(true)
     try {
       const questions = await generateQuestionsFromNotes(
-        notesContent,
+        cleanNotesContent,
         questionCount,
         { difficulty }
       )
@@ -117,7 +122,7 @@ export function CreateExamFromNotesDialog({
         difficulty,
         questionCount,
         source: "notes",
-        notesContent: notesContent.substring(0, 200) + "...", // Store truncated content
+        notesContent: cleanNotesContent.substring(0, 200) + "...", // Store truncated content
         createdAt: new Date().toISOString()
       }
 
@@ -160,7 +165,7 @@ export function CreateExamFromNotesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Brain className="h-5 w-5" />
@@ -187,10 +192,12 @@ export function CreateExamFromNotesDialog({
 
             <div>
               <Label>Difficulty Level</Label>
-              <DifficultySelector
-                onSelect={setDifficulty}
-                defaultDifficulty={difficulty}
-              />
+              <div className="mt-1">
+                <DifficultySelector
+                  onSelect={setDifficulty}
+                  defaultDifficulty={difficulty}
+                />
+              </div>
             </div>
 
             <div>
@@ -213,14 +220,14 @@ export function CreateExamFromNotesDialog({
           {/* Content Preview */}
           <div>
             <Label>Notes Content Preview</Label>
-            <div className="mt-2 p-3 bg-muted rounded-md max-h-32 overflow-y-auto text-sm">
-              {notesContent.length > 300 
-                ? `${notesContent.substring(0, 300)}...`
-                : notesContent
+            <div className="mt-2 p-3 bg-muted rounded-md max-h-32 overflow-y-auto text-sm text-foreground">
+              {cleanNotesContent.length > 300 
+                ? `${cleanNotesContent.substring(0, 300)}...`
+                : cleanNotesContent
               }
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {notesContent.length} characters • {notesContent.split('\n').length} lines
+              {cleanNotesContent.length} characters • {cleanNotesContent.split('\n').length} lines
             </p>
           </div>
 

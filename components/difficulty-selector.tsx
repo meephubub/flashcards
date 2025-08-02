@@ -49,9 +49,8 @@ export function DifficultySelector({ onSelect, defaultDifficulty = "medium" }: D
   }
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-medium">Select Difficulty</h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {difficulties.map((difficulty) => (
           <Card
             key={difficulty.value}
@@ -60,11 +59,11 @@ export function DifficultySelector({ onSelect, defaultDifficulty = "medium" }: D
             }`}
             onClick={() => handleSelect(difficulty.value)}
           >
-            <CardContent className="p-4 flex flex-col items-center text-center">
-              <div className="text-3xl mb-2">{difficulty.icon}</div>
-              <h4 className="font-medium">{difficulty.label}</h4>
-              <p className="text-sm text-muted-foreground mt-1">{difficulty.description}</p>
-              {selectedDifficulty === difficulty.value && <CheckCircle2 className="h-5 w-5 text-primary mt-2" />}
+            <CardContent className="p-3 flex flex-col items-center text-center">
+              <div className="text-2xl mb-1">{difficulty.icon}</div>
+              <h4 className="font-medium text-sm">{difficulty.label}</h4>
+              <p className="text-xs text-muted-foreground mt-1 leading-tight">{difficulty.description}</p>
+              {selectedDifficulty === difficulty.value && <CheckCircle2 className="h-4 w-4 text-primary mt-1" />}
             </CardContent>
           </Card>
         ))}

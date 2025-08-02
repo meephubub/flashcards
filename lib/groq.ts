@@ -58,18 +58,7 @@ export async function generateFlashcards(
     includeImages: boolean = false
 ): Promise<GenerationResult> {
     try {
-        // Try custom endpoint first with GPT-4o-mini
-        const customEndpoint = "https://flashcards-api-1.onrender.com/v1/chat/completions";
-        let response;
-        let data;
-        
-        try {
-            console.log("Attempting to use custom endpoint with GPT-4o-mini for flashcard generation");
-            const customRequestBody = {
-                messages: [
-                    {
-                        role: "system",
-                        content: `You are an expert educational content creator specializing in creating high-quality flashcards. Your task is to create ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level.
+        const systemMessage = `You are an expert educational content creator specializing in creating high-quality flashcards. Your task is to create ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level.
 
 Guidelines for creating effective flashcards:
 1. Questions should be clear, specific, and test understanding
@@ -83,99 +72,12 @@ IMPORTANT: Format each flashcard EXACTLY like this:
 Q: [Your question here]
 A: [Your answer here]
 
-Do not use any other format or prefixes. Each flashcard must start with "Q:" and its answer must start with "A:".`
-                    },
-                    {
-                        role: "user",
-                        content: `Generate ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level. Make sure each flashcard follows the exact format specified.`
-                    }
-                ],
-                model: "gpt-4o-mini",
-                temperature: 0.7,
-                max_tokens: 4000,
-            };
-            
-            console.log("Custom endpoint request body:", JSON.stringify(customRequestBody, null, 2));
-            
-            response = await fetch(customEndpoint, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(customRequestBody),
-            });
+Do not use any other format or prefixes. Each flashcard must start with "Q:" and its answer must start with "A:".`;
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => null);
-                console.error("Custom endpoint error response:", {
-                    status: response.status,
-                    statusText: response.statusText,
-                    errorData,
-                });
-                throw new Error(
-                    `Custom endpoint error: ${response.statusText}${
-                        errorData ? ` - ${JSON.stringify(errorData)}` : ""
-                    }`
-                );
-            }
+        const userPrompt = `Generate ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level. Make sure each flashcard follows the exact format specified.`;
 
-            data = await response.json();
-            console.log("Custom endpoint response:", data);
-        } catch (customError: any) {
-            console.error("Custom endpoint failed, falling back to Groq:", customError);
-            
-            // Fallback to Groq
-            const groqApiKey = process.env.GROQ_API_KEY;
-            if (!groqApiKey) {
-                throw new Error("GROQ_API_KEY is not defined in environment variables");
-            }
-
-            response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${groqApiKey}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    model: "llama-3.3-70b-versatile",
-                    messages: [
-                        {
-                            role: "system",
-                            content: `You are an expert educational content creator specializing in creating high-quality flashcards. Your task is to create ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level.
-
-Guidelines for creating effective flashcards:
-1. Questions should be clear, specific, and test understanding
-2. Answers should be concise but complete
-3. Use simple, direct language
-4. Focus on key concepts and important details
-5. Avoid overly complex or ambiguous questions
-6. if it's about a language, include just a word or sentence on one side and the translation on the other
-
-IMPORTANT: Format each flashcard EXACTLY like this:
-Q: [Your question here]
-A: [Your answer here]
-
-Do not use any other format or prefixes. Each flashcard must start with "Q:" and its answer must start with "A:".`
-                        },
-                        {
-                            role: "user",
-                            content: `Generate ${numCards} flashcards about "${topic}" at ${difficulty} difficulty level. Make sure each flashcard follows the exact format specified.`
-                        }
-                    ],
-                    temperature: 0.7,
-                    max_completion_tokens: 4000,
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to generate flashcards: ${response.statusText}`);
-            }
-
-            data = await response.json();
-            console.log("Groq fallback response:", data);
-        }
-
-        const content = data.choices[0].message.content;
+        // Use the updated makeGroqRequest function which will try Pollinations AI first, then fallback to Groq
+        const content = await makeGroqRequest(userPrompt, false, systemMessage);
         console.log("Raw flashcard response:", content);
 
         // Parse the content to extract flashcards
@@ -741,7 +643,7 @@ export async function generateMultipleChoiceQuestionsWithGroq(
     }
 }
 
-// Helper function to make a request to the Groq API
+// Helper function to make a request to the Pollinations AI API or Groq API
 export async function makeGroqRequest(
     prompt: string,
     requireJson: boolean = false,
@@ -749,54 +651,71 @@ export async function makeGroqRequest(
     forceJson: boolean = false
 ): Promise<string> {
     try {
-        // Try custom endpoint first with GPT-4o
-        const customEndpoint = "https://flashcards-api-1.onrender.com/v1/chat/completions";
+        // Try Pollinations AI first
         try {
-            console.log("Attempting to use custom endpoint with GPT-4o-mini");
-            const customRequestBody = {
-                messages: [
-                    {
-                        role: "system",
-                        content: systemMessage,
-                    },
-                    {
-                        role: "user",
-                        content: prompt,
-                    },
-                ],
-                model: "gpt-4o",
-                temperature: 0.6,
-                max_tokens: 3000,
-            };
-            console.log("Custom endpoint request body:", JSON.stringify(customRequestBody, null, 2));
+            console.log("Attempting to use Pollinations AI text-to-text endpoint");
             
-            const response = await fetch(customEndpoint, {
-                method: "POST",
+            // Build the URL with parameters
+            const url = new URL("https://text.pollinations.ai/");
+            url.searchParams.set("prompt", encodeURIComponent(prompt));
+            url.searchParams.set("model", "openai"); // Use OpenAI model as default
+            url.searchParams.set("temperature", "0.6");
+            url.searchParams.set("top_p", "0.9");
+            
+            // Add system message if provided
+            if (systemMessage && systemMessage !== "You are a helpful assistant.") {
+                url.searchParams.set("system", encodeURIComponent(systemMessage));
+            }
+            
+            // Force JSON output if required
+            if (requireJson || forceJson) {
+                url.searchParams.set("json", "true");
+            }
+            
+            console.log("Pollinations AI request URL:", url.toString());
+            
+            const response = await fetch(url.toString(), {
+                method: "GET",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(customRequestBody),
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => null);
-                console.error("Custom endpoint error response:", {
+                const errorText = await response.text().catch(() => "Unknown error");
+                console.error("Pollinations AI error response:", {
                     status: response.status,
                     statusText: response.statusText,
-                    errorData,
+                    errorText,
                 });
                 throw new Error(
-                    `Custom endpoint error: ${response.statusText}${
-                        errorData ? ` - ${JSON.stringify(errorData)}` : ""
-                    }`
+                    `Pollinations AI error: ${response.statusText} - ${errorText}`
                 );
             }
 
-            const data = await response.json();
-            return data.choices[0].message.content;
-        } catch (customError) {
-            // If custom endpoint fails, try Groq with Llama
-            console.log("Custom endpoint failed, falling back to Groq with Llama");
+            const data = await response.text();
+            console.log("Pollinations AI response:", data);
+            
+            // If JSON was requested, try to parse it
+            if (requireJson || forceJson) {
+                try {
+                    const jsonData = JSON.parse(data);
+                    return jsonData.text || jsonData.content || jsonData.response || data;
+                } catch (jsonError) {
+                    console.warn("Failed to parse JSON response from Pollinations AI, returning raw text");
+                    return data;
+                }
+            }
+            
+            return data;
+        } catch (pollinationsError) {
+            console.error("Pollinations AI failed, falling back to Groq:", pollinationsError);
+            
+            // Fallback to Groq
+            const groqApiKey = process.env.GROQ_API_KEY;
+            if (!groqApiKey) {
+                throw new Error("GROQ_API_KEY is not defined in environment variables");
+            }
             
             const groqRequestBody = {
                 messages: [
@@ -821,7 +740,7 @@ export async function makeGroqRequest(
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+                        "Authorization": `Bearer ${groqApiKey}`,
                     },
                     body: JSON.stringify(groqRequestBody),
                 },

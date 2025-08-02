@@ -82,6 +82,7 @@
     "framer-motion": "^12.14.0",
     "fs": "latest",
     "fuzzysort": "^3.1.0",
+    "g4f": "^1.4.6",
     "groq": "^3.99.0",
     "groq-sdk": "^0.25.0",
     "ignore-loader": "^0.1.2",

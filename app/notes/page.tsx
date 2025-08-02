@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo, useReducer } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -1364,7 +1364,7 @@ const dragDropReducer = (state: DragDropState, action: DragDropAction): DragDrop
   }
 };
 
-const DragDropBlock = ({ question, pairs, options, userAnswers, setUserAnswers, showAnswers, setShowAnswers, theme }: {
+const DragDropBlock = React.memo(({ question, pairs, options, userAnswers, setUserAnswers, showAnswers, setShowAnswers, theme }: {
   question: string,
   pairs: { left: string, right: string }[],
   options: string[],
@@ -1374,7 +1374,7 @@ const DragDropBlock = ({ question, pairs, options, userAnswers, setUserAnswers, 
   setShowAnswers: (show: boolean) => void,
   theme: "dark" | "light"
 }) => {
-  const [state, dispatch] = React.useReducer(dragDropReducer, {
+  const [state, dispatch] = useReducer(dragDropReducer, {
     answers: userAnswers,
     showAnswers
   });
@@ -1478,7 +1478,7 @@ const DragDropBlock = ({ question, pairs, options, userAnswers, setUserAnswers, 
       </div>
     </div>
   );
-};
+});
 
 interface NoteCardProps {
   note: Note
@@ -1940,6 +1940,7 @@ export default function NotesPage() {
 
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
+  const [isSyntaxHelpOpen, setIsSyntaxHelpOpen] = useState(false);
 
   const notesContainerRef = useRef<HTMLDivElement>(null)
   const activeNoteRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>
@@ -2645,24 +2646,6 @@ export default function NotesPage() {
     }
   }, [theme])
 
-  // Show loading spinner while authentication state is being determined
-  if (authIsLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black/5">
-        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  // Show redirect message if not authenticated
-  if (!session) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Redirecting to login...</p>
-      </div>
-    );
-  }
-
   // Replace original handleNoteSelectInSidebar with optimized version
   const handleNoteSelectInSidebar = useCallback((noteId: string) => {
     if (focusedNoteId !== noteId) {
@@ -2696,6 +2679,24 @@ export default function NotesPage() {
       setFocusedNoteId(null);
     }
   }, []);
+
+  // Show loading spinner while authentication state is being determined
+  if (authIsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black/5">
+        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // Show redirect message if not authenticated
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Redirecting to login...</p>
+      </div>
+    );
+  }
 
   // Search function
   const handleSearch = (query: string) => {
@@ -3047,8 +3048,6 @@ export default function NotesPage() {
       setIsGeneratingImages(false);
     }
   };
-
-  const [isSyntaxHelpOpen, setIsSyntaxHelpOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
