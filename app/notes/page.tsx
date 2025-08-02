@@ -19,7 +19,6 @@ import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialo
 import { AIAssistantSidebar } from "@/components/ai-assistant-sidebar"
 import { CreateExamFromNotesDialog } from "@/components/create-exam-from-notes-dialog"
 import IntegratedExam from "@/components/integrated-exam"
-import ExamBottomNav from "@/components/exam-bottom-nav"
 import {
   SparklesIcon,
   PlusCircleIcon,
@@ -1959,6 +1958,13 @@ export default function NotesPage() {
   const [selectedImageModel, setSelectedImageModel] = useState<ImageModel>("flux");
   const [isSyntaxHelpOpen, setIsSyntaxHelpOpen] = useState(false);
 
+  // Utility to format time from seconds to MM:SS
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
   const notesContainerRef = useRef<HTMLDivElement>(null)
   const activeNoteRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>
   const loadMoreRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>
@@ -3468,12 +3474,6 @@ graph TD; A-->B;
           </div>
         </div>
 
-        {/* Exam Bottom Navigation */}
-        <ExamBottomNav
-          stats={examStats}
-          isVisible={isExamActive}
-        />
-
         {/* Floating Bottom Nav Bar with enhanced frosted glass effect */}
         <div 
           className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? 'left-1/2 -translate-x-1/2 w-[80%] max-w-4xl' : 'left-[calc(18rem+3rem)]'} ${isAiAssistantOpen ? 'right-[calc(350px+2rem)]' : 'right-6'} px-4 py-3 rounded-2xl z-40 flex items-center gap-3 transition-all duration-500 ease-in-out overflow-hidden border backdrop-blur-[32px] shadow-2xl`}
@@ -3520,7 +3520,29 @@ graph TD; A-->B;
               transform: 'translate(10%, 10%)'
             }}
           />
-          <div className="flex items-center space-x-1.5">
+          {isExamActive && examStats ? (
+            <div className="w-full flex items-center justify-between px-2 text-sm">
+              <div className="flex items-center space-x-4 font-mono">
+                <div>
+                  <span className="text-xs opacity-70">Q: </span>
+                  <span>{examStats.currentQuestion}/{examStats.totalQuestions}</span>
+                </div>
+                <div>
+                  <span className="text-xs opacity-70">Score: </span>
+                  <span>{examStats.examScore}%</span>
+                </div>
+              </div>
+              <div className="font-mono text-lg font-bold">
+                {formatTime(examStats.timeRemaining)}
+              </div>
+              <Button variant="destructive" size="sm" onClick={handleCloseExam}>
+                <XCircle className="h-4 w-4 mr-2" />
+                End Exam
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center space-x-1.5">
             <Button
               variant="ghost"
               size="icon"
@@ -3653,6 +3675,8 @@ graph TD; A-->B;
               </>
             )}
           </Button>
+            </>
+          )}
         </div>
       </div>
 
