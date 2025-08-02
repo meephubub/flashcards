@@ -87,7 +87,7 @@
     "kokoro-js": "^1.2.1",
     "langchain": "^0.3.29",
     "lucide-react": "^0.454.0",
-    "mermaid": "^11.9.0",
+    "mermaid": "10.9.0-rc.2",
     "next-themes": "latest",
     "onnxruntime-web": "^1.22.0",
     "openai": "^5.8.3",
