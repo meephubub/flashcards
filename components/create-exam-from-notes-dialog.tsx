@@ -18,16 +18,26 @@ import { DifficultySelector } from "@/components/difficulty-selector"
 import { generateQuestionsFromNotes, type QuestionType } from "@/app/actions/generate-questions-from-notes"
 import { ExamQuestion } from "@/lib/exam-cache"
 import { useToast } from "@/hooks/use-toast"
-import { useRouter } from "next/navigation"
 import { Brain, Sparkles, BookOpen, Clock, Target } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+
+interface NotesExamData {
+  examName: string;
+  questions: ExamQuestion[];
+  difficulty: string;
+  questionCount: number;
+  source: "notes";
+  notesContent: string;
+  createdAt: string;
+}
 
 interface CreateExamFromNotesDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   notesContent: string
   noteTitle?: string
+  onExamCreated: (examData: NotesExamData) => void
 }
 
 interface ExamPreview {
@@ -41,10 +51,10 @@ export function CreateExamFromNotesDialog({
   open,
   onOpenChange,
   notesContent,
-  noteTitle
+  noteTitle,
+  onExamCreated
 }: CreateExamFromNotesDialogProps) {
   const { toast } = useToast()
-  const router = useRouter()
   
   const [examName, setExamName] = useState(noteTitle ? `Exam: ${noteTitle}` : "")
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard" | "adaptive">("medium")
@@ -115,8 +125,7 @@ export function CreateExamFromNotesDialog({
         { difficulty }
       )
 
-      // Store the exam data in localStorage for the exam mode to use
-      const examData = {
+      const examData: NotesExamData = {
         examName,
         questions,
         difficulty,
@@ -126,16 +135,14 @@ export function CreateExamFromNotesDialog({
         createdAt: new Date().toISOString()
       }
 
-      localStorage.setItem("notes_exam_data", JSON.stringify(examData))
+      onExamCreated(examData);
 
       toast({
-        title: "Exam created!",
-        description: "Your exam has been generated successfully.",
-      })
-
-      // Close dialog and navigate to exam
-      onOpenChange(false)
-      router.push("/exam-from-notes")
+        title: "Exam created successfully!",
+        description: "You can now start the exam from your notes.",
+      });
+      
+      onOpenChange(false);
     } catch (error) {
       console.error("Error creating exam:", error)
       toast({

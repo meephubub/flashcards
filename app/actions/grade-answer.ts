@@ -31,6 +31,42 @@ export async function gradeAnswer(
       }
     }
 
+    // Handle multiple choice questions with exact matching
+    if (questionType === "multiple-choice") {
+      console.log("MCQ Grading Debug:", {
+        userAnswer: userAnswer.trim(),
+        correctAnswer: correctAnswer.trim(),
+        userAnswerLength: userAnswer.trim().length,
+        correctAnswerLength: correctAnswer.trim().length,
+        isExactMatch: userAnswer.trim() === correctAnswer.trim()
+      });
+      
+      const isCorrect = userAnswer.trim() === correctAnswer.trim();
+      return {
+        isCorrect,
+        score: isCorrect ? 100 : 0,
+        feedback: isCorrect ? "Correct!" : "Incorrect.",
+        explanation: isCorrect
+          ? undefined
+          : `The correct answer was: ${correctAnswer}`,
+        suggestions: isCorrect ? undefined : "Review the question and try to understand why this answer is correct.",
+      }
+    }
+
+    // Handle true-false questions with exact matching
+    if (questionType === "true-false") {
+      const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+      return {
+        isCorrect,
+        score: isCorrect ? 100 : 0,
+        feedback: isCorrect ? "Correct!" : "Incorrect.",
+        explanation: isCorrect
+          ? undefined
+          : `The correct answer was: ${correctAnswer}`,
+        suggestions: isCorrect ? undefined : "Review the statement and determine if it's true or false based on the facts.",
+      }
+    }
+
     // Only grade freeform types with Xenova similarity (no Groq)
     if (questionType === "short-answer" || questionType === "fill-in-blank") {
       try {

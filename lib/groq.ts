@@ -202,21 +202,24 @@ export async function gradeAnswerWithGroq(
         previousAnswers?: GradingResult[];
     },
 ): Promise<GradingResult> {
-    const prompt = `Grade the following exam answer. Provide detailed feedback and suggestions for improvement.
-  
+    const prompt = `Grade the following exam answer. You are an expert teacher evaluating a student's response.
+
   Question Type: ${questionType}
   Question: ${question}
-  Correct Answer: ${correctAnswer}
-  User's Answer: ${userAnswer}
+  
+  EXPECTED CORRECT ANSWER (from question generation): ${correctAnswer}
+  STUDENT'S ANSWER: ${userAnswer}
+  
   ${options?.adaptiveScoring ? "Adaptive Scoring: Enabled" : ""}
   ${options?.timePressure ? `Time Pressure: ${options.timePressure}` : ""}
   ${options?.previousAnswers ? `Previous Performance: ${JSON.stringify(options.previousAnswers)}` : ""}
   
-  Grade the answer based on:
-  1. Accuracy and completeness
-  2. Understanding of concepts
-  3. Clarity and coherence
-  4. Question type specific criteria
+  Evaluation Guidelines:
+  1. Compare the student's answer against the EXPECTED CORRECT ANSWER
+  2. Consider partial credit for answers that demonstrate understanding but may be incomplete
+  3. For short-answer questions, look for key concepts and ideas rather than exact word matching
+  4. Provide constructive feedback that helps the student learn
+  5. Consider the question type when evaluating (multiple choice vs short answer vs true/false)
   
   Return the response as a JSON object with the following properties:
   {
@@ -653,32 +656,39 @@ export async function makeGroqRequest(
     try {
         // Try Pollinations AI first
         try {
-            console.log("Attempting to use Pollinations AI text-to-text endpoint");
+            console.log("Attempting to use Pollinations AI OpenAI-compatible endpoint");
             
-            // Build the URL with parameters
-            const url = new URL("https://text.pollinations.ai/");
-            url.searchParams.set("prompt", encodeURIComponent(prompt));
-            url.searchParams.set("model", "openai"); // Use OpenAI model as default
-            url.searchParams.set("temperature", "0.6");
-            url.searchParams.set("top_p", "0.9");
+            // Prepare the request body for the POST endpoint
+            const requestBody: any = {
+                model: "openai",
+                messages: [
+                    {
+                        role: "system",
+                        content: systemMessage,
+                    },
+                    {
+                        role: "user",
+                        content: prompt,
+                    },
+                ],
+                temperature: 0.6,
+                stream: false,
+                private: false,
+            };
             
-            // Add system message if provided
-            if (systemMessage && systemMessage !== "You are a helpful assistant.") {
-                url.searchParams.set("system", encodeURIComponent(systemMessage));
-            }
-            
-            // Force JSON output if required
+            // Add JSON mode if required
             if (requireJson || forceJson) {
-                url.searchParams.set("json", "true");
+                requestBody.response_format = { type: "json_object" };
             }
             
-            console.log("Pollinations AI request URL:", url.toString());
+            console.log("Pollinations AI request body:", JSON.stringify(requestBody, null, 2));
             
-            const response = await fetch(url.toString(), {
-                method: "GET",
+            const response = await fetch("https://text.pollinations.ai/openai", {
+                method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -693,21 +703,22 @@ export async function makeGroqRequest(
                 );
             }
 
-            const data = await response.text();
+            const data = await response.json();
             console.log("Pollinations AI response:", data);
             
-            // If JSON was requested, try to parse it
-            if (requireJson || forceJson) {
-                try {
-                    const jsonData = JSON.parse(data);
-                    return jsonData.text || jsonData.content || jsonData.response || data;
-                } catch (jsonError) {
-                    console.warn("Failed to parse JSON response from Pollinations AI, returning raw text");
-                    return data;
-                }
+            // Extract the content from the response
+            let content = "";
+            if (data.choices && data.choices[0] && data.choices[0].message) {
+                content = data.choices[0].message.content;
+            } else if (data.text) {
+                content = data.text;
+            } else if (data.content) {
+                content = data.content;
+            } else {
+                content = JSON.stringify(data);
             }
             
-            return data;
+            return content;
         } catch (pollinationsError) {
             console.error("Pollinations AI failed, falling back to Groq:", pollinationsError);
             

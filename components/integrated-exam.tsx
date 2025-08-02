@@ -1,13 +1,11 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd"
@@ -22,12 +20,10 @@ import {
   Clock,
   Award,
   Brain,
-  Save,
-  RotateCw,
   X,
 } from "lucide-react"
-import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
+import { type Note } from "@/lib/supabase"
 import { ExamQuestion } from "@/lib/exam-cache"
 import { gradeAnswer } from "@/app/actions/grade-answer"
 import { gradeAnswerWithGroq } from "@/lib/groq"
@@ -54,109 +50,102 @@ interface QuestionState {
   chatMessages: Array<{ role: "user" | "assistant"; content: string }>
 }
 
-export default function ExamFromNotesPage() {
-  const router = useRouter()
+interface IntegratedExamProps {
+  examData: NotesExamData | null
+  onClose: () => void
+  onStatsUpdate: (stats: {
+    currentQuestion: number
+    totalQuestions: number
+    timeRemaining: number
+    streakCount: number
+    examScore: number
+    examCompleted: boolean
+  }) => void
+}
+
+export default function IntegratedExam({ examData: initialExamData, onClose, onStatsUpdate }: IntegratedExamProps) {
   const { toast } = useToast()
 
-  const [examData, setExamData] = useState<NotesExamData | null>(null)
+  // Use the prop directly, no need for an extra state layer for the exam data itself.
+  const examData = initialExamData
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({})
   const [results, setResults] = useState<Record<number, any>>({})
-  const [questionStates, setQuestionStates] = useState<Record<number, QuestionState>>({})
+  const [questionStates, setQuestionStates] = useState<Record<number, QuestionState>>(() => {
+    if (!examData || !examData.questions || examData.questions.length === 0) {
+      return {};
+    }
+    const firstQuestion = examData.questions[0];
+    return {
+      [firstQuestion.id]: {
+        answer: "",
+        matchingPairs: firstQuestion.type === "matching" && firstQuestion.matchingPairs ? [...firstQuestion.matchingPairs].sort(() => 0.5 - Math.random()) : [],
+        sequence: firstQuestion.type === "sequence" && firstQuestion.sequence ? [...firstQuestion.sequence].sort(() => 0.5 - Math.random()) : [],
+        isAnswered: false,
+        isGrading: false,
+        showHint: false,
+        hintLevel: 0,
+        showFeedback: false,
+        chatMessages: [],
+      },
+    };
+  });
   const [examCompleted, setExamCompleted] = useState(false)
   const [examScore, setExamScore] = useState(0)
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [examStarted, setExamStarted] = useState(false)
   const [streakCount, setStreakCount] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true) // Keep this for initial setup
 
-  // Load exam data from localStorage
+  const currentQuestion = examData?.questions[currentQuestionIndex];
+  const currentQuestionState = currentQuestion ? questionStates[currentQuestion.id] : null;
+
+  // This effect now only handles setup that runs once when the component mounts with data.
   useEffect(() => {
-    const storedData = localStorage.getItem("notes_exam_data")
-    if (storedData) {
-      try {
-        const data = JSON.parse(storedData) as NotesExamData
-        setExamData(data)
-        setTimeRemaining(Math.round(60 * 15 * 2)) // 30 minutes default
-        setIsLoading(false)
-      } catch (error) {
-        console.error("Error parsing exam data:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load exam data. Please create a new exam.",
-          variant: "destructive"
-        })
-        router.push("/notes")
-      }
+    if (examData) {
+      setTimeRemaining(Math.round(60 * 15 * 2)) // 30 minutes default
+      setIsLoading(false)
     } else {
+      // This part handles the case where the component is rendered without any data.
       toast({
-        title: "No exam data",
-        description: "No exam data found. Please create an exam from your notes.",
-        variant: "destructive"
+        title: "Failed to load exam data",
+        description: "The exam data was not provided. Please try again.",
+        variant: "destructive",
       })
-      router.push("/notes")
+      onClose()
     }
-  }, [router, toast])
+    // We only want this to run once on mount, or if onClose/toast changes (which they shouldn't).
+  }, [examData, onClose, toast])
 
-  const currentQuestion = examData?.questions[currentQuestionIndex]
-  const currentQuestionState = currentQuestion ? questionStates[currentQuestion.id] : null
+  const { shuffledPairs, shuffledOptions, shuffledTerms } = useMemo(() => {
+    if (!currentQuestion) {
+      return { shuffledPairs: [], shuffledOptions: [], shuffledTerms: [] }
+    }
+    const pairs = currentQuestion.matchingPairs ? [...currentQuestion.matchingPairs].sort(() => Math.random() - 0.5) : []
+    const options = currentQuestion.options ? [...currentQuestion.options].sort(() => Math.random() - 0.5) : []
+    const terms = currentQuestion.matchingPairs ? currentQuestion.matchingPairs.map(p => p.right).sort(() => Math.random() - 0.5) : []
+    return { shuffledPairs: pairs, shuffledOptions: options, shuffledTerms: terms }
+  }, [currentQuestion])
 
-     // Validate MCQ questions on load
-   useEffect(() => {
-     if (currentQuestion?.type === "multiple-choice" && currentQuestion.options && currentQuestion.correctAnswer) {
-       const isValid = currentQuestion.options.includes(currentQuestion.correctAnswer)
-       if (!isValid) {
-         console.error("Invalid MCQ question detected:", {
-           question: currentQuestion.question,
-           correctAnswer: currentQuestion.correctAnswer,
-           options: currentQuestion.options,
-           correctAnswerLength: currentQuestion.correctAnswer.length,
-           optionLengths: currentQuestion.options.map(opt => opt.length),
-           correctAnswerTrimmed: currentQuestion.correctAnswer.trim(),
-           optionsTrimmed: currentQuestion.options.map(opt => opt.trim())
-         })
-       } else {
-         console.log("MCQ validation passed on load:", {
-           correctAnswer: currentQuestion.correctAnswer,
-           options: currentQuestion.options
-         })
-       }
-     }
-   }, [currentQuestion])
+  // Loading state check
+  const isLoadingState = isLoading || !examData || !currentQuestion || !currentQuestionState
 
-  // Initialize question state
+  // Combined stats update effect to avoid duplicate updates
   useEffect(() => {
-    if (!currentQuestion) return
+    if (examData) {
+      onStatsUpdate({
+        currentQuestion: currentQuestionIndex + 1,
+        totalQuestions: examData.questions.length,
+        timeRemaining,
+        streakCount,
+        examScore,
+        examCompleted
+      })
+    }
+  }, [currentQuestionIndex, timeRemaining, streakCount, examScore, examCompleted, examData, onStatsUpdate])
 
-    setQuestionStates(prev => {
-      if (prev[currentQuestion.id]) {
-        return prev
-      }
-
-      const newState: QuestionState = {
-        answer: userAnswers[currentQuestion.id] || "",
-        matchingPairs: currentQuestion.type === "matching" && currentQuestion.matchingPairs 
-          ? [...currentQuestion.matchingPairs].sort(() => 0.5 - Math.random())
-          : [],
-        sequence: currentQuestion.type === "sequence" && currentQuestion.sequence
-          ? [...currentQuestion.sequence].sort(() => 0.5 - Math.random())
-          : [],
-        isAnswered: !!results[currentQuestion.id],
-        isGrading: false,
-        showHint: false,
-        hintLevel: 0,
-        showFeedback: false,
-        chatMessages: []
-      }
-
-      return {
-        ...prev,
-        [currentQuestion.id]: newState
-      }
-    })
-  }, [currentQuestion, userAnswers, results])
-
-  // Timer
+  // Timer effect
   useEffect(() => {
     if (!examStarted || examCompleted) return
 
@@ -183,6 +172,30 @@ export default function ExamFromNotesPage() {
 
     return () => clearInterval(timer)
   }, [examStarted, examCompleted, toast])
+
+  // These declarations were moved to the top of the component to ensure all hooks are called before any conditional returns
+
+  // Render loading state if needed
+  if (isLoadingState) {
+    return (
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <Card className="w-full max-w-4xl h-[90vh] flex flex-col">
+          <CardHeader>
+            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </CardHeader>
+          <CardContent className="flex-grow flex flex-col items-center justify-center">
+            <Skeleton className="h-24 w-full mb-4" />
+            <Skeleton className="h-12 w-3/4" />
+          </CardContent>
+          <CardFooter className="flex justify-between items-center">
+            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-24" />
+          </CardFooter>
+        </Card>
+      </div>
+    )
+  }
 
   const handleAnswerChange = (value: string) => {
     if (!currentQuestion || currentQuestionState?.isAnswered) return
@@ -230,9 +243,8 @@ export default function ExamFromNotesPage() {
   const handleSubmitAnswer = async () => {
     if (!currentQuestion || !currentQuestionState) return
 
-    // Validate answer
     if (currentQuestion.type === "matching") {
-      if (currentQuestionState.matchingPairs.length === 0) {
+      if (!currentQuestionState.matchingPairs || currentQuestionState.matchingPairs.length === 0) {
         toast({
           title: "Answer required",
           description: "Please match all pairs before submitting.",
@@ -273,24 +285,15 @@ export default function ExamFromNotesPage() {
     }))
 
     try {
-      console.log("Submit Answer Debug:", {
-        questionType: currentQuestion?.type,
-        question: currentQuestion?.question,
-        userAnswer: answerToSave,
-        correctAnswer: currentQuestion?.correctAnswer,
-        options: currentQuestion?.options
-      });
-      
-             let gradingResult
-       if (currentQuestion.type === "short-answer") {
-         // Use Groq for short answer grading
-         gradingResult = await gradeAnswerWithGroq(
-           currentQuestion.type,
-           currentQuestion.question,
-           currentQuestion.correctAnswer,
-           answerToSave
-         )
-       } else {
+      let gradingResult
+      if (currentQuestion.type === "short-answer") {
+        gradingResult = await gradeAnswerWithGroq(
+          currentQuestion.type,
+          currentQuestion.question,
+          currentQuestion.correctAnswer,
+          answerToSave
+        )
+      } else {
         gradingResult = await gradeAnswer(
           currentQuestion.type,
           currentQuestion.question,
@@ -325,12 +328,12 @@ export default function ExamFromNotesPage() {
         setStreakCount(0)
       }
 
-             toast({
-         title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
-         description: gradingResult.feedback,
-         variant: gradingResult.isCorrect ? "default" : "destructive",
-         duration: 1200
-       })
+      toast({
+        title: gradingResult.isCorrect ? "Correct! " : "Not quite right ",
+        description: gradingResult.feedback,
+        variant: gradingResult.isCorrect ? "default" : "destructive",
+        duration: 1200
+      })
     } catch (error) {
       console.error("Error grading answer:", error)
       toast({
@@ -352,15 +355,42 @@ export default function ExamFromNotesPage() {
   }
 
   const handleNextQuestion = () => {
-    if (!examData) return
+    if (!examData) return;
 
-    if (currentQuestionIndex < examData.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1)
+    const nextIndex = currentQuestionIndex + 1;
+    if (nextIndex < examData.questions.length) {
+      const nextQuestion = examData.questions[nextIndex];
+
+      // Initialize state for the next question if it doesn't exist
+      setQuestionStates(prev => {
+        if (prev[nextQuestion.id]) {
+          return prev;
+        }
+        const newState: QuestionState = {
+          answer: userAnswers[nextQuestion.id] || "",
+          matchingPairs: nextQuestion.type === "matching" && nextQuestion.matchingPairs ? [...nextQuestion.matchingPairs].sort(() => 0.5 - Math.random()) : [],
+          sequence: nextQuestion.type === "sequence" && nextQuestion.sequence
+            ? [...nextQuestion.sequence].sort(() => 0.5 - Math.random())
+            : [],
+          isAnswered: !!results[nextQuestion.id],
+          isGrading: false,
+          showHint: false,
+          hintLevel: 0,
+          showFeedback: false,
+          chatMessages: []
+        };
+        return {
+          ...prev,
+          [nextQuestion.id]: newState
+        };
+      });
+
+      setCurrentQuestionIndex(nextIndex);
     } else {
-      calculateFinalScore()
-      setExamCompleted(true)
+      calculateFinalScore();
+      setExamCompleted(true);
     }
-  }
+  };
 
   const handlePreviousQuestion = () => {
     if (currentQuestionIndex > 0) {
@@ -399,7 +429,7 @@ export default function ExamFromNotesPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 w-10" />
@@ -429,22 +459,19 @@ export default function ExamFromNotesPage() {
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold mb-2">No exam data</h2>
         <p className="text-gray-500 mb-6">No exam data found. Please create an exam from your notes.</p>
-        <Button asChild>
-          <Link href="/notes">Back to Notes</Link>
+        <Button onClick={onClose}>
+          Close
         </Button>
       </div>
     )
   }
 
-  // Show exam start screen
   if (!examStarted) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/notes">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-xl font-semibold">Exam: {examData.examName}</h1>
         </div>
@@ -487,18 +514,15 @@ export default function ExamFromNotesPage() {
     )
   }
 
-  // Show exam completion screen
   if (examCompleted) {
     const answeredCount = Object.keys(results).length
     const correctCount = Object.values(results).filter((r) => r.isCorrect).length
 
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/notes">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-xl font-semibold">Exam Results: {examData.examName}</h1>
         </div>
@@ -533,8 +557,8 @@ export default function ExamFromNotesPage() {
               <Button onClick={restartExam} className="mr-2">
                 Take Another Exam
               </Button>
-              <Button variant="outline" asChild>
-                <Link href="/notes">Back to Notes</Link>
+              <Button variant="outline" onClick={onClose}>
+                Close
               </Button>
             </div>
           </CardContent>
@@ -544,36 +568,14 @@ export default function ExamFromNotesPage() {
   }
 
   const progress = ((currentQuestionIndex + 1) / examData.questions.length) * 100
-  const minutes = Math.floor(timeRemaining / 60)
-  const seconds = timeRemaining % 60
-  const formattedTime = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/notes">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <h1 className="text-xl font-semibold truncate">Exam: {examData.examName}</h1>
-        </div>
-        <div className="flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-1 text-sm">
-            <Clock className="h-4 w-4" />
-            <span className={timeRemaining < 60 ? "text-destructive" : ""}>{formattedTime}</span>
-          </div>
-          {streakCount > 0 && (
-            <div className="flex items-center gap-1">
-              <Award className="h-4 w-4" />
-              <span>Streak: {streakCount}</span>
-            </div>
-          )}
-          <div className="text-muted-foreground">
-            {currentQuestionIndex + 1}/{examData.questions.length}
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-xl font-semibold truncate">Exam: {examData.examName}</h1>
       </div>
 
       <Progress value={progress} className="h-1" />
@@ -591,77 +593,68 @@ export default function ExamFromNotesPage() {
             </span>
           </CardTitle>
         </CardHeader>
-                 <CardContent className="space-y-4">
-           <div className="text-lg font-medium">{currentQuestion.question}</div>
-           
-           {/* Show correct answer when user gets it wrong */}
-           {currentQuestionState?.isAnswered && !results[currentQuestion.id]?.isCorrect && (
-             <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-               <div className="flex items-center gap-2 mb-2">
-                 <AlertCircle className="h-4 w-4 text-destructive" />
-                 <span className="font-medium text-destructive">Correct Answer:</span>
-               </div>
-               <p className="text-sm text-foreground">{currentQuestion.correctAnswer}</p>
-             </div>
-           )}
+        <CardContent className="space-y-4">
+          <div className="text-lg font-medium">{currentQuestion.question}</div>
 
-          {/* Different input types based on question type */}
-          {currentQuestion.type === "multiple-choice" && (
-            <>
-                             {/* Debug info - only show in dev environment */}
-               {process.env.ENVIRONMENT === 'dev' && (
-                 <div className="text-xs text-gray-500 p-2 bg-gray-100 rounded">
-                   Debug: Correct Answer = "{currentQuestion.correctAnswer}" | 
-                   Options: {currentQuestion.options?.join(', ')} | 
-                   Match Found: {currentQuestion.options?.includes(currentQuestion.correctAnswer) ? 'YES' : 'NO'}
-                 </div>
-               )}
+          {currentQuestionState?.isAnswered && !results[currentQuestion.id]?.isCorrect && (
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span className="font-medium text-destructive">Correct Answer:</span>
+              </div>
+              <p className="text-sm text-foreground">{currentQuestion.correctAnswer}</p>
+            </div>
+          )}
+
+          {currentQuestion.type === "multiple-choice" && currentQuestion.options && (
             <RadioGroup
               value={currentQuestionState?.answer || ""}
               onValueChange={handleAnswerChange}
               disabled={currentQuestionState?.isAnswered}
               className="space-y-3"
             >
-              {currentQuestion.options?.map((option: string, i: number) => (
+              {shuffledOptions.map((option: string, i: number) => (
                 <div
                   key={i}
-                  className={`flex items-center space-x-3 p-4 rounded-lg border transition-all duration-200
-                    ${
-                      currentQuestionState?.answer === option
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50 hover:bg-muted/50"
-                    }
-                    ${
-                      currentQuestionState?.isAnswered
-                        ? option === currentQuestion.correctAnswer
-                          ? "border-success bg-success/5"
-                          : currentQuestionState?.answer === option
-                            ? "border-destructive bg-destructive/5"
-                            : ""
-                        : "cursor-pointer"
-                    }`}
+                  className={`flex items-center space-x-3 p-4 rounded-lg border transition-all duration-200 ${
+                    currentQuestionState?.answer === option
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50 hover:bg-muted/50"
+                  } ${
+                    currentQuestionState?.isAnswered
+                      ? option === currentQuestion.correctAnswer
+                        ? "border-success bg-success/5"
+                        : currentQuestionState?.answer === option
+                        ? "border-destructive bg-destructive/5"
+                        : ""
+                      : "cursor-pointer"
+                  }`}
                   onClick={() => !currentQuestionState?.isAnswered && handleAnswerChange(option)}
                 >
                   <RadioGroupItem value={option} id={`option-${i}`} className="h-5 w-5" />
                   <Label
                     htmlFor={`option-${i}`}
-                    className={`flex-1 cursor-pointer text-base
-                      ${currentQuestionState?.isAnswered && option === currentQuestion.correctAnswer ? "text-success" : ""}
-                      ${currentQuestionState?.isAnswered && currentQuestionState?.answer === option && option !== currentQuestion.correctAnswer ? "text-destructive" : ""}
-                    `}
+                    className={`flex-1 cursor-pointer text-base ${
+                      currentQuestionState?.isAnswered && option === currentQuestion.correctAnswer ? "text-success" : ""
+                    } ${
+                      currentQuestionState?.isAnswered &&
+                      currentQuestionState?.answer === option &&
+                      option !== currentQuestion.correctAnswer
+                        ? "text-destructive"
+                        : ""
+                    }`}
                   >
                     {option}
                   </Label>
                   {currentQuestionState?.isAnswered && option === currentQuestion.correctAnswer && (
                     <Check className="h-5 w-5 text-success" />
                   )}
-                  {currentQuestionState?.isAnswered && currentQuestionState?.answer === option && option !== currentQuestion.correctAnswer && (
-                    <X className="h-5 w-5 text-destructive" />
-                  )}
+                  {currentQuestionState?.isAnswered &&
+                    currentQuestionState?.answer === option &&
+                    option !== currentQuestion.correctAnswer && <X className="h-5 w-5 text-destructive" />}
                 </div>
               ))}
             </RadioGroup>
-            </>
           )}
 
           {currentQuestion.type === "true-false" && (
@@ -705,12 +698,11 @@ export default function ExamFromNotesPage() {
             />
           )}
 
-          {/* Matching question UI */}
-          {currentQuestion.type === "matching" && currentQuestion.matchingPairs && (
+          {currentQuestion.type === "matching" && currentQuestion.matchingPairs && shuffledPairs && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <h3 className="font-medium">Terms</h3>
-                {currentQuestion.matchingPairs.map((pair: { left: string; right: string }, index: number) => (
+                {shuffledPairs.map((pair: { left: string; right: string }, index: number) => (
                   <div key={`term-${index}`} className="p-2 bg-secondary rounded-md">
                     {pair.left}
                   </div>
@@ -718,7 +710,7 @@ export default function ExamFromNotesPage() {
               </div>
               <div className="space-y-2">
                 <h3 className="font-medium">Definitions</h3>
-                {currentQuestion.matchingPairs.map((pair: { left: string; right: string }, index: number) => (
+                {shuffledPairs.map((pair: { left: string; right: string }, index: number) => (
                   <select
                     key={`select-${index}`}
                     value={currentQuestionState?.matchingPairs[index]?.right || ""}
@@ -727,9 +719,9 @@ export default function ExamFromNotesPage() {
                     className="w-full p-2 rounded-md border border-input bg-background"
                   >
                     <option value="">Select a match</option>
-                    {currentQuestion.matchingPairs.map((p: { left: string; right: string }, i: number) => (
-                      <option key={`option-${index}-${i}`} value={p.right}>
-                        {p.right}
+                    {shuffledTerms.map((term: string, i: number) => (
+                      <option key={`option-${index}-${i}`} value={term}>
+                        {term}
                       </option>
                     ))}
                   </select>

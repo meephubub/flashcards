@@ -153,6 +153,46 @@ Ensure the JSON is valid and complete.`
       throw new Error("Invalid question data received")
     }
 
+    // Additional validation for MCQ questions
+    if (type === "multiple-choice") {
+      if (!questionData.options || !Array.isArray(questionData.options) || questionData.options.length !== 4) {
+        throw new Error("MCQ must have exactly 4 options")
+      }
+      
+             // Check if correctAnswer is one of the options (exact match)
+       if (!questionData.options.includes(questionData.correctAnswer)) {
+         // Try trimmed comparison
+         const trimmedCorrectAnswer = questionData.correctAnswer.trim()
+         const trimmedOptions = questionData.options.map(opt => opt.trim())
+         
+         if (trimmedOptions.includes(trimmedCorrectAnswer)) {
+           // Found a match with trimming, update the correctAnswer to match the exact option
+           const matchingOption = questionData.options.find(opt => opt.trim() === trimmedCorrectAnswer)
+           if (matchingOption) {
+             questionData.correctAnswer = matchingOption
+             console.log("Fixed correctAnswer (trimmed match):", questionData.correctAnswer)
+           }
+         } else {
+           console.warn("MCQ correctAnswer doesn't match any option, fixing...", {
+             correctAnswer: questionData.correctAnswer,
+             options: questionData.options,
+             correctAnswerLength: questionData.correctAnswer.length,
+             optionLengths: questionData.options.map(opt => opt.length),
+             trimmedCorrectAnswer,
+             trimmedOptions
+           })
+           // Fix by setting the correctAnswer to the first option (fallback)
+           questionData.correctAnswer = questionData.options[0]
+           console.log("Fixed correctAnswer to first option:", questionData.correctAnswer)
+         }
+       } else {
+         console.log("MCQ validation passed:", {
+           correctAnswer: questionData.correctAnswer,
+           options: questionData.options
+         })
+       }
+    }
+
     return {
       ...questionData,
       id: questionNumber,

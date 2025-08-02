@@ -18,6 +18,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
 import { AIAssistantSidebar } from "@/components/ai-assistant-sidebar"
 import { CreateExamFromNotesDialog } from "@/components/create-exam-from-notes-dialog"
+import IntegratedExam from "@/components/integrated-exam"
+import ExamBottomNav from "@/components/exam-bottom-nav"
 import {
   SparklesIcon,
   PlusCircleIcon,
@@ -1912,7 +1914,22 @@ export default function NotesPage() {
   const [noteForFlashcards, setNoteForFlashcards] = useState<Note | null>(null)
   const [isExamDialogOpen, setIsExamDialogOpen] = useState(false)
   const [noteForExam, setNoteForExam] = useState<Note | null>(null)
+  const [examData, setExamData] = useState<any>(null)
+
+  // Memoize examData to ensure stable reference for IntegratedExam
+  const memoizedExamData = useMemo(() => examData, [examData]);
   const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
+  
+  // Exam integration state
+  const [isExamActive, setIsExamActive] = useState(false)
+  const [examStats, setExamStats] = useState<{
+    currentQuestion: number
+    totalQuestions: number
+    timeRemaining: number
+    streakCount: number
+    examScore: number
+    examCompleted: boolean
+  } | null>(null)
 
   // State for Image Search
   const [isImageSearchDialogOpen, setIsImageSearchDialogOpen] = useState<boolean>(false);
@@ -2987,6 +3004,45 @@ export default function NotesPage() {
     }
   };
 
+  // Exam integration handlers
+  const handleStartExam = (note: Note) => {
+    setNoteForExam(note)
+    setIsExamDialogOpen(true)
+  }
+
+  const handleExamCreated = (data: any) => {
+    console.log('handleExamCreated received:', data);
+    // Basic runtime check for minimal examData shape
+    if (data && data.questions && Array.isArray(data.questions) && data.questions.length > 0) {
+      setExamData(data);
+      setIsExamActive(true);
+      setIsExamDialogOpen(false);
+    } else {
+      console.error('Invalid examData received:', data);
+      toast({
+        title: 'Exam creation failed',
+        description: 'No valid questions were generated. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  const handleCloseExam = () => {
+    setIsExamActive(false)
+    setExamStats(null)
+  }
+
+  const memoizedOnStatsUpdate = useCallback((stats: {
+    currentQuestion: number
+    totalQuestions: number
+    timeRemaining: number
+    streakCount: number
+    examScore: number
+    examCompleted: boolean
+  }) => {
+    setExamStats(stats)
+  }, [])
+
   const extractImageTags = (content: string): string[] => {
     const matches = content.match(/!\(img\)\[(.*?)\]/g) || [];
     return matches.map(tag => {
@@ -3370,7 +3426,7 @@ graph TD; A-->B;
               <p className="text-center text-neutral-400 py-10 text-lg">Note not found or does not match category.</p>
             )}
 
-            {!isLoading && displayedNotes.length > 0 && (
+            {!isLoading && displayedNotes.length > 0 && !isExamActive && (
               <NotesList 
                 notes={displayedNotes}
                 focusedNoteId={focusedNoteId}
@@ -3400,8 +3456,23 @@ graph TD; A-->B;
                 loadMoreRef={loadMoreRef}
               />
             )}
+
+            {/* Integrated Exam Component */}
+            {isExamActive && (
+              <IntegratedExam
+                examData={memoizedExamData}
+                onClose={handleCloseExam}
+                onStatsUpdate={memoizedOnStatsUpdate}
+              />
+            )}
           </div>
         </div>
+
+        {/* Exam Bottom Navigation */}
+        <ExamBottomNav
+          stats={examStats}
+          isVisible={isExamActive}
+        />
 
         {/* Floating Bottom Nav Bar with enhanced frosted glass effect */}
         <div 
@@ -3693,6 +3764,7 @@ graph TD; A-->B;
         }}
         notesContent={noteForExam?.content || ""}
         noteTitle={noteForExam?.title}
+        onExamCreated={handleExamCreated}
       />
 
       {/* Delete Confirmation Dialog */}
