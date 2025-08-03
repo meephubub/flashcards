@@ -96,27 +96,50 @@ export default function IntegratedExam({ examData: initialExamData, onClose, onS
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [examStarted, setExamStarted] = useState(false)
   const [streakCount, setStreakCount] = useState(0)
-  const [isLoading, setIsLoading] = useState(true) // Keep this for initial setup
+  const [isLoading, setIsLoading] = useState(true)
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentQuestion = examData?.questions[currentQuestionIndex];
   const currentQuestionState = currentQuestion ? questionStates[currentQuestion.id] : null;
 
+  const isSequenceInvalid = currentQuestion?.type === 'sequence' && (!Array.isArray(currentQuestion.sequence) || currentQuestion.sequence.length === 0);
+
+
+
+  const calculateFinalScore = useCallback(() => {
+    const totalQuestions = examData?.questions.length || 0;
+    if (totalQuestions === 0) {
+      setExamScore(0);
+      return;
+    }
+    const correctAnswers = Object.values(results).filter(
+      (r) => r.isCorrect
+    ).length;
+    const score = Math.round((correctAnswers / totalQuestions) * 100);
+    setExamScore(score);
+    setExamCompleted(true);
+
+    if (score === 100) {
+      confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+    }
+  }, [results, examData?.questions.length]);
+
   // This effect now only handles setup that runs once when the component mounts with data.
   useEffect(() => {
     if (examData) {
-      setTimeRemaining(Math.round(60 * 15 * 2)) // 30 minutes default
+      setTimeRemaining(Math.round(60 * 30)) // 30 minutes default
       setIsLoading(false)
+      setExamStarted(true)
     } else {
       // This part handles the case where the component is rendered without any data.
       toast({
-        title: "Failed to load exam data",
-        description: "The exam data was not provided. Please try again.",
+        title: "No Exam Data",
+        description: "Could not load the exam. Please try again.",
         variant: "destructive",
       })
-      onClose()
+      setIsLoading(false)
     }
-    // We only want this to run once on mount, or if onClose/toast changes (which they shouldn't).
-  }, [examData, onClose, toast])
+  }, [examData, toast])
 
   const { shuffledPairs, shuffledOptions, shuffledTerms } = useMemo(() => {
     if (!currentQuestion) {
@@ -143,35 +166,41 @@ export default function IntegratedExam({ examData: initialExamData, onClose, onS
         examCompleted
       })
     }
-  }, [currentQuestionIndex, timeRemaining, streakCount, examScore, examCompleted, examData, onStatsUpdate])
+  }, [currentQuestionIndex, examData, timeRemaining, streakCount, examScore, examCompleted, onStatsUpdate])
 
   // Timer effect
   useEffect(() => {
-    if (!examStarted || examCompleted) return
-
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          if (!examCompleted) {
-            setTimeout(() => {
-              toast({
-                title: "Time's up!",
-                description: "Your exam has been automatically submitted.",
-                variant: "destructive",
-              })
-            }, 0)
-            calculateFinalScore()
-            setExamCompleted(true)
+    if (examStarted && !examCompleted) {
+      timerRef.current = setInterval(() => {
+        setTimeRemaining(prevTime => {
+          if (prevTime <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            setExamCompleted(isCompleted => {
+              if (!isCompleted) {
+                calculateFinalScore();
+                toast({
+                  title: "Time's up!",
+                  description: "Your exam has been automatically submitted.",
+                  variant: "destructive",
+                });
+              }
+              return true;
+            });
+            return 0;
           }
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
+          return prevTime - 1;
+        });
+      }, 1000);
+    } else if (examCompleted && timerRef.current) {
+      clearInterval(timerRef.current);
+    }
 
-    return () => clearInterval(timer)
-  }, [examStarted, examCompleted, toast])
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [examStarted, examCompleted, toast, calculateFinalScore]);
 
   // These declarations were moved to the top of the component to ensure all hooks are called before any conditional returns
 
@@ -398,23 +427,7 @@ export default function IntegratedExam({ examData: initialExamData, onClose, onS
     }
   }
 
-  const calculateFinalScore = () => {
-    if (!examData) return 0
 
-    let totalScore = 0
-    let answeredQuestions = 0
-
-    for (const question of examData.questions) {
-      if (results[question.id]) {
-        totalScore += results[question.id].score
-        answeredQuestions++
-      }
-    }
-
-    const finalScore = answeredQuestions > 0 ? Math.round(totalScore / answeredQuestions) : 0
-    setExamScore(finalScore)
-    return finalScore
-  }
 
   const restartExam = () => {
     setExamStarted(false)
@@ -424,7 +437,7 @@ export default function IntegratedExam({ examData: initialExamData, onClose, onS
     setResults({})
     setQuestionStates({})
     setStreakCount(0)
-    setTimeRemaining(Math.round(60 * 15 * 2))
+    setTimeRemaining(Math.round(60 * 30))
   }
 
   if (isLoading) {
@@ -557,8 +570,9 @@ export default function IntegratedExam({ examData: initialExamData, onClose, onS
               <Button onClick={restartExam} className="mr-2">
                 Take Another Exam
               </Button>
-              <Button variant="outline" onClick={onClose}>
-                Close
+              <Button onClick={onClose} className="w-full sm:w-auto bg-black text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200">
+                <X className="h-4 w-4 mr-2" />
+                End Test
               </Button>
             </div>
           </CardContent>
@@ -731,7 +745,7 @@ export default function IntegratedExam({ examData: initialExamData, onClose, onS
           )}
 
           {/* Sequence question UI */}
-          {currentQuestion.type === "sequence" && currentQuestion.sequence && (
+          {currentQuestion.type === "sequence" && currentQuestion.sequence && !isSequenceInvalid && (
             <DragDropContext onDragEnd={handleDragEnd}>
               <Droppable droppableId="sequence">
                 {(provided) => (
@@ -756,6 +770,13 @@ export default function IntegratedExam({ examData: initialExamData, onClose, onS
               </Droppable>
             </DragDropContext>
           )}
+
+          {isSequenceInvalid && (
+            <div className="text-red-500 p-4 bg-red-100 dark:bg-red-900/20 border border-red-500 rounded-md">
+              <p className="font-bold">Question Error</p>
+              <p>This sequence question could not be displayed due to a formatting error. You can skip to the next question.</p>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-between gap-4">
           <div className="flex w-full sm:w-auto justify-between">
@@ -767,7 +788,7 @@ export default function IntegratedExam({ examData: initialExamData, onClose, onS
 
           <div>
             {!currentQuestionState?.isAnswered ? (
-              <Button onClick={handleSubmitAnswer} disabled={currentQuestionState?.isGrading} className="w-full sm:w-auto">
+              <Button onClick={handleSubmitAnswer} disabled={currentQuestionState?.isGrading || isSequenceInvalid} className="w-full sm:w-auto">
                 {currentQuestionState?.isGrading ? "Grading..." : "Submit Answer"}
               </Button>
             ) : (

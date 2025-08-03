@@ -101,7 +101,7 @@ async function createQuestionFromNotes(
     "true-false": "Generate a true/false question that tests understanding of the concepts.",
     "short-answer": "Generate a short answer question that requires a concise but complete response.",
     "matching": "Generate a matching question with 4-6 pairs of related terms and definitions.",
-    "sequence": "Generate a sequence question where students must arrange 4-6 items in the correct order.",
+    "sequence": "Generate a sequence question where students must arrange 4-6 items in the correct order. The 'sequence' field in the JSON output must be an array of 4 to 6 strings representing the items in the correct order. The 'correctAnswer' field should be a JSON stringified version of this array.",
     "analogy": "Generate an analogy question that tests understanding through comparison.",
     "critical-thinking": "Generate a critical thinking question that requires analysis and evaluation.",
     "application": "Generate an application question that tests how well students can apply concepts.",
@@ -151,6 +151,18 @@ Ensure the JSON is valid and complete.`
     // Validate the question data
     if (!questionData.question || !questionData.correctAnswer) {
       throw new Error("Invalid question data received")
+    }
+
+    // Additional validation for MCQ questions
+    if (type === "sequence") {
+      if (!questionData.sequence || !Array.isArray(questionData.sequence) || questionData.sequence.length < 2) {
+        console.error("Invalid sequence question data received:", questionData)
+        throw new Error("Sequence question must have at least 2 items in the sequence array.")
+      }
+      // Ensure correctAnswer is a string representation of the sequence
+      if (typeof questionData.correctAnswer !== 'string' || !questionData.correctAnswer.startsWith('[')) {
+          questionData.correctAnswer = JSON.stringify(questionData.sequence);
+      }
     }
 
     // Additional validation for MCQ questions

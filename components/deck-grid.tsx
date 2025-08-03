@@ -146,13 +146,13 @@ function CreateNewDeckCard({ onClick, index }: { onClick: () => void, index: num
           }}
         />
         
-        <div className="relative h-full rounded-2xl bg-transparent flex items-center justify-center min-h-[240px] shadow-[0_10px_20px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_20px_-15px_rgba(0,0,0,0.3)]">
-          <div className="text-center p-6 flex flex-col items-center justify-center">
-            <div className="w-16 h-16 rounded-full bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 ease-out shadow-[0_5px_15px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_5px_15px_-5px_rgba(0,0,0,0.3)]">
-              <PlusCircle className="h-8 w-8 text-gray-500 dark:text-gray-400" />
+                <div className="relative h-full rounded-xl bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300 dark:hover:border-gray-700 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-center min-h-[240px] group">
+          <div className="text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-lg bg-gray-200/60 dark:bg-gray-800/60 flex items-center justify-center mb-3 group-hover:bg-gray-300/60 dark:group-hover:bg-gray-700/60 transition-colors duration-200">
+              <PlusCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             </div>
-            <p className="font-medium text-gray-700 dark:text-gray-300 text-lg">Create New Deck</p>
-            <p className="text-gray-500 dark:text-gray-500 text-sm mt-1">Start a new collection</p>
+            <p className="font-medium text-gray-800 dark:text-gray-200 text-base">Create New Deck</p>
+            <p className="text-gray-500 dark:text-gray-500 text-xs mt-1">Start a new collection</p>
           </div>
         </div>
       </div>

@@ -1323,7 +1323,7 @@ const DragDropOption = React.memo(({
       isUsed 
         ? 'opacity-40 cursor-not-allowed' 
         : theme === "dark" 
-          ? 'bg-neutral-700 border-neutral-600 text-neutral-100 hover:bg-neutral-600' 
+          ? 'bg-black border-black text-white hover:bg-gray-800' 
           : 'bg-gray-200 border-gray-400 text-gray-800 hover:bg-gray-300'
     }`}
     draggable={!isUsed}
