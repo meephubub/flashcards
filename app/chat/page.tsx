@@ -1,7 +1,9 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useRef, useState } from "react"
+import { useState, useEffect, useRef } from "react"
+import { usePorcupine } from "@picovoice/porcupine-react"
+import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -268,7 +270,102 @@ function ToolEventsDropdown({
 }
 
 export default function ChatPage() {
-  const { user, isLoading: authLoading } = useAuth()
+  const { toast } = useToast();
+  const { keywordDetection, isLoaded, isListening, error, init, start, release } = usePorcupine();
+
+  // Only initialize Porcupine once and only start after loaded
+  useEffect(() => {
+    let cancelled = false;
+    const runPorcupine = async () => {
+      try {
+        const porcupineKeyword = {
+          publicPath: "/models/hey-sam_en_wasm_v3_0_0.ppn",
+          label: "Hey Sam"
+        };
+        const porcupineModel = {
+          publicPath: "/models/porcupine_params.pv"
+        };
+        console.log("[Porcupine] Initializing with access key:", process.env.NEXT_PUBLIC_PICOVOICE_ACCESS_KEY);
+        await init(
+          process.env.NEXT_PUBLIC_PICOVOICE_ACCESS_KEY!,
+          porcupineKeyword,
+          porcupineModel
+        );
+        console.log("[Porcupine] Initialization successful.");
+      } catch (e) {
+        if (!cancelled) {
+          console.error("[Porcupine] Initialization error:", e);
+          toast({
+            title: "Porcupine Error",
+            description: (e as Error).message || String(e),
+            variant: "destructive",
+            duration: 4000,
+          });
+        }
+      }
+    };
+    if (process.env.NEXT_PUBLIC_PICOVOICE_ACCESS_KEY) {
+      runPorcupine();
+    }
+    return () => {
+      cancelled = true;
+      console.log("[Porcupine] Releasing resources and stopping detection.");
+      release?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Start listening only after loaded
+  useEffect(() => {
+    if (isLoaded && !isListening) {
+      start().then(() => {
+        console.log("[Porcupine] Listening for wake word 'Hey Sam'...");
+      }).catch(e => {
+        console.error("[Porcupine] Start error:", e);
+        toast({
+          title: "Porcupine Start Error",
+          description: (e as Error).message || String(e),
+          variant: "destructive",
+          duration: 4000,
+        });
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
+
+  useEffect(() => {
+    if (keywordDetection !== null && isLoaded && isListening) {
+      console.log("[Porcupine] Wake word detected!", keywordDetection);
+      toast({
+        title: "Wake Word Detected",
+        description: `You said 'Hey Sam'! Listening...`,
+        duration: 2000,
+      });
+    }
+  }, [keywordDetection, isLoaded, isListening]);
+
+  useEffect(() => {
+    if (error) {
+      console.error("[Porcupine] Error:", error);
+      toast({
+        title: "Porcupine Error",
+        description: error,
+        variant: "destructive",
+        duration: 4000,
+      });
+    }
+  }, [error, toast]);
+  const environment = process.env.NEXT_PUBLIC_ENVIRONMENT || process.env.ENVIRONMENT;
+  const usingDevAuthBypass = environment === "dev";
+  const { user: realUser, isLoading: authLoading } = useAuth();
+  // If in dev mode, mock a user object
+  const user = usingDevAuthBypass
+    ? {
+        id: "dev-user-id",
+        email: "dev@localhost",
+        name: "Dev User",
+      }
+    : realUser;
   const [convos, setConvos] = useState<AgentConversation[]>([])
   const [selectedConvo, setSelectedConvo] = useState<AgentConversation | null>(null)
   const [input, setInput] = useState("")
@@ -582,14 +679,15 @@ export default function ChatPage() {
     )
   }
 
-  if (!user) {
+  if (!user && !usingDevAuthBypass) {
     return (
-      <div className={`flex flex-col items-center justify-center h-screen ${theme.bg} ${theme.text}`}>
-        <div className="text-center space-y-4">
-          <UserCircle className={`h-16 w-16 mx-auto ${theme.textMuted}`} />
-          <h1 className="text-2xl font-bold">Welcome to AI Chat</h1>
-          <p className={theme.textSecondary}>Please sign in to start chatting</p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <MessageSquare className="w-10 h-10 mb-4 text-gray-400" />
+        <h2 className="text-2xl font-semibold mb-2">Welcome to AI Chat</h2>
+        <p className="text-gray-500 mb-4">Please sign in to start chatting.</p>
+        <Button onClick={() => window.location.href = "/"}>
+          Go to Home
+        </Button>
       </div>
     )
   }
