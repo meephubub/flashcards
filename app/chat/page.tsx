@@ -4,6 +4,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { usePorcupine } from "@picovoice/porcupine-react"
 import { useToast } from "@/hooks/use-toast"
+import SpeechToTextModal from "@/components/speech/speech-to-text-modal"
 import { useAuth } from "@/context/auth-context"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -269,8 +270,43 @@ function ToolEventsDropdown({
   );
 }
 
+import { getOrLoadModel } from '@/lib/modelManager';
+
 export default function ChatPage() {
   const { toast } = useToast();
+
+  useEffect(() => {
+    const preloadModel = async () => {
+      try {
+        let downloadStarted = false;
+        await getOrLoadModel({
+          onDownloadStart: () => {
+            if (!downloadStarted) {
+              downloadStarted = true;
+              toast({
+                title: 'Downloading speech model',
+                description: 'This may take up to a minute the first time.',
+                duration: 5000,
+              });
+            }
+          }
+        });
+        toast({
+          title: 'Speech model ready',
+          description: 'You can now use voice commands',
+          duration: 3000,
+        });
+      } catch (error) {
+        console.error('Failed to load model:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load speech model',
+          variant: 'destructive',
+        });
+      }
+    };
+    preloadModel();
+  }, [toast]);
   const { keywordDetection, isLoaded, isListening, error, init, start, release } = usePorcupine();
 
   // Only initialize Porcupine once and only start after loaded
@@ -336,20 +372,17 @@ export default function ChatPage() {
   useEffect(() => {
     if (keywordDetection !== null && isLoaded && isListening) {
       console.log("[Porcupine] Wake word detected!", keywordDetection);
-      toast({
-        title: "Wake Word Detected",
-        description: `You said 'Hey Sam'! Listening...`,
-        duration: 2000,
-      });
+      setIsSttModalOpen(true);
     }
-  }, [keywordDetection, isLoaded, isListening]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keywordDetection]);
 
   useEffect(() => {
     if (error) {
       console.error("[Porcupine] Error:", error);
       toast({
         title: "Porcupine Error",
-        description: error,
+        description: error.message,
         variant: "destructive",
         duration: 4000,
       });
@@ -370,6 +403,7 @@ export default function ChatPage() {
   const [selectedConvo, setSelectedConvo] = useState<AgentConversation | null>(null)
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
+  const [isSttModalOpen, setIsSttModalOpen] = useState(false)
   const [streamingMsg, setStreamingMsg] = useState("")
   const [streamingEvents, setStreamingEvents] = useState<StreamingEvent[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -777,6 +811,14 @@ export default function ChatPage() {
 
       {/* Main chat area */}
       <main className="flex-1 flex flex-col h-full">
+        <SpeechToTextModal
+          isOpen={isSttModalOpen}
+          onClose={() => setIsSttModalOpen(false)}
+          onTranscript={(transcript) => {
+            setInput(transcript);
+            setIsSttModalOpen(false);
+          }}
+        />
         {/* Header */}
         <header className={`${theme.border} border-b ${theme.bg}/50 backdrop-blur-sm`}>
           <div className="flex items-center justify-between px-6 py-4">

@@ -21,6 +21,7 @@
     "@langchain/core": "^0.3.62",
     "@langchain/langgraph": "^0.3.7",
     "@langchain/openai": "^0.3.17",
+    "@picovoice/cobra-web": "^2.0.3",
     "@picovoice/porcupine-react": "^3.0.3",
     "@picovoice/porcupine-web": "^3.0.3",
     "@picovoice/porcupine-web-en-worker": "^2.1.7",
