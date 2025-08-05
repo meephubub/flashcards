@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@flags-sdk/statsig": "^0.2.2",
+    "@gpt4free/g4f.dev": "^1.0.3",
     "@hookform/resolvers": "^3.10.0",
     "@huggingface/transformers": "^3.5.1",
     "@iconify/utils": "2.1.19",

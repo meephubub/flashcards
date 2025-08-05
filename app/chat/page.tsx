@@ -420,6 +420,7 @@ export default function ChatPage() {
     { label: "GPT-3.5 Turbo", value: "gpt-3.5-turbo" },
     { label: "Agent Large", value: "agent-large", model: "openai", baseURL: "https://text.pollinations.ai/openai/" },
     { label: "Agent Small", value: "agent-small", model: "llama-3.3-70b-versatile", baseURL: "https://api.groq.com/openai/v1" },
+    { label: "Moonshot Agent", value: "moonshot-ai", model: "moonshotai/kimi-k2-instruct", baseURL: "https://api.groq.com/openai/v1" },
   ]
 
   // Theme management
@@ -531,7 +532,7 @@ export default function ChatPage() {
     const apiEndpoint = selectedModelOption?.baseURL || "https://text.pollinations.ai/";
     const apiModel = selectedModelOption?.model || selectedModel;
 
-    if (selectedModel === "agent-large" || selectedModel === "agent-small") {
+    if (selectedModel === "agent-large" || selectedModel === "agent-small" || selectedModel === "moonshot-ai") {
       console.log("Calling agent API with:", { prompt: input.trim(), history, stream: true, model: apiModel, baseURL: apiEndpoint });
       response = await fetch("/api/agent", {
         method: "POST",
