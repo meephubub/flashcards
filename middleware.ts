@@ -7,7 +7,7 @@ export const config = {
   ],
 }
 
-export const runtime = 'edge' // 👈 important
+export const runtime = 'experimental-edge' // 👈 important
 
 export async function middleware(request: NextRequest) {
   if (process.env.ENVIRONMENT === 'dev') {
