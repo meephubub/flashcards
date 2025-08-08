@@ -4210,7 +4210,11 @@ graph TD; A-->B;
               {searchQuery}"
             </div>
           )}
-          <div className="mt-6 space-y-8 md:space-y-10 w-full max-w-4xl mx-auto">
+          <div
+            className={`mt-6 space-y-8 md:space-y-10 w-full mx-auto ${
+              sidebarCollapsed && !isAiAssistantOpen ? "max-w-6xl" : "max-w-4xl"
+            }`}
+          >
             {isLoading && displayedNotes.length === 0 && (
               <div className="text-center py-10">
                 <div className="w-8 h-8 border-4 border-neutral-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -4301,11 +4305,11 @@ graph TD; A-->B;
           </div>
         </div>
 
-        {/* start of bottom nav bar */}
+        {/* start of nav bar */}
 
         {/* Modern Floating Bottom Nav Bar with enhanced frosted glass */}
         <div
-          className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? "left-1/2 -translate-x-1/2 w-[80%] max-w-4xl" : "left-[calc(18rem+3rem)]"} ${isAiAssistantOpen ? "right-[calc(350px+2rem)]" : "right-6"} px-5 py-3.5 rounded-3xl z-40 flex items-center gap-4 transition-all duration-700 ease-out overflow-hidden backdrop-blur-[40px] shadow-[0_8px_40px_rgba(0,0,0,0.12)]`}
+          className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? "left-4 right-4 md:left-6 md:right-6" : "left-[calc(18rem+3rem)]"} ${sidebarCollapsed && !isAiAssistantOpen ? "" : isAiAssistantOpen ? "right-[calc(350px+2rem)]" : "right-6"} px-5 py-3.5 rounded-3xl z-40 flex items-center gap-4 transition-all duration-700 ease-out overflow-hidden backdrop-blur-[40px] shadow-[0_8px_40px_rgba(0,0,0,0.12)]`}
           style={{
             background:
               theme === "dark"

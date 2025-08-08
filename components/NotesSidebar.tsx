@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { SearchIcon, XIcon, ArrowLeft } from "lucide-react";
+import { SearchIcon, XIcon, ArrowLeft, ChevronRight, ChevronDown, Folder as FolderIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/theme-provider";
+import React from "react";
 
 interface NotesSidebarProps {
   notes: Note[];
@@ -35,10 +36,18 @@ export function NotesSidebar({
   const router = useRouter();
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const notesForSelectedCategory =
-    selectedCategory === "all"
-      ? notes
-      : notes.filter((note) => note.category === selectedCategory);
+  // When a folder is selected, include notes in that folder and all subfolders
+  const notesForSelectedCategory = React.useMemo(() => {
+    if (selectedCategory === "all") return notes;
+    const prefix = selectedCategory.endsWith("/")
+      ? selectedCategory
+      : selectedCategory + "/";
+    return notes.filter(
+      (note) =>
+        note.category === selectedCategory ||
+        (note.category && note.category.startsWith(prefix)),
+    );
+  }, [notes, selectedCategory]);
 
   // Filter notes by search query (searches in both title and content)
   const filteredNotes = searchQuery.trim() 
@@ -103,33 +112,155 @@ export function NotesSidebar({
           variant={selectedCategory === "all" ? "secondary" : "ghost"}
           className={cn(
             "w-full justify-start px-3 py-2 text-sm rounded-md",
-            selectedCategory === "all" 
-              ? isDark ? "bg-neutral-700 text-white" : "bg-gray-200 text-gray-900"
-              : isDark 
-                ? "text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100" 
-                : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+            selectedCategory === "all"
+              ? isDark
+                ? "bg-neutral-700 text-white"
+                : "bg-gray-200 text-gray-900"
+              : isDark
+                ? "text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                : "text-gray-700 hover:bg-gray-100 hover:text-gray-900",
           )}
           onClick={() => onSelectCategory("all")}
         >
           All Notes
         </Button>
-        {categories.map((category) => (
-          <Button
-            key={category}
-            variant={selectedCategory === category ? "secondary" : "ghost"}
-            className={cn(
-              "w-full justify-start px-3 py-2 text-sm rounded-md",
-              selectedCategory === category 
-                ? isDark ? "bg-neutral-700 text-white" : "bg-gray-200 text-gray-900"
-                : isDark 
-                  ? "text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100" 
-                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-            )}
-            onClick={() => onSelectCategory(category)}
-          >
-            {category.charAt(0).toUpperCase() + category.slice(1)}
-          </Button>
-        ))}
+
+        {/* Nested Folder Tree */}
+        {(() => {
+          type TreeNode = {
+            name: string;
+            path: string;
+            children: Map<string, TreeNode>;
+          };
+
+          const buildTree = (paths: string[]): TreeNode => {
+            const root: TreeNode = { name: "", path: "", children: new Map() };
+            for (const p of paths) {
+              const parts = p.split("/").filter(Boolean);
+              let current = root;
+              let accPath = "";
+              for (const part of parts) {
+                accPath = accPath ? `${accPath}/${part}` : part;
+                if (!current.children.has(part)) {
+                  current.children.set(part, {
+                    name: part,
+                    path: accPath,
+                    children: new Map(),
+                  });
+                }
+                current = current.children.get(part)!;
+              }
+            }
+            return root;
+          };
+
+          const tree = React.useMemo(() => buildTree(categories), [categories]);
+          const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+          const [rootExpanded, setRootExpanded] = React.useState<boolean>(true);
+
+          const toggle = (path: string) => {
+            setExpanded((prev) => {
+              const next = new Set(prev);
+              if (next.has(path)) next.delete(path);
+              else next.add(path);
+              return next;
+            });
+          };
+
+          const renderNode = (node: TreeNode, depth = 0) => {
+            const entries = Array.from(node.children.values()).sort((a, b) =>
+              a.name.localeCompare(b.name),
+            );
+            return entries.map((child) => {
+              const hasChildren = child.children.size > 0;
+              const isSelected = selectedCategory === child.path;
+              const isExpanded = expanded.has(child.path);
+              return (
+                <div key={child.path}>
+                  <div className="flex items-center">
+                    <Button
+                      variant={isSelected ? "secondary" : "ghost"}
+                      className={cn(
+                        "flex-1 justify-start px-3 py-2 text-sm rounded-md",
+                        isSelected
+                          ? isDark
+                            ? "bg-neutral-700 text-white"
+                            : "bg-gray-200 text-gray-900"
+                          : isDark
+                            ? "text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900",
+                      )}
+                      onClick={() => {
+                        onSelectCategory(child.path);
+                        if (hasChildren) toggle(child.path);
+                      }}
+                      style={{ paddingLeft: 12 + depth * 12 }}
+                    >
+                      <span className="flex items-center gap-2">
+                        {hasChildren ? (
+                          isExpanded ? (
+                            <ChevronDown
+                              className="h-4 w-4"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggle(child.path);
+                              }}
+                            />
+                          ) : (
+                            <ChevronRight
+                              className="h-4 w-4"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggle(child.path);
+                              }}
+                            />
+                          )
+                        ) : (
+                          <span className="w-4 h-4" />
+                        )}
+                        <FolderIcon className="h-4 w-4" />
+                        <span>
+                          {child.name.charAt(0).toUpperCase() + child.name.slice(1)}
+                        </span>
+                      </span>
+                    </Button>
+                  </div>
+                  {hasChildren && isExpanded && (
+                    <div className="ml-3">{renderNode(child, depth + 1)}</div>
+                  )}
+                </div>
+              );
+            });
+          };
+
+          return (
+            <div>
+              <div className="flex items-center mb-1">
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    "flex-1 justify-start px-3 py-2 text-sm rounded-md",
+                    isDark
+                      ? "text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900",
+                  )}
+                  onClick={() => setRootExpanded((v) => !v)}
+                >
+                  <span className="flex items-center gap-2">
+                    {rootExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <FolderIcon className="h-4 w-4" />
+                    <span>All Folders</span>
+                  </span>
+                </Button>
+              </div>
+              {rootExpanded && <div>{renderNode(tree)}</div>}
+            </div>
+          );
+        })()}
       </CardContent>
 
       <CardHeader className={`sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-10 p-4 border-t border-b ${isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-gray-200"}`}>
