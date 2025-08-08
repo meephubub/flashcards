@@ -9,6 +9,7 @@ import { AuthProvider } from "@/context/auth-context";
 import { Toaster } from "@/components/ui/toaster";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
+import ActionSearchBar from "@/components/action-search-bar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -42,6 +43,8 @@ export default function RootLayout({
             <SettingsProvider>
               <DeckProvider>
                 {children}
+                {/* Global Action Search - opens with Ctrl+K */}
+                <ActionSearchBar />
                 <Toaster />
               </DeckProvider>
             </SettingsProvider>

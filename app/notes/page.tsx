@@ -2232,21 +2232,25 @@ const NoteCard = React.memo(
                   </div>
                 </div>
               ) : (
-                <div id={`note-content-${note.id}`} className="mt-2">
-                  {renderNoteContent(
-                    note.content,
-                    mcqStates,
-                    handleMcqOptionClick,
-                    shuffledMcqOptionsRef.current,
-                    gapStates,
-                    setGapStates,
-                    getSimilarity,
-                    dragDropStates,
-                    setDragDropStates,
-                    note.category,
-                    getCategoryColorClass,
-                  )}
-                </div>
+                <EnhancedNoteContent
+                  noteId={note.id}
+                  category={note.category}
+                  render={() =>
+                    renderNoteContent(
+                      note.content,
+                      mcqStates,
+                      handleMcqOptionClick,
+                      shuffledMcqOptionsRef.current,
+                      gapStates,
+                      setGapStates,
+                      getSimilarity,
+                      dragDropStates,
+                      setDragDropStates,
+                      note.category,
+                      getCategoryColorClass,
+                    )
+                  }
+                />
               )}
             </div>
 
@@ -2363,6 +2367,128 @@ const NotesList = React.memo(function NotesList({
     </>
   );
 });
+
+// Inline utility component: wraps rendered note content, adds
+// - Keyboard highlight (Ctrl+Shift+H) for current selection
+// - Collapsible sections for H2/H3 headings
+function EnhancedNoteContent({
+  noteId,
+  category,
+  render,
+}: {
+  noteId: string;
+  category: string | null;
+  render: () => React.ReactNode;
+}) {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const sectionsRef = React.useRef<Map<HTMLElement, HTMLElement[]>>(new Map());
+
+  // Build collapsible sections based on H2/H3 headings
+  React.useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+
+    sectionsRef.current.clear();
+    const headings = Array.from(
+      root.querySelectorAll<HTMLElement>("h2, h3")
+    );
+    // Determine level helper
+    const level = (el: Element) => (el.tagName.toLowerCase() === "h2" ? 2 : 3);
+
+    for (let i = 0; i < headings.length; i++) {
+      const h = headings[i];
+      const hLevel = level(h);
+      const nextSameOrHigher = headings.slice(i + 1).find((n) => level(n) <= hLevel);
+      const sectionNodes: HTMLElement[] = [];
+      let cursor = h.nextElementSibling as HTMLElement | null;
+      while (cursor && cursor !== nextSameOrHigher) {
+        sectionNodes.push(cursor);
+        cursor = cursor.nextElementSibling as HTMLElement | null;
+      }
+      sectionsRef.current.set(h, sectionNodes);
+
+      // Make heading clickable to toggle
+      h.style.cursor = "pointer";
+      h.dataset.collapsible = "true";
+      h.addEventListener("click", () => {
+        const nodes = sectionsRef.current.get(h) || [];
+        const collapsed = h.dataset.state === "collapsed";
+        if (collapsed) {
+          h.dataset.state = "expanded";
+          nodes.forEach((n) => (n.style.display = ""));
+        } else {
+          h.dataset.state = "collapsed";
+          nodes.forEach((n) => (n.style.display = "none"));
+        }
+      });
+    }
+
+    return () => {
+      // clean: remove click listeners
+      headings.forEach((h) => {
+        const clone = h.cloneNode(true) as HTMLElement;
+        h.replaceWith(clone);
+      });
+    };
+  }, [noteId, category]);
+
+  // Keyboard highlight: Ctrl+M wraps selection with <mark>
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isCtrlM = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "M" || e.key === "m");
+      const isCtrlShiftM = (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.key === "M" || e.key === "m");
+      // Reset all highlights in current note content
+      if (isCtrlShiftM) {
+        const root = containerRef.current;
+        if (!root) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const marks = Array.from(root.querySelectorAll('mark')) as HTMLElement[];
+        for (const m of marks) {
+          const parent = m.parentNode;
+          if (!parent) continue;
+          while (m.firstChild) parent.insertBefore(m.firstChild, m);
+          parent.removeChild(m);
+        }
+        return;
+      }
+      if (isCtrlM) {
+        const root = containerRef.current;
+        if (!root) return;
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        // Ensure selection is within our container
+        const within = root.contains(range.startContainer) && root.contains(range.endContainer);
+        if (!within || range.collapsed) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        try {
+          const mark = document.createElement("mark");
+          // Green-themed highlight with light ring; no inline background yellow.
+          mark.className = "rounded px-0.5 bg-emerald-300/30 dark:bg-emerald-400/25 ring-1 ring-inset ring-emerald-500/25";
+
+          // surroundContents may throw if selection is non-simple; fallback to extract/append
+          try {
+            range.surroundContents(mark);
+          } catch {
+            const frag = range.extractContents();
+            mark.appendChild(frag);
+            range.insertNode(mark);
+          }
+          sel.removeAllRanges();
+        } catch {
+          // no-op
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return <div ref={containerRef} className="mt-2">{render()}</div>;
+}
 
 export default function NotesPage() {
   const {
