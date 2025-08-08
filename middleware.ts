@@ -1,105 +1,68 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|api/|auth/callback|api/auth/callback).*)',
+  ],
+}
+
+export const runtime = 'edge' // 👈 important
+
 export async function middleware(request: NextRequest) {
-  // Don't block anything in dev environment
   if (process.env.ENVIRONMENT === 'dev') {
     return NextResponse.next()
   }
 
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
+  const response = NextResponse.next()
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUB_API!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
+        get: (name: string) => request.cookies.get(name)?.value,
+        set: (name: string, value: string, options: CookieOptions) => {
           const cookieOptions = {
             ...options,
             sameSite: 'lax' as const,
             secure: process.env.NODE_ENV === 'production',
             path: '/',
           }
-          request.cookies.set({
-            name,
-            value,
-            ...cookieOptions,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value,
-            ...cookieOptions,
-          })
+          response.cookies.set({ name, value, ...cookieOptions })
         },
-        remove(name: string, options: CookieOptions) {
+        remove: (name: string, options: CookieOptions) => {
           const cookieOptions = {
             ...options,
             sameSite: 'lax' as const,
             secure: process.env.NODE_ENV === 'production',
             path: '/',
           }
-          request.cookies.set({
-            name,
-            value: '',
-            ...cookieOptions,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.delete({
-            name,
-            ...cookieOptions,
-          })
+          response.cookies.delete({ name, ...cookieOptions })
         },
       },
     }
   )
 
-  // Get the user's session
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Define public routes that do not require authentication
   const publicRoutes = ['/home', '/login', '/signup', '/reset-password', '/api/auth/callback', '/auth/callback']
   const isPublicRoute = publicRoutes.some(route =>
     request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
   )
 
-  // Redirect to /home if user is not authenticated and trying to access a non-public route
   if (!session && !isPublicRoute) {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 
-  // Redirect to main app page (/) if user is authenticated and trying to access auth or public pages
   const authRoutes = ['/login', '/signup', '/reset-password', '/home']
   const isAuthRoute = authRoutes.some(route =>
     request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
   )
 
-  if (isAuthRoute && session) {
+  if (session && isAuthRoute) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
   return response
-}
-
-export const config = {
-  matcher: [
-    // Exclude all /api/* routes from middleware
-    '/((?!_next/static|_next/image|favicon.ico|api/|auth/callback|api/auth/callback).*)',
-  ],
 }
