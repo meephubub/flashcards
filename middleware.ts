@@ -10,7 +10,9 @@ export const config = {
 export const runtime = 'experimental-edge' // 👈 important
 
 export async function middleware(request: NextRequest) {
-  if (process.env.ENVIRONMENT === 'dev') {
+  const envCookie = request.cookies.get('ENVIRONMENT')?.value
+  const effectiveEnv = (envCookie || process.env.ENVIRONMENT || 'prod').toLowerCase()
+  if (effectiveEnv === 'dev') {
     return NextResponse.next()
   }
 

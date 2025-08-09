@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import ActionSearchBar from "@/components/action-search-bar";
+import EnvBannerClient from "@/components/env-banner-client";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -33,6 +34,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <EnvBannerClient/>
+        {/* Dev environment banner */}
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

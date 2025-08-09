@@ -271,6 +271,7 @@ function ToolEventsDropdown({
 }
 
 import { getOrLoadModel } from '@/lib/modelManager';
+import { request } from "http"
 
 export default function ChatPage() {
   const { toast } = useToast();
@@ -388,7 +389,8 @@ export default function ChatPage() {
       });
     }
   }, [error, toast]);
-  const environment = process.env.NEXT_PUBLIC_ENVIRONMENT || process.env.ENVIRONMENT;
+  const envCookie = request.cookies.get('ENVIRONMENT')?.value
+  const environment = (envCookie || process.env.ENVIRONMENT || 'prod').toLowerCase()
   const usingDevAuthBypass = environment === "dev";
   const { user: realUser, isLoading: authLoading } = useAuth();
   // If in dev mode, mock a user object

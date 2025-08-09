@@ -31,6 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ExamQuestion } from "@/lib/exam-cache"
 import { gradeAnswer } from "@/app/actions/grade-answer"
 import { gradeAnswerWithGroq } from "@/lib/groq"
+import { useEnvironmentStore } from "@/hooks/use-environment"
 
 interface NotesExamData {
   examName: string
@@ -69,6 +70,7 @@ export default function ExamFromNotesPage() {
   const [examStarted, setExamStarted] = useState(false)
   const [streakCount, setStreakCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const env = useEnvironmentStore((s) => s.environment)
 
   // Load exam data from localStorage
   useEffect(() => {
@@ -101,28 +103,28 @@ export default function ExamFromNotesPage() {
   const currentQuestion = examData?.questions[currentQuestionIndex]
   const currentQuestionState = currentQuestion ? questionStates[currentQuestion.id] : null
 
-     // Validate MCQ questions on load
-   useEffect(() => {
-     if (currentQuestion?.type === "multiple-choice" && currentQuestion.options && currentQuestion.correctAnswer) {
-       const isValid = currentQuestion.options.includes(currentQuestion.correctAnswer)
-       if (!isValid) {
-         console.error("Invalid MCQ question detected:", {
-           question: currentQuestion.question,
-           correctAnswer: currentQuestion.correctAnswer,
-           options: currentQuestion.options,
-           correctAnswerLength: currentQuestion.correctAnswer.length,
-           optionLengths: currentQuestion.options.map(opt => opt.length),
-           correctAnswerTrimmed: currentQuestion.correctAnswer.trim(),
-           optionsTrimmed: currentQuestion.options.map(opt => opt.trim())
-         })
-       } else {
-         console.log("MCQ validation passed on load:", {
-           correctAnswer: currentQuestion.correctAnswer,
-           options: currentQuestion.options
-         })
-       }
-     }
-   }, [currentQuestion])
+  // Validate MCQ questions on load
+  useEffect(() => {
+    if (currentQuestion?.type === "multiple-choice" && currentQuestion.options && currentQuestion.correctAnswer) {
+      const isValid = currentQuestion.options.includes(currentQuestion.correctAnswer)
+      if (!isValid) {
+        console.error("Invalid MCQ question detected:", {
+          question: currentQuestion.question,
+          correctAnswer: currentQuestion.correctAnswer,
+          options: currentQuestion.options,
+          correctAnswerLength: currentQuestion.correctAnswer.length,
+          optionLengths: currentQuestion.options.map(opt => opt.length),
+          correctAnswerTrimmed: currentQuestion.correctAnswer.trim(),
+          optionsTrimmed: currentQuestion.options.map(opt => opt.trim())
+        })
+      } else {
+        console.log("MCQ validation passed on load:", {
+          correctAnswer: currentQuestion.correctAnswer,
+          options: currentQuestion.options
+        })
+      }
+    }
+  }, [currentQuestion])
 
   // Initialize question state
   useEffect(() => {
@@ -591,37 +593,37 @@ export default function ExamFromNotesPage() {
             </span>
           </CardTitle>
         </CardHeader>
-                 <CardContent className="space-y-4">
-           <div className="text-lg font-medium">{currentQuestion.question}</div>
-           
-           {/* Show correct answer when user gets it wrong */}
-           {currentQuestionState?.isAnswered && !results[currentQuestion.id]?.isCorrect && (
-             <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-               <div className="flex items-center gap-2 mb-2">
-                 <AlertCircle className="h-4 w-4 text-destructive" />
-                 <span className="font-medium text-destructive">Correct Answer:</span>
-               </div>
-               <p className="text-sm text-foreground">{currentQuestion.correctAnswer}</p>
-             </div>
-           )}
+        <CardContent className="space-y-4">
+          <div className="text-lg font-medium">{currentQuestion.question}</div>
+          
+          {/* Show correct answer when user gets it wrong */}
+          {currentQuestionState?.isAnswered && !results[currentQuestion.id]?.isCorrect && (
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span className="font-medium text-destructive">Correct Answer:</span>
+              </div>
+              <p className="text-sm text-foreground">{currentQuestion.correctAnswer}</p>
+            </div>
+          )}
 
           {/* Different input types based on question type */}
           {currentQuestion.type === "multiple-choice" && (
             <>
-                             {/* Debug info - only show in dev environment */}
-               {process.env.ENVIRONMENT === 'dev' && (
-                 <div className="text-xs text-gray-500 p-2 bg-gray-100 rounded">
-                   Debug: Correct Answer = "{currentQuestion.correctAnswer}" | 
-                   Options: {currentQuestion.options?.join(', ')} | 
-                   Match Found: {currentQuestion.options?.includes(currentQuestion.correctAnswer) ? 'YES' : 'NO'}
-                 </div>
-               )}
-            <RadioGroup
-              value={currentQuestionState?.answer || ""}
-              onValueChange={handleAnswerChange}
-              disabled={currentQuestionState?.isAnswered}
-              className="space-y-3"
-            >
+              {/* Debug info - only show in dev environment */}
+              {env === 'dev' && (
+                <div className="text-xs text-gray-500 p-2 bg-gray-100 rounded">
+                  Debug: Correct Answer = "{currentQuestion.correctAnswer}" | 
+                  Options: {currentQuestion.options?.join(', ')} | 
+                  Match Found: {currentQuestion.options?.includes(currentQuestion.correctAnswer) ? 'YES' : 'NO'}
+                </div>
+              )}
+              <RadioGroup
+                value={currentQuestionState?.answer || ""}
+                onValueChange={handleAnswerChange}
+                disabled={currentQuestionState?.isAnswered}
+                className="space-y-2"
+              >
               {currentQuestion.options?.map((option: string, i: number) => (
                 <div
                   key={i}
@@ -660,7 +662,7 @@ export default function ExamFromNotesPage() {
                   )}
                 </div>
               ))}
-            </RadioGroup>
+              </RadioGroup>
             </>
           )}
 

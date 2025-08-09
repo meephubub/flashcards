@@ -26,6 +26,8 @@ import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialo
 import { AIAssistantSidebar } from "@/components/ai-assistant-sidebar";
 import { CreateExamFromNotesDialog } from "@/components/create-exam-from-notes-dialog";
 import IntegratedExam from "@/components/integrated-exam";
+import { useNoteDialogStore } from "@/hooks/use-note-dialog";
+import { useNoteContextStore } from "@/hooks/use-note-context";
 import {
   SparklesIcon,
   PlusCircleIcon,
@@ -410,6 +412,9 @@ const renderNoteContent = (
   let inDragDrop = false;
   let dragDropLines: string[] = [];
   let dragDropBlockKey = "";
+  // Blockquote state
+  let inBlockquote = false;
+  let blockquoteLines: string[] = [];
 
   // Process functions
   const processList = () => {
@@ -578,6 +583,34 @@ const renderNoteContent = (
     inInfoBox = false;
     infoBoxContent = [];
     infoBoxColor = "";
+  };
+
+  // Process blockquote (theme-aware)
+  const processBlockquote = () => {
+    if (!inBlockquote || blockquoteLines.length === 0) return;
+    const { theme } = useTheme();
+    const isDark = theme === "dark";
+
+    elements.push(
+      <div
+        key={`blockquote-${elements.length}`}
+        className={
+          isDark
+            ? "my-4 p-4 pl-5 border-l-4 border-neutral-600 bg-neutral-900/40 rounded-r-xl text-neutral-200"
+            : "my-4 p-4 pl-5 border-l-4 border-neutral-300 bg-gray-50 rounded-r-xl text-gray-800"
+        }
+      >
+        <div className="space-y-2 italic">
+          {blockquoteLines.map((q: string, idx: number) => (
+            <p key={idx} className="leading-relaxed">
+              {parseInlineMarkdown(q)}
+            </p>
+          ))}
+        </div>
+      </div>,
+    );
+    inBlockquote = false;
+    blockquoteLines = [];
   };
 
   const processMathBlock = () => {
@@ -944,6 +977,27 @@ const renderNoteContent = (
     if (inDragDrop) {
       dragDropLines.push(lines[i]);
       continue;
+    }
+
+    // Blockquote start/continuation: lines beginning with '>'
+    const bqMatch = line.match(/^>\s?(.*)$/);
+    if (bqMatch) {
+      // Finalize other open blocks that shouldn't span into blockquotes
+      if (!inBlockquote) {
+        processList();
+        processTable();
+        processInfoBox();
+        processMathBlock();
+        if (inMcqBlock) processMcqBlock();
+        inBlockquote = true;
+        blockquoteLines = [];
+      }
+      blockquoteLines.push(bqMatch[1]);
+      continue;
+    } else if (inBlockquote) {
+      // End of a blockquote when encountering a non '>' line
+      processBlockquote();
+      // fall through to process current line normally
     }
 
     // Check for headings (# Heading 1, ## Heading 2, ### Heading 3)
@@ -1505,6 +1559,7 @@ const renderNoteContent = (
   processTable(); // Process any remaining table after the loop
   processInfoBox();
   processMathBlock();
+  processBlockquote();
   if (inMcqBlock || (currentMcqQuestion && currentMcqOptions.length > 0)) {
     // Only log if there's something to process
     console.log(
@@ -3692,10 +3747,46 @@ export default function NotesPage() {
   const handleDeleteNote = async (noteId: string) => {
     const note = allNotes.find((n) => n.id === noteId);
     if (note) {
+      // keep store in sync for command palette display
+      try {
+        useNoteContextStore.getState().setCurrentNoteId(noteId);
+      } catch {}
       setNoteToDelete(note);
       setIsDeleteDialogOpen(true);
     }
   };
+
+  // Make delete-by-id available to the global command palette and provide a
+  // way to show a consistent "select a note" dialog when no selection exists
+  const setDeleteNoteById = useNoteContextStore((s) => s.setDeleteNoteById);
+  const setOpenSelectNoteDialog = useNoteContextStore((s) => s.setOpenSelectNoteDialog);
+  const setCurrentNoteId = useNoteContextStore((s) => s.setCurrentNoteId);
+  const [isSelectNoteDialogOpen, setIsSelectNoteDialogOpen] = useState(false);
+
+  useEffect(() => {
+    // Route palette delete to our existing confirmation flow
+    setDeleteNoteById?.((id: string) => handleDeleteNote(id));
+    // Expose an opener to show a styled dialog for missing selection
+    setOpenSelectNoteDialog?.(() => () => setIsSelectNoteDialogOpen(true));
+    return () => {
+      setDeleteNoteById?.(undefined);
+      setOpenSelectNoteDialog?.(undefined);
+    };
+  }, [setDeleteNoteById, setOpenSelectNoteDialog, handleDeleteNote]);
+
+  // Keep the global store in sync with the currently focused/selected note
+  useEffect(() => {
+    try {
+      // focusedNoteId is the current note selection in this page
+      // If it's undefined, store null
+      // @ts-ignore - focusedNoteId is defined within this component
+      setCurrentNoteId?.(typeof focusedNoteId === "undefined" ? null : focusedNoteId || null);
+    } catch {}
+  }, [
+    // @ts-ignore - focusedNoteId is defined within this component
+    focusedNoteId,
+    setCurrentNoteId,
+  ]);
 
   const confirmDelete = async () => {
     if (!noteToDelete) return;
@@ -4487,7 +4578,7 @@ graph TD; A-->B;
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setIsAddNoteDialogOpen(true)}
+                  onClick={() => useNoteDialogStore.getState().openDialog()}
                   className={`p-2 rounded-2xl transition-all duration-300 hover:scale-105 ${theme === "dark" ? "text-neutral-300 hover:text-white bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.05] hover:border-white/[0.12]" : "text-gray-600 hover:text-gray-900 bg-black/[0.02] hover:bg-black/[0.06] border border-black/[0.04] hover:border-black/[0.08]"}`}
                   aria-label="Add new note"
                 >
@@ -4646,8 +4737,8 @@ graph TD; A-->B;
 
       {/* Add Note Dialog */}
       <AddNoteDialog
-        open={isAddNoteDialogOpen}
-        onOpenChange={setIsAddNoteDialogOpen}
+        open={useNoteDialogStore((s) => s.open)}
+        onOpenChange={useNoteDialogStore((s) => s.setOpen)}
         availableCategories={availableCategories}
         theme={theme as "dark" | "light" | undefined}
         handleAddNote={handleAddNote}
@@ -4768,6 +4859,36 @@ graph TD; A-->B;
         noteTitle={noteForExam?.title}
         onExamCreated={handleExamCreated}
       />
+
+      {/* Select Note Required Dialog (shown when no note is selected) */}
+      <Dialog
+        open={isSelectNoteDialogOpen}
+        onOpenChange={(isOpen) => setIsSelectNoteDialogOpen(isOpen)}
+      >
+        <DialogContent className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 max-w-md rounded-xl shadow-2xl p-0 sm:p-0">
+          <div className="p-6 sm:p-8">
+            <DialogHeader className="mb-6">
+              <ShadDialogTitle className="text-2xl font-bold text-neutral-100">
+                Select a Note
+              </ShadDialogTitle>
+              <DialogDescription className="text-neutral-400 mt-2">
+                Please select a note first to perform this action.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsSelectNoteDialogOpen(false)}
+                className="bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog
