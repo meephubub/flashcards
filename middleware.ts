@@ -57,7 +57,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 
-  const authRoutes = ['/login', '/signup', '/reset-password', '/home']
+  const authRoutes = ['/login', '/signup', '/reset-password']
   const isAuthRoute = authRoutes.some(route =>
     request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
   )
