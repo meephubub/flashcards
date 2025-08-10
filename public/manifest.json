@@ -2,9 +2,12 @@
   "name": "Flashcard App",
   "short_name": "Flashcards",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone"],
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/IMG_2251.png",
