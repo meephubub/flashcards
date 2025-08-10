@@ -20,9 +20,10 @@ export const metadata: Metadata = {
   title: "Flashcard App",
   description: "A modern flashcard app with an Obsidian-like interface",
   generator: "me - sam",
-  icons: {
-    icon: "/favicon.png", // or .png if you used that
-  },
+  icons: [
+  { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+  { url: "/favicon.png", sizes: "512x512", type: "image/png" },
+  ],
   manifest: "/manifest.json",
   themeColor: "#ffffff",
   appleWebApp: {
