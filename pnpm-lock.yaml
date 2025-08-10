@@ -12,8 +12,8 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
       '@gpt4free/g4f.dev':
-        specifier: ^1.0.3
-        version: 1.0.3
+        specifier: ^1.0.4
+        version: 1.0.4
       '@hookform/resolvers':
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.62.0(react@19.1.1))
@@ -635,8 +635,8 @@ packages:
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
 
-  '@gpt4free/g4f.dev@1.0.3':
-    resolution: {integrity: sha512-iVWnFh9oGag2cXPpW7cEMUbTUtrYaZKFyBJK+xcQu6gPiV7tyYN/FE27eAjk8dExwNW/U8Zi74VpMmNH+Z0d9w==}
+  '@gpt4free/g4f.dev@1.0.4':
+    resolution: {integrity: sha512-uMZKcVWoIA9n+zs2wu+cKWaVDHrES+1nxwisEfNVtWyyIleuaG1b8W6Sk2cl25rEFsPn5Qj1BaPL/IGt0ucM4w==}
 
   '@graphql-typed-document-node/core@3.2.0':
     resolution: {integrity: sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ==}
@@ -6271,7 +6271,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.10': {}
 
-  '@gpt4free/g4f.dev@1.0.3': {}
+  '@gpt4free/g4f.dev@1.0.4': {}
 
   '@graphql-typed-document-node/core@3.2.0(graphql@16.11.0)':
     dependencies:

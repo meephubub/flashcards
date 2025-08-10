@@ -4,13 +4,16 @@ import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X } from "lucide-react"
+import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
 import { useNoteContextStore } from "@/hooks/use-note-context"
 import { useEnvironmentStore } from "@/hooks/use-environment"
 import { makeGroqRequest } from "@/lib/groq"
+import { generateImage as generateSlowImageApi, type ImageModel } from "@/lib/generate-image"
+import { Loader2 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Action {
   id: string
@@ -242,6 +245,22 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiAnswer, setAiAnswer] = useState<string | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
+  // Image generation state
+  const [imgLoading, setImgLoading] = useState(false)
+  const [imgUrl, setImgUrl] = useState<string | null>(null)
+  const [imgError, setImgError] = useState<string | null>(null)
+  const [imgCopied, setImgCopied] = useState(false)
+  // Slow (server-backed) image generation state
+  const [slowLoading, setSlowLoading] = useState(false)
+  const [slowUrl, setSlowUrl] = useState<string | null>(null)
+  const [slowError, setSlowError] = useState<string | null>(null)
+  const [slowCopied, setSlowCopied] = useState(false)
+  const imageModels: ImageModel[] = [
+    "flux", "turbo", "gptimage", "together", "dall-e-3",
+    "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large",
+    "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney", "ideogram-v3-quality"
+  ]
+  const [selectedModel, setSelectedModel] = useState<ImageModel>("flux-pro")
 
   useEffect(() => {
     setMounted(true)
@@ -259,6 +278,12 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const isAiUi = query.startsWith('? ')
   const isAi = query.startsWith('?')
   const aiQuestion = isAiUi ? query.slice(2) : (isAi ? query.slice(1) : '')
+  // Generate Image detection (works with or without '? ' UI prefix)
+  const rawQuery = (isAiUi ? query.slice(2) : query).trim()
+  const isGenImage = rawQuery.toLowerCase().startsWith('generate image:')
+  const genImagePrompt = isGenImage ? rawQuery.slice('generate image:'.length).trim() : ''
+  const isGenSlow = rawQuery.toLowerCase().startsWith('generate slow image:')
+  const genSlowPrompt = isGenSlow ? rawQuery.slice('generate slow image:'.length).trim() : ''
 
   const applyEnv = (env: 'dev' | 'prod') => {
     setEnvironment(env)
@@ -440,6 +465,49 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
     }
   }
 
+  // Generate Image helper using Pollinations (flux-pro)
+  const generateImageFromPrompt = async (prompt: string) => {
+    try {
+      setImgLoading(true)
+      setImgError(null)
+      setImgUrl(null)
+      // Build Pollinations URL (returns an image file). Width/height set to 512 for quicker preview.
+      const encodedPrompt = encodeURIComponent(prompt)
+      const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux-pro&width=1024&height=1024`
+      setImgUrl(url)
+      // Also append to the body as an immediate preview outside the palette
+      const img = new Image()
+      img.src = url
+      document.body.appendChild(img)
+    } catch (err: any) {
+      console.error('Image generation failed', err)
+      setImgError(err?.message || 'Image generation failed')
+      alert(err?.message || 'Image generation failed')
+    } finally {
+      setImgLoading(false)
+    }
+  }
+
+  // Slow image generation using backend helper (supports many models)
+  const generateSlowImageFromPrompt = async (prompt: string, model: ImageModel) => {
+    try {
+      setSlowLoading(true)
+      setSlowError(null)
+      setSlowUrl(null)
+      const res = await generateSlowImageApi(prompt, model)
+      const b64 = res?.data?.[0]?.b64_json
+      if (!b64) throw new Error('No image payload returned')
+      const maybeUrl = typeof b64 === 'string' && (b64.startsWith('http://') || b64.startsWith('https://'))
+      const url = maybeUrl ? b64 : `data:image/png;base64,${b64}`
+      setSlowUrl(url)
+    } catch (err: any) {
+      console.error('Slow image generation failed', err)
+      setSlowError(err?.message || 'Slow image generation failed')
+    } finally {
+      setSlowLoading(false)
+    }
+  }
+
   const container = {
     hidden: { opacity: 0, height: 0 },
     show: {
@@ -526,6 +594,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
                 <span className="text-[10px] leading-none font-semibold">?</span>
               </div>
             )}
+        
             <Input
               type="text"
               placeholder="Ask a question with ? or search commands"
@@ -538,7 +607,20 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault()
-                  if (isCalc) {
+                  const q = (isAiUi ? query.slice(2) : query).trim()
+                  const lower = q.toLowerCase()
+                  if (lower.startsWith('generate image:')) {
+                    const prompt = q.slice('generate image:'.length).trim()
+                    if (prompt.length > 0) {
+                      // Trigger generation and keep palette open to preview and copy URL
+                      generateImageFromPrompt(prompt)
+                    }
+                  } else if (lower.startsWith('generate slow image:')) {
+                    const prompt = q.slice('generate slow image:'.length).trim()
+                    if (prompt.length > 0) {
+                      generateSlowImageFromPrompt(prompt, selectedModel)
+                    }
+                  } else if (isCalc) {
                     // Copy calculator result instead of running an action
                     copyCalc()
                   } else if (isEnvDev) {
@@ -641,6 +723,114 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
               {aiAnswer && (
                 <div className="mt-1 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
                   {aiAnswer}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Slow Image Generation UI (below search bar) */}
+        {(isGenSlow || slowLoading || slowUrl || slowError) && (
+          <div className="w-full px-4 pb-2 -mt-2">
+            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <ImageIcon />
+                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Generate Slow Image</div>
+              </div>
+              {isGenSlow && (
+                <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
+                  {genSlowPrompt || 'Type a prompt after “generate slow image:”'}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-600 dark:text-gray-400">Model</label>
+                <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v as ImageModel)}>
+                  <SelectTrigger className="h-7 w-48">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {imageModels.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <button
+                  type="button"
+                  onClick={() => { const p = genSlowPrompt; if (p) generateSlowImageFromPrompt(p, selectedModel) }}
+                  disabled={slowLoading || !genSlowPrompt}
+                  className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  {slowLoading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>) : 'Generate'}
+                </button>
+              </div>
+              {slowLoading && (
+                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                  <Loader2 className="w-4 h-4 animate-spin" /> This may take a while…
+                </div>
+              )}
+              {slowError && <div className="text-xs text-red-500">{slowError}</div>}
+              {slowUrl && (
+                <div className="flex flex-col gap-2">
+                  <div className="w-full overflow-hidden rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={slowUrl} alt="Generated" className="max-h-64 mx-auto rounded" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[11px] break-all text-gray-700 dark:text-gray-300 bg-neutral-100 dark:bg-neutral-900 px-2 py-1 rounded border border-black/5 dark:border-white/10 flex-1">{slowUrl}</code>
+                    <button
+                      type="button"
+                      onClick={async () => { if (slowUrl) { await navigator.clipboard.writeText(slowUrl); setSlowCopied(true); setTimeout(() => setSlowCopied(false), 1000) } }}
+                      className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span className="text-xs">{slowCopied ? 'Copied' : 'Copy URL'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Image Generation UI */}
+        {(isGenImage || imgLoading || imgUrl || imgError) && (
+          <div className="w-full px-4 pb-2 -mt-2">
+            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <ImageIcon />
+                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Generate Image</div>
+              </div>
+              {isGenImage && (
+                <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
+                  {genImagePrompt || 'Type a prompt after “generate image:”'}
+                </div>
+              )}
+              {imgLoading && <div className="text-xs text-gray-600 dark:text-gray-400">Generating…</div>}
+              {imgError && <div className="text-xs text-red-500">{imgError}</div>}
+              {imgUrl && (
+                <div className="flex flex-col gap-2">
+                  <div className="w-full overflow-hidden rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 p-2">
+                    {/* Preview */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imgUrl} alt="Generated" className="max-h-64 mx-auto rounded" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[11px] break-all text-gray-700 dark:text-gray-300 bg-neutral-100 dark:bg-neutral-900 px-2 py-1 rounded border border-black/5 dark:border-white/10 flex-1">{imgUrl}</code>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (imgUrl) {
+                          await navigator.clipboard.writeText(imgUrl)
+                          setImgCopied(true)
+                          setTimeout(() => setImgCopied(false), 1000)
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span className="text-xs">{imgCopied ? 'Copied' : 'Copy URL'}</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
