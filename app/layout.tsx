@@ -21,8 +21,9 @@ export const metadata: Metadata = {
   description: "A modern flashcard app with an Obsidian-like interface",
   generator: "me - sam",
   icons: [
-  { url: "/IMG_2251.png", sizes: "192x192", type: "image/png" },
-  { url: "/favicon.png", sizes: "512x512", type: "image/png" },
+    { url: "/IMG_2251.png", sizes: "192x192", type: "image/png" },
+    { url: "/favicon.png", sizes: "512x512", type: "image/png" },
+    { url: "/IMG_2253.png", sizes: "180x180", type: "image/png", rel: "apple-touch-icon" },
   ],
   manifest: "/manifest.json",
   themeColor: "#ffffff",
