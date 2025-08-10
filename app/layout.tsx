@@ -10,6 +10,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import ActionSearchBar from "@/components/action-search-bar";
+import MobilePaletteButton from "@/components/mobile-palette-button";
+import PwaInit from "@/components/pwa-init";
 import EnvBannerClient from "@/components/env-banner-client";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -20,6 +22,13 @@ export const metadata: Metadata = {
   generator: "me - sam",
   icons: {
     icon: "/favicon.png", // or .png if you used that
+  },
+  manifest: "/manifest.json",
+  themeColor: "#ffffff",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Flashcard App",
   },
   verification: {
     google: "EivDjNReXp8-Wx5s5TaGj34rbcFZYCKx4SdSEHJHvHE",
@@ -34,6 +43,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        {/* PWA init (service worker) */}
+        <PwaInit />
         <EnvBannerClient/>
         {/* Dev environment banner */}
         <ThemeProvider
@@ -45,6 +56,8 @@ export default function RootLayout({
           <AuthProvider>
             <SettingsProvider>
               <DeckProvider>
+                {/* Mobile-only palette trigger */}
+                <MobilePaletteButton />
                 {children}
                 {/* Global Action Search - opens with Ctrl+K */}
                 <ActionSearchBar />
