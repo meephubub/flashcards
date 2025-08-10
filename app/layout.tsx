@@ -45,6 +45,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#ffffff" />
+        {/* Explicit PWA/iOS tags to aid iOS A2HS */}
+        <meta name="application-name" content="Flashcard App" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Flashcard App" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/IMG_2253.png" />
       </head>
       <body className={inter.className}>
         {/* PWA init (service worker) */}
