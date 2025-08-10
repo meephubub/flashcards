@@ -191,6 +191,34 @@ const allActions: Action[] = [
     short: "",
     end: "Command",
   },
+  {
+    id: "fan-on",
+    label: "Fan On",
+    icon: <AudioLines className="h-4 w-4 text-green-500" />,
+    description: "Trigger Voicemonkey",
+    short: "",
+    end: "Device",
+    run: () => {
+      // Fire-and-forget; modal will close after run
+      void fetch(
+        "https://api-v2.voicemonkey.io/trigger?token=814e797e65ae46a6828e1001150bd8ac_0a30f8185cdd6014f8a9b1d0ef1b326a&device=fan-on"
+      )
+    },
+  },
+  {
+    id: "fan-off",
+    label: "Fan Off",
+    icon: <AudioLines className="h-4 w-4 text-red-500" />,
+    description: "Trigger Voicemonkey",
+    short: "",
+    end: "Device",
+    run: () => {
+      // Fire-and-forget; modal will close after run
+      void fetch(
+        "https://api-v2.voicemonkey.io/trigger?token=814e797e65ae46a6828e1001150bd8ac_0a30f8185cdd6014f8a9b1d0ef1b326a&device=fan-off"
+      )
+    },
+  },
 ]
 
 function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
