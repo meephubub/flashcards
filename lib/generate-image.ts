@@ -4,7 +4,7 @@ interface GenerateImageResponse {
   }>;
 }
 
-export type ImageModel = "flux" | "turbo" | "gptimage" | "together" | "dall-e-3" | "sdxl-1.0" | "sdxl-l" | "sdxl-turbo" | "sd-3.5-large" | "flux-pro" | "flux-dev" | "flux-schnell" | "flux-canny" | "midjourney" | "ideogram-v3-quality";
+export type ImageModel = "flux" | "turbo" | "gptimage" | "together" | "dall-e-3" | "sdxl-1.0" | "sdxl-l" | "sdxl-turbo" | "sd-3.5-large" | "flux-pro" | "flux-dev" | "flux-schnell" | "flux-canny" | "midjourney" | "ideogram-v3-quality" | "imagen-4.0-ultra-generate" | "flux-1.1-pro";
 
 export async function generateImage(prompt: string, model: ImageModel = "flux"): Promise<GenerateImageResponse> {
   if (model === "together") {
@@ -41,7 +41,7 @@ export async function generateImage(prompt: string, model: ImageModel = "flux"):
   }
 
   // Use render endpoint for gptimage and other advanced models
-  const advancedModels = ["gptimage", "dall-e-3", "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large", "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney", "ideogram-v3-quality"];
+  const advancedModels = ["gptimage", "dall-e-3", "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large", "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney", "ideogram-v3-quality", "imagen-4.0-ultra-generate", "flux-1.1-pro"];
   
   if (advancedModels.includes(model)) {
     const response = await fetch("https://flashcards-api-1.onrender.com/v1/images/generate", {

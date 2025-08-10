@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon } from "lucide-react"
+import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon, Download } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
@@ -258,7 +258,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const imageModels: ImageModel[] = [
     "flux", "turbo", "gptimage", "together", "dall-e-3",
     "sdxl-1.0", "sdxl-l", "sdxl-turbo", "sd-3.5-large",
-    "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney", "ideogram-v3-quality"
+    "flux-pro", "flux-dev", "flux-schnell", "flux-canny", "midjourney", "ideogram-v3-quality", "imagen-4.0-ultra-generate", "flux-1.1-pro"
   ]
   const [selectedModel, setSelectedModel] = useState<ImageModel>("flux-pro")
 
@@ -497,8 +497,9 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
       const res = await generateSlowImageApi(prompt, model)
       const b64 = res?.data?.[0]?.b64_json
       if (!b64) throw new Error('No image payload returned')
-      const maybeUrl = typeof b64 === 'string' && (b64.startsWith('http://') || b64.startsWith('https://'))
-      const url = maybeUrl ? b64 : `data:image/png;base64,${b64}`
+      const isHttp = typeof b64 === 'string' && (b64.startsWith('http://') || b64.startsWith('https://'))
+      const isData = typeof b64 === 'string' && b64.startsWith('data:')
+      const url = isData ? b64 : (isHttp ? b64 : `data:image/png;base64,${b64}`)
       setSlowUrl(url)
     } catch (err: any) {
       console.error('Slow image generation failed', err)
@@ -776,15 +777,39 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={slowUrl} alt="Generated" className="max-h-64 mx-auto rounded" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <code className="text-[11px] break-all text-gray-700 dark:text-gray-300 bg-neutral-100 dark:bg-neutral-900 px-2 py-1 rounded border border-black/5 dark:border-white/10 flex-1">{slowUrl}</code>
+                  <div className="flex justify-end">
                     <button
                       type="button"
-                      onClick={async () => { if (slowUrl) { await navigator.clipboard.writeText(slowUrl); setSlowCopied(true); setTimeout(() => setSlowCopied(false), 1000) } }}
                       className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      onClick={async () => {
+                        try {
+                          const filename = `image-${Date.now()}.png`
+                          const link = document.createElement('a')
+                          // If data URL, save directly; otherwise fetch and create object URL
+                          if (slowUrl.startsWith('data:')) {
+                            link.href = slowUrl
+                            link.download = filename
+                            document.body.appendChild(link)
+                            link.click()
+                            document.body.removeChild(link)
+                          } else {
+                            const resp = await fetch(slowUrl)
+                            const blob = await resp.blob()
+                            const url = URL.createObjectURL(blob)
+                            link.href = url
+                            link.download = filename
+                            document.body.appendChild(link)
+                            link.click()
+                            document.body.removeChild(link)
+                            URL.revokeObjectURL(url)
+                          }
+                        } catch (e) {
+                          console.error('Save failed', e)
+                        }
+                      }}
                     >
-                      <Copy className="w-4 h-4" />
-                      <span className="text-xs">{slowCopied ? 'Copied' : 'Copy URL'}</span>
+                      <Download className="w-4 h-4" />
+                      <span className="text-xs">Save</span>
                     </button>
                   </div>
                 </div>
