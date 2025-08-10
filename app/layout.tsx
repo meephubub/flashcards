@@ -26,7 +26,6 @@ export const metadata: Metadata = {
     { url: "/IMG_2253.png", sizes: "180x180", type: "image/png", rel: "apple-touch-icon" },
   ],
   manifest: "/manifest.json",
-  themeColor: "#ffffff",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -44,6 +43,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#ffffff" />
+      </head>
       <body className={inter.className}>
         {/* PWA init (service worker) */}
         <PwaInit />
