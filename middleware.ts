@@ -68,6 +68,7 @@ export async function middleware(request: NextRequest) {
     '/reset-password',
     '/api/auth/callback',
     '/auth/callback',
+    '/install',
   ]
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + '/')
