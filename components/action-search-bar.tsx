@@ -4,12 +4,13 @@ import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check } from "lucide-react"
+import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
 import { useNoteContextStore } from "@/hooks/use-note-context"
 import { useEnvironmentStore } from "@/hooks/use-environment"
+import { makeGroqRequest } from "@/lib/groq"
 
 interface Action {
   id: string
@@ -157,11 +158,14 @@ const allActions: Action[] = [
   },
   {
     id: "2",
-    label: "Summarize",
-    icon: <BarChart2 className="h-4 w-4 text-orange-500" />,
+    label: "Question",
+    icon: <HelpCircle className="h-4 w-4 text-blue-500" />,
     description: "gpt-4o",
     short: "⌘cmd+p",
     end: "Command",
+    run: () => {
+      // Filled at runtime by ActionSearchBar via effectiveActions mapping if needed
+    },
   },
   {
     id: "3",
@@ -207,6 +211,9 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [copied, setCopied] = useState(false)
   const setEnvironment = useEnvironmentStore((s) => s.setEnvironment)
   const [mounted, setMounted] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -220,6 +227,10 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const isEnvProd = trimmed === '__prod__'
   const isEnvShow = trimmed === '__env__'
   const currentEnv = useEnvironmentStore((s) => s.environment)
+  // AI question detection (use RAW query start, not trimmed)
+  const isAiUi = query.startsWith('? ')
+  const isAi = query.startsWith('?')
+  const aiQuestion = isAiUi ? query.slice(2) : (isAi ? query.slice(1) : '')
 
   const applyEnv = (env: 'dev' | 'prod') => {
     setEnvironment(env)
@@ -280,6 +291,23 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
       ]
       base = [...prepend, ...base]
     }
+    // Enhance the "Question" action to prime the input with '? '
+    base = base.map(a => a.id === "2"
+      ? {
+          ...a,
+          run: () => {
+            setQuery(prev => (prev.startsWith('? ') ? prev : '? '))
+            setAiAnswer(null)
+            setAiError(null)
+            // keep palette open and focus input
+            setTimeout(() => {
+              const el = document.getElementById("action-search-input") as HTMLInputElement | null
+              el?.focus()
+            }, 0)
+          },
+        }
+      : a
+    )
     return base
   })()
 
@@ -338,8 +366,50 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   }, [debouncedQuery, isFocused, open, showAll, pathname])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setQuery(e.target.value)
+    const val = e.target.value
+    const prevAiUi = query.startsWith('? ')
+    const prevAi = query.startsWith('?') && !prevAiUi
+
+    // If in AI UI mode ("? "), value shown excludes the prefix
+    if (prevAiUi) {
+      if (val === '') {
+        // User deleted back to start: exit AI mode
+        setQuery('')
+      } else {
+        setQuery(`? ${val}`)
+      }
+    } else if (prevAi) {
+      // In raw '?' mode, if user removed the '?', exit AI
+      if (!val.startsWith('?')) {
+        setQuery(val)
+      } else {
+        // Normalize to '? ' when needed
+        setQuery(val.startsWith('? ') ? val : val.startsWith('?') ? `? ${val.slice(1)}` : val)
+      }
+    } else {
+      setQuery(val)
+    }
+    // Reset AI outputs on input change
+    setAiAnswer(null)
+    setAiError(null)
     setIsTyping(true)
+  }
+
+  // Ask AI helper
+  const askAI = async () => {
+    const q = aiQuestion.trim()
+    if (!q) return
+    try {
+      setAiLoading(true)
+      setAiError(null)
+      const systemMessage = "You are a helpful assistant. Answer clearly and concisely."
+      const answer = await makeGroqRequest(q, false, systemMessage)
+      setAiAnswer(answer)
+    } catch (err: any) {
+      setAiError(err?.message || 'Failed to get an answer.')
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   const container = {
@@ -422,15 +492,21 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
             Search Commands
           </label>
           <div className="relative">
+            {isAiUi && (
+              <div className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-blue-600">
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span className="text-[10px] leading-none font-semibold">?</span>
+              </div>
+            )}
             <Input
               type="text"
-              placeholder="What's up?"
-              value={query}
+              placeholder="Ask a question with ? or search commands"
+              value={isAiUi ? query.slice(2) : query}
               onChange={handleInputChange}
               onFocus={handleFocus}
               onBlur={() => setTimeout(() => setIsFocused(false), 200)}
               id="action-search-input"
-              className="pl-3 pr-9 py-1.5 h-10 text-sm rounded-lg focus-visible:ring-offset-0 bg-white dark:bg-neutral-800 border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
+              className={`${isAiUi ? 'pl-16' : 'pl-3'} pr-9 py-1.5 h-10 text-sm rounded-lg focus-visible:ring-offset-0 bg-white dark:bg-neutral-800 border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400`}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault()
@@ -444,6 +520,9 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
                   } else if (isEnvShow) {
                     // Just close or do nothing; here we close for a quick glance UX
                     setOpen(false)
+                  } else if (isAi && aiQuestion.trim().length > 0) {
+                    // Ask AI instead of running an action
+                    askAI()
                   } else {
                     const target = selectedAction ?? result?.actions?.[0]
                     if (target) runAction(target)
@@ -451,9 +530,28 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
                 }
               }}
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
               <AnimatePresence mode="popLayout">
-                {query.length > 0 ? (
+                {isAiUi ? (
+                  <motion.button
+                    key="exit"
+                    type="button"
+                    aria-label="Exit question mode"
+                    title="Exit question mode"
+                    initial={{ y: -20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 20, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="inline-flex items-center justify-center w-5 h-5 rounded-md border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    onClick={() => {
+                      setQuery(aiQuestion)
+                      setAiAnswer(null)
+                      setAiError(null)
+                    }}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </motion.button>
+                ) : query.length > 0 ? (
                   <motion.div
                     key="send"
                     initial={{ y: -20, opacity: 0 }}
@@ -478,6 +576,48 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
             </div>
           </div>
         </div>
+        {/* AI Question UI */}
+        {isAi && (
+          <div className="w-full px-4 pb-2 -mt-2">
+            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-blue-500" />
+                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Ask AI</div>
+              </div>
+              <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
+                {aiQuestion || 'Type your question after ?'}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={askAI}
+                  disabled={aiLoading || !aiQuestion.trim()}
+                  className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  {aiLoading ? 'Thinking…' : 'Ask'}
+                </button>
+                {aiAnswer && (
+                  <button
+                    type="button"
+                    onClick={async () => { await navigator.clipboard.writeText(aiAnswer) }}
+                    className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy answer
+                  </button>
+                )}
+              </div>
+              {aiError && (
+                <div className="text-xs text-red-500">{aiError}</div>
+              )}
+              {aiAnswer && (
+                <div className="mt-1 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
+                  {aiAnswer}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {isCalc && (
           <div className="w-full px-4 pb-2 -mt-2">
             <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex items-center justify-between gap-3">

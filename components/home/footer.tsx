@@ -55,7 +55,7 @@ export function Footer() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white">
                   <Brain className="h-5 w-5 text-black" />
                 </div>
-                <span className="text-xl font-bold">Flashcards</span>
+                <span className="text-xl font-bold">Yasashi</span>
               </div>
               <p className="text-gray-400 text-lg leading-relaxed mb-8 max-w-md">
                 Transform your learning with AI-powered flashcards, intelligent

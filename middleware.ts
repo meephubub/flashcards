@@ -7,7 +7,7 @@ export const config = {
   ],
 }
 
-export const runtime = 'experimental-edge' // 👈 important
+export const runtime = 'experimental-edge' // 👈 importants
 
 export async function middleware(request: NextRequest) {
   const envCookie = request.cookies.get('ENVIRONMENT')?.value
