@@ -3,15 +3,26 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export const config = {
   matcher: [
+    // Match everything except Next.js internals, favicon, and API routes
     '/((?!_next/static|_next/image|favicon.ico|api/|auth/callback|api/auth/callback).*)',
   ],
 }
 
-export const runtime = 'experimental-edge' // 👈 importants
+export const runtime = 'experimental-edge' // 👈 important
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // Skip middleware for static assets by extension
+  if (
+    pathname.match(/\.(txt|json|xml|png|ico|svg|jpg|jpeg|gif|webp|woff2|woff|ttf|eot)$/i)
+  ) {
+    return NextResponse.next()
+  }
+
   const envCookie = request.cookies.get('ENVIRONMENT')?.value
   const effectiveEnv = (envCookie || process.env.ENVIRONMENT || 'prod').toLowerCase()
+
   if (effectiveEnv === 'dev') {
     return NextResponse.next()
   }
@@ -46,11 +57,20 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  const publicRoutes = ['/home', '/login', '/signup', '/reset-password', '/api/auth/callback', '/auth/callback']
-  const isPublicRoute = publicRoutes.some(route =>
-    request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
+  const publicRoutes = [
+    '/home',
+    '/login',
+    '/signup',
+    '/reset-password',
+    '/api/auth/callback',
+    '/auth/callback',
+  ]
+  const isPublicRoute = publicRoutes.some(
+    (route) => pathname === route || pathname.startsWith(route + '/')
   )
 
   if (!session && !isPublicRoute) {
@@ -58,8 +78,8 @@ export async function middleware(request: NextRequest) {
   }
 
   const authRoutes = ['/login', '/signup', '/reset-password']
-  const isAuthRoute = authRoutes.some(route =>
-    request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(route + '/')
+  const isAuthRoute = authRoutes.some(
+    (route) => pathname === route || pathname.startsWith(route + '/')
   )
 
   if (session && isAuthRoute) {
