@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
 
   // Skip middleware for static assets by extension
   if (
-    pathname.match(/\.(txt|json|xml|png|ico|svg|jpg|jpeg|gif|webp|woff2|woff|ttf|eot)$/i)
+    pathname.match(/\.(txt|json|xml|png|ico|svg|jpg|jpeg|gif|webp|woff2|woff|ttf|eot|html)$/i)
   ) {
     return NextResponse.next()
   }
