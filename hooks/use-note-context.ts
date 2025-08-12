@@ -7,6 +7,8 @@ interface NoteContextStore {
   setDeleteNoteById: (fn: ((id: string) => Promise<void> | void) | undefined) => void
   openSelectNoteDialog?: () => void
   setOpenSelectNoteDialog: (fn: (() => void) | undefined) => void
+  startEditCurrentNote?: () => void
+  setStartEditCurrentNote: (fn: (() => void) | undefined) => void
 }
 
 export const useNoteContextStore = create<NoteContextStore>((set) => ({
@@ -16,4 +18,6 @@ export const useNoteContextStore = create<NoteContextStore>((set) => ({
   setDeleteNoteById: (fn) => set({ deleteNoteById: fn }),
   openSelectNoteDialog: undefined,
   setOpenSelectNoteDialog: (fn) => set({ openSelectNoteDialog: fn }),
+  startEditCurrentNote: undefined,
+  setStartEditCurrentNote: (fn) => set({ startEditCurrentNote: fn }),
 }))

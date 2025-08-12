@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon, Download } from "lucide-react"
+import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon, Download, Pencil } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
@@ -236,6 +236,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [showAll, setShowAll] = useState(false)
   const pathname = usePathname()
   const { openDialog } = useNoteDialogStore()
+  const startEditCurrentNote = useNoteContextStore((s) => s.startEditCurrentNote)
   const currentNoteId = useNoteContextStore((s) => s.currentNoteId)
   const deleteNoteById = useNoteContextStore((s) => s.deleteNoteById)
   const openSelectNoteDialog = useNoteContextStore((s) => s.openSelectNoteDialog)
@@ -344,6 +345,24 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
     let base = [...actions]
     if (pathname && pathname.startsWith("/notes")) {
       const prepend: Action[] = [
+        {
+          id: "edit-note",
+          label: "Edit current note",
+          description:
+            currentNoteId
+              ? "Enter edit mode"
+              : "Select a note first to edit",
+          icon: <Pencil className="h-4 w-4" />,
+          short: "Enter",
+          end: "Ctrl+E",
+          run: () => {
+            if (!currentNoteId) {
+              if (typeof openSelectNoteDialog === "function") openSelectNoteDialog()
+              return
+            }
+            if (typeof startEditCurrentNote === "function") startEditCurrentNote()
+          },
+        },
         {
           id: "delete-note",
           label: "Delete note",

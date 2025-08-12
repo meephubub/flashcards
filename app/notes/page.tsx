@@ -26,14 +26,17 @@ import { NoteDeleteDialog } from "@/components/note-delete-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle as ShadDialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import ReactMarkdown from "react-markdown"
+import { Textarea } from "@/components/ui/textarea"
 
 // react-markdown plugins
 import remarkGfm from "remark-gfm"
 import remarkMath from 'remark-math'
 import remarkDirective from 'remark-directive'
+import remarkBreaks from 'remark-breaks'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { Skeleton } from "@/components/ui/skeleton"
+import { makeGroqRequest } from "@/lib/groq"
 
 export default function Page() {
   const { user } = useAuth()
@@ -47,6 +50,7 @@ export default function Page() {
   const setCurrentNoteId = useNoteContextStore((s) => s.setCurrentNoteId)
   const setDeleteNoteById = useNoteContextStore((s) => s.setDeleteNoteById)
   const setOpenSelectNoteDialog = useNoteContextStore((s) => s.setOpenSelectNoteDialog)
+  const setStartEditCurrentNote = useNoteContextStore((s) => s.setStartEditCurrentNote)
 
   // ActionSearchBar "Create note" integration
   const createOpen = useNoteDialogStore((s) => s.open)
@@ -58,6 +62,14 @@ export default function Page() {
   const [noteProject, setNoteProject] = useState<string>("")
   const [loadingNote, setLoadingNote] = useState(false)
   const [noteError, setNoteError] = useState<string | null>(null)
+
+  // Inline editing state
+  const [isEditing, setIsEditing] = useState(false)
+  const [draftContent, setDraftContent] = useState<string>("")
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [aiFormatting, setAiFormatting] = useState(false)
+  const [aiFormatError, setAiFormatError] = useState<string | null>(null)
 
   // Minimal select-note dialog state
   const [isSelectOpen, setIsSelectOpen] = useState(false)
@@ -183,6 +195,147 @@ export default function Page() {
       mounted = false
     }
   }, [currentNoteId, supabase, user?.id])
+
+  // When note changes, reset editing/draft state
+  useEffect(() => {
+    setIsEditing(false)
+    setDraftContent(noteContent || "")
+    setSaveError(null)
+  }, [currentNoteId, noteContent])
+
+  // Expose an action for ActionSearchBar to trigger editing
+  useEffect(() => {
+    setStartEditCurrentNote(() => {
+      if (!currentNoteId) return
+      setIsEditing(true)
+      setDraftContent(noteContent || "")
+    })
+    return () => setStartEditCurrentNote(undefined)
+  }, [setStartEditCurrentNote, currentNoteId, noteContent])
+
+  // Save handler
+  const saveDraft = React.useCallback(async () => {
+    if (!user?.id || !currentNoteId) return
+    if (saving) return
+    setSaving(true)
+    setSaveError(null)
+    const { data, error } = await supabase
+      .from("notes")
+      .update({ content: draftContent })
+      .eq("id", currentNoteId)
+      .eq("user_id", user.id)
+      .select("updated_at, content")
+      .single()
+    if (error) {
+      setSaveError(error.message)
+    } else {
+      // Commit to view state
+      setNoteContent((data?.content as string) ?? draftContent)
+      setNoteUpdatedAt((data?.updated_at as string) || "")
+      setIsEditing(false)
+    }
+    setSaving(false)
+  }, [currentNoteId, draftContent, supabase, user?.id, saving])
+
+  // Format with AI
+  const formatWithAI = React.useCallback(async () => {
+    if (!draftContent.trim()) return
+    if (aiFormatting) return
+    setAiFormatting(true)
+    setAiFormatError(null)
+    try {
+      const guidelines = `You are a Markdown formatter for personal notes.
+
+Goals:
+- Improve structure and readability while preserving meaning.
+- Use clear headings (H1-H3), bullet/numbered lists, and subheadings as needed.
+- Convert ad-hoc separators into proper markdown (lists, headings, blockquotes).
+- Keep existing URLs and image markdown as-is; if you see raw image URLs, convert to ![img](URL).
+- Use fenced code blocks for code snippets with language hints when obvious.
+- Keep content concise; do not invent content.
+- Output valid GitHub-flavored Markdown only.`
+
+      const systemMessage = "You are a helpful Markdown editor."
+      const prompt = `${guidelines}\n\n---\n\nHere is the raw note content to format:\n\n${draftContent}`
+      const result = await makeGroqRequest(prompt, false, systemMessage)
+      if (typeof result === 'string' && result.trim()) {
+        setDraftContent(result)
+      } else if (result && typeof (result as any).text === 'string') {
+        setDraftContent((result as any).text)
+      } else {
+        setAiFormatError('AI returned no content')
+      }
+    } catch (e: any) {
+      setAiFormatError(e?.message || 'Failed to format with AI')
+    } finally {
+      setAiFormatting(false)
+    }
+  }, [draftContent, aiFormatting])
+
+  // Editor: convert pasted image URLs to markdown image syntax
+  const onEditorPaste = React.useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = (e.clipboardData?.getData('text/plain') || '').trim()
+    // Basic image URL detector
+    const isImageUrl = /^https?:\/\/\S+\.(png|jpe?g|gif|webp|bmp|svg)(\?\S*)?$/i.test(text)
+    if (!isImageUrl) return
+    e.preventDefault()
+    const el = e.currentTarget
+    const start = el.selectionStart ?? draftContent.length
+    const end = el.selectionEnd ?? start
+    const before = draftContent.slice(0, start)
+    const after = draftContent.slice(end)
+    const insertion = `![img](${text})`
+    const next = `${before}${insertion}${after}`
+    setDraftContent(next)
+    // Restore caret just after the inserted markdown
+    const caret = start + insertion.length
+    setTimeout(() => {
+      try {
+        el.focus()
+        el.setSelectionRange(caret, caret)
+      } catch {}
+    }, 0)
+  }, [draftContent])
+
+  // Editor: Ctrl+I on selected link -> wrap as markdown image
+  const onEditorKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isCtrlI = (e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')
+    if (!isCtrlI) return
+    const el = e.currentTarget
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? 0
+    if (start === end) return
+    const selected = draftContent.slice(start, end).trim()
+    const isImageUrl = /^https?:\/\/\S+\.(png|jpe?g|gif|webp|bmp|svg)(\?\S*)?$/i.test(selected)
+    if (!isImageUrl) return
+    e.preventDefault()
+    const before = draftContent.slice(0, start)
+    const after = draftContent.slice(end)
+    const insertion = `![img](${selected})`
+    const next = `${before}${insertion}${after}`
+    setDraftContent(next)
+    const caret = (before.length + insertion.length)
+    setTimeout(() => {
+      try {
+        el.focus()
+        el.setSelectionRange(caret, caret)
+      } catch {}
+    }, 0)
+  }, [draftContent])
+
+  // Keyboard: Ctrl+E toggles edit; if already editing, save
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault()
+        if (!currentNoteId) return
+        if (isEditing) void saveDraft()
+        else setIsEditing(true)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isEditing, saveDraft, currentNoteId])
 
   // Provide delete handler for ActionSearchBar (opens confirm dialog)
   useEffect(() => {
@@ -372,8 +525,54 @@ export default function Page() {
                 </header>
                 {loadingNote ? (
                   <NoteSkeleton />
+                ) : isEditing ? (
+                  <div>
+                    {(saveError || aiFormatError) && (
+                      <div className="mb-3 text-sm text-red-600">{saveError ?? aiFormatError}</div>
+                    )}
+                    <div className="mb-3 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => void saveDraft()}
+                        disabled={saving}
+                      >
+                        {saving ? 'Saving…' : 'Save (Ctrl+E)'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void formatWithAI()}
+                        disabled={aiFormatting}
+                      >
+                        {aiFormatting ? 'Formatting…' : 'Format with AI'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setIsEditing(false)
+                          setDraftContent(noteContent || "")
+                          setSaveError(null)
+                          setAiFormatError(null)
+                        }}
+                        disabled={saving}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={draftContent}
+                      onChange={(e) => setDraftContent(e.target.value)}
+                      onKeyDown={onEditorKeyDown}
+                      onPaste={onEditorPaste}
+                      placeholder="Write your note in Markdown…"
+                      className="min-h-[220px] w-full resize-y bg-transparent font-mono text-sm"
+                    />
+                  </div>
                 ) : (
-                  <MarkdownContent content={noteContent} />
+                  <div className="group/reader">
+                    <MarkdownContent content={noteContent} />
+                  </div>
                 )}
               </article>
             )}
@@ -385,19 +584,90 @@ export default function Page() {
 }
 
 function MarkdownContent({ content }: { content: string }) {
-  // Custom remark plugin to handle :::center ... ::: blocks
-  const centerDirectivePlugin = React.useCallback(function () {
+  // Utilities to modify mdast with parent tracking
+  function visitWithParent(tree: any, visitor: (node: any, parent: any, index: number) => void) {
+    function walk(node: any, parent: any) {
+      const children = node && Array.isArray(node.children) ? node.children : []
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i]
+        visitor(child, node, i)
+        walk(child, node)
+      }
+    }
+    walk(tree, null)
+  }
+
+  // Custom remark plugin to handle directives like :::center and info boxes :::info/:::warning/etc
+  const directivePlugin = React.useCallback(function () {
     return (tree: any) => {
       visit(tree, (node: any) => {
-        if (
-          (node.type === 'containerDirective' || node.type === 'leafDirective') &&
-          node.name === 'center'
-        ) {
+        if (node && (node.type === 'containerDirective' || node.type === 'leafDirective')) {
+          const name = node.name
+          if (!name) return
           const data = node.data || (node.data = {})
           const hast = data.hProperties || (data.hProperties = {})
-          data.hName = 'div'
-          hast.className = (hast.className ? hast.className + ' ' : '') + 'text-center'
+
+          // Center directive
+          if (name === 'center') {
+            data.hName = 'div'
+            hast.className = (hast.className ? hast.className + ' ' : '') + 'text-center'
+            return
+          }
+
+          // Info boxes with color variants
+          const boxMap: Record<string, string> = {
+            info: 'border-blue-400 bg-blue-100 text-blue-900 dark:border-blue-600/50 dark:bg-blue-900 dark:text-blue-100',
+            warning: 'border-amber-400 bg-amber-100 text-amber-900 dark:border-amber-600/50 dark:bg-amber-900 dark:text-amber-100',
+            success: 'border-emerald-400 bg-emerald-100 text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-900 dark:text-emerald-100',
+            error: 'border-red-400 bg-red-100 text-red-900 dark:border-red-600/50 dark:bg-red-900 dark:text-red-100',
+            note: 'border-slate-400 bg-slate-100 text-slate-900 dark:border-slate-600/50 dark:bg-slate-900 dark:text-slate-100',
+            tip: 'border-purple-400 bg-purple-100 text-purple-900 dark:border-purple-600/50 dark:bg-purple-900 dark:text-purple-100',
+          }
+          if (boxMap[name]) {
+            data.hName = 'div'
+            const base = 'my-4 rounded-lg border px-3 py-2 shadow-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0'
+            hast.className = (hast.className ? hast.className + ' ' : '') + base + ' ' + boxMap[name]
+            return
+          }
         }
+      })
+    }
+  }, [])
+
+  // Gap syntax plugin: transform (gap:answer) into <gap answer="..." /> hast nodes
+  const gapPlugin = React.useCallback(function () {
+    const GAP_RE = /\(gap:([^\)]+)\)/g
+    return (tree: any) => {
+      visitWithParent(tree, (node, parent, index) => {
+        if (!parent || typeof node?.type !== 'string') return
+        // Only split text nodes
+        if (node.type !== 'text' || typeof node.value !== 'string') return
+        const text: string = node.value
+        if (!GAP_RE.test(text)) return
+        GAP_RE.lastIndex = 0
+
+        const parts: any[] = []
+        let lastIndex = 0
+        let m: RegExpExecArray | null
+        while ((m = GAP_RE.exec(text)) !== null) {
+          const start = m.index
+          const end = GAP_RE.lastIndex
+          const before = text.slice(lastIndex, start)
+          if (before) parts.push({ type: 'text', value: before })
+          const answer = (m[1] || '').trim()
+          parts.push({
+            type: 'gap',
+            data: {
+              hName: 'gap',
+              hProperties: { answer },
+            },
+          })
+          lastIndex = end
+        }
+        const after = text.slice(lastIndex)
+        if (after) parts.push({ type: 'text', value: after })
+        // Replace this child with expanded parts
+        parent.children.splice(index, 1, ...parts)
       })
     }
   }, [])
@@ -405,55 +675,155 @@ function MarkdownContent({ content }: { content: string }) {
   return (
     <div className="prose prose-neutral dark:prose-invert max-w-none">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath, remarkDirective, centerDirectivePlugin]}
+        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, directivePlugin, gapPlugin]}
         rehypePlugins={[rehypeKatex]}
         components={{
-          h1: ({ node, ...props }) => (
+          // Inline gap element renderer
+          gap: ({ node, ...props }: any) => {
+            const answer: string = (props as any)?.answer || (node as any)?.properties?.answer || ''
+            // Local state per instance
+            const [value, setValue] = React.useState('')
+            const [status, setStatus] = React.useState<'idle' | 'pending' | 'correct' | 'incorrect'>('idle')
+            const answerEmbeddingRef = React.useRef<Float32Array | null>(null)
+            const timerRef = React.useRef<number | null>(null)
+
+            const grade = React.useCallback(async (input: string) => {
+              const trimmed = input.trim()
+              if (!trimmed) {
+                setStatus('idle')
+                return
+              }
+              setStatus('pending')
+              try {
+                const mod = await import('@/app/actions/xenova-similarity')
+                const ref = answerEmbeddingRef
+                if (!ref.current) {
+                  ref.current = await mod.getSentenceEmbedding(answer)
+                }
+                // Optional spellcheck to reduce small typos
+                const maybeCorrected = mod.spellcheckAnswer ? mod.spellcheckAnswer(trimmed, answer) : trimmed
+                const userEmb = await mod.getSentenceEmbedding(maybeCorrected)
+                const sim = mod.cosineSimilarity(ref.current, userEmb)
+                if (sim >= 0.8 || maybeCorrected.toLowerCase() === answer.toLowerCase()) setStatus('correct')
+                else setStatus('incorrect')
+              } catch (e) {
+                // Fallback to simple match
+                setStatus(maybeEqual(trimmed, answer) ? 'correct' : 'incorrect')
+              }
+            }, [answer])
+
+            const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+              const v = e.target.value
+              setValue(v)
+              if (timerRef.current) window.clearTimeout(timerRef.current)
+              timerRef.current = window.setTimeout(() => {
+                void grade(v)
+              }, 500)
+            }
+
+            React.useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current) }, [])
+
+            function maybeEqual(a: string, b: string) {
+              return a.trim().toLowerCase() === b.trim().toLowerCase()
+            }
+
+            return (
+              <span className="mx-1 inline-flex items-center gap-1 align-baseline">
+                <input
+                  aria-label="Fill in the gap"
+                  className={`inline-block w-32 bg-transparent border border-neutral-300 px-2 py-0.5 text-sm rounded focus:outline-none focus:ring-0 ${status === 'correct' ? 'border-black' : status === 'incorrect' ? 'border-neutral-500' : ''}`}
+                  value={value}
+                  onChange={onChange}
+                />
+                <span className="text-xs text-neutral-700 select-none">
+                  {status === 'pending' ? '…' : status === 'correct' ? '✓' : status === 'incorrect' ? '✗' : ''}
+                </span>
+              </span>
+            )
+          },
+          h1: (props: any) => (
             <h1 className="mt-6 scroll-m-20 text-4xl font-bold tracking-tight" {...props} />
           ),
-          h2: ({ node, ...props }) => (
+          h2: (props: any) => (
             <h2 className="mt-10 scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight first:mt-0" {...props} />
           ),
-          h3: ({ node, ...props }) => (
+          h3: (props: any) => (
             <h3 className="mt-8 scroll-m-20 text-2xl font-semibold tracking-tight" {...props} />
           ),
-          h4: ({ node, ...props }) => (
+          h4: (props: any) => (
             <h4 className="mt-6 scroll-m-20 text-xl font-semibold tracking-tight" {...props} />
           ),
-          table: ({ node, ...props }) => (
+          table: (props: any) => (
             <div className="my-6 w-full overflow-x-auto">
               <table className="w-full text-left border-collapse [&_th]:border-b [&_td]:border-b [&_th]:px-3 [&_td]:px-3 [&_th]:py-2 [&_td]:py-2" {...props} />
             </div>
           ),
-          img: ({ node, ...props }: any) => {
+          img: (props: any) => {
             const src: string | undefined = props?.src
             const isDataUri = typeof src === 'string' && src.startsWith('data:')
-            // eslint-disable-next-line @next/next/no-img-element
-            return (
-              <img
-                className="my-4 max-w-full rounded-md border"
-                loading="lazy"
-                decoding="async"
-                referrerPolicy="no-referrer"
-                {...props}
-                alt={props?.alt || ''}
-              />
-            )
+            const ZoomableImg: React.FC<any> = (imgProps: any) => {
+              const [open, setOpen] = React.useState(false)
+              const [enter, setEnter] = React.useState(false)
+              React.useEffect(() => {
+                if (open) {
+                  const id = setTimeout(() => setEnter(true), 0)
+                  return () => clearTimeout(id)
+                }
+                setEnter(false)
+              }, [open])
+
+              const src: string | undefined = imgProps?.src
+              const alt: string = imgProps?.alt || ''
+
+              return (
+                <>
+                  {/* Inline (small) image */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="my-4 block w-full max-w-[360px] rounded-md border cursor-zoom-in transition-all duration-300 ease-in-out"
+                    loading="lazy"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onClick={() => setOpen(true)}
+                    {...imgProps}
+                    alt={alt}
+                  />
+
+                  {/* Lightbox overlay for full-size view */}
+                  {open && (
+                    <div
+                      className={`fixed inset-0 z-50 bg-black/70 transition-opacity duration-200 ${enter ? 'opacity-100' : 'opacity-0'}`}
+                      onClick={() => setOpen(false)}
+                    >
+                      <div className="flex h-full w-full items-center justify-center p-4">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={src}
+                          alt={alt}
+                          className={`max-h-[90vh] max-w-[90vw] rounded-md shadow-2xl transition-transform duration-200 ${enter ? 'scale-100' : 'scale-95'}`}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )
+            }
+            return <ZoomableImg {...props} />
           },
-          a: ({ node, ...props }) => (
+          a: (props: any) => (
             <a className="underline decoration-muted-foreground underline-offset-4 hover:text-foreground" target="_blank" rel="noopener noreferrer" {...props} />
           ),
-          ul: ({ node, ...props }) => (
+          ul: (props: any) => (
             <ul className="my-4 ml-6 list-disc [&>li]:mt-2" {...props} />
           ),
-          ol: ({ node, ...props }) => (
+          ol: (props: any) => (
             <ol className="my-4 ml-6 list-decimal [&>li]:mt-2" {...props} />
           ),
-          blockquote: ({ node, ...props }) => (
+          blockquote: (props: any) => (
             <blockquote className="mt-6 border-l-2 pl-6 italic text-muted-foreground" {...props} />
           ),
           // Loosened typing to support 'inline' prop from react-markdown Code component
-          code: ({ node, inline, className, children, ...props }: any) => {
+          code: ({ inline, className, children, ...props }: any) => {
             if (inline) {
               return (
                 <code className={(className ? className + ' ' : '') + 'rounded bg-muted px-1.5 py-0.5 text-sm'} {...props}>
@@ -471,7 +841,7 @@ function MarkdownContent({ content }: { content: string }) {
               </code>
             )
           },
-        }}
+        } as any}
       >
         {content}
       </ReactMarkdown>
