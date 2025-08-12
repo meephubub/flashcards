@@ -53,7 +53,6 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         {/* PWA init (service worker) */}
-        <PwaInit />
         <EnvBannerClient/>
         {/* Dev environment banner */}
         <ThemeProvider

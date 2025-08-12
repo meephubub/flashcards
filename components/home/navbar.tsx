@@ -12,6 +12,28 @@ const Navbar04Page = () => {
             <Logo />
           </div>
 
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-4">
+            <Link
+              href="/home"
+              className="text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white transition-colors rounded-full px-3 py-1 text-sm"
+            >
+              Home
+            </Link>
+            <Link
+              href="/home/about-us"
+              className="text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white transition-colors rounded-full px-3 py-1 text-sm"
+            >
+              About
+            </Link>
+            <Link
+              href="/home/pricing"
+              className="text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white transition-colors rounded-full px-3 py-1 text-sm"
+            >
+              Pricing
+            </Link>
+          </div>
+
           <div className="flex items-center gap-3">
             <Link href="/login" passHref legacyBehavior>
               <Button

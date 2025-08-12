@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+simport { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Brain, Github, Twitter, Linkedin, Mail } from "lucide-react";
 
@@ -9,8 +9,8 @@ const footerSections = [
       { name: "Features", href: "#features" },
       { name: "Study Modes", href: "#study-modes" },
       { name: "AI Assistant", href: "#ai" },
-      { name: "Notes System", href: "#notes" },
-      { name: "Pricing", href: "#pricing" },
+      { name: "Notes System", href: "/notes" },
+      { name: "Pricing", href: "/home/pricing" },
     ],
   },
   {
@@ -26,20 +26,20 @@ const footerSections = [
   {
     title: "Company",
     links: [
-      { name: "About Us", href: "#about" },
-      { name: "Careers", href: "#careers" },
-      { name: "Contact", href: "#contact" },
-      { name: "Privacy Policy", href: "#privacy" },
-      { name: "Terms of Service", href: "#terms" },
+      { name: "About Us", href: "/home/about-us" },
+      { name: "Careers", href: "/home/careers" },
+      { name: "Contact", href: "/home/contact" },
+      { name: "Privacy Policy", href: "/home/privacy-policy" },
+      { name: "Terms of Service", href: "/home/terms-of-service" },
     ],
   },
 ];
 
 const socialLinks = [
-  { name: "GitHub", icon: Github, href: "#" },
+  { name: "GitHub", icon: Github, href: "https://github.com/meephubub/flashcards" },
   { name: "Twitter", icon: Twitter, href: "#" },
   { name: "LinkedIn", icon: Linkedin, href: "#" },
-  { name: "Email", icon: Mail, href: "#" },
+  { name: "Email", icon: Mail, href: "mailto:samthelegend68@gmail.com" }
 ];
 
 export function Footer() {
@@ -65,7 +65,7 @@ export function Footer() {
 
               {/* Newsletter Signup */}
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300" >
                   Stay Updated
                 </h3>
                 <div className="flex gap-2">
@@ -122,13 +122,13 @@ export function Footer() {
               </p>
               <div className="flex gap-6">
                 <a
-                  href="#privacy"
+                  href="/home/privacy-policy"
                   className="text-sm text-gray-400 hover:text-white transition-colors"
                 >
                   Privacy
                 </a>
                 <a
-                  href="#terms"
+                  href="/home/terms-of-service"
                   className="text-sm text-gray-400 hover:text-white transition-colors"
                 >
                   Terms

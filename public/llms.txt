@@ -1,0 +1,37 @@
+# LLM Crawler Guidelines for Flashcard App
+# This file informs AI-focused crawlers how they may access content.
+# Non-standard but increasingly adopted by AI agents. Keep robots.txt authoritative for web crawlers.
+
+# Global default for AI agents
+User-agent: *
+Allow: /
+Sitemap: /sitemap.xml
+
+# Explicit allowances for common AI crawlers
+User-agent: GPTBot
+Allow: /
+
+User-agent: GPTBot-Image
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+# Optional: disallow sensitive routes if any
+# Disallow: /api/
+# Disallow: /admin/
+
+# Contact
+# If you operate an AI crawler and need different access, contact: admin@your-domain.example
