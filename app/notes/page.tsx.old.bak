@@ -4524,32 +4524,10 @@ graph TD; A-->B;
 
         {/* start of nav bar */}
 
-        {/* Modern Floating Bottom Nav Bar with enhanced frosted glass */}
+        {/* Bottom Nav Bar (non-floating) */}
         <div
-          className={`fixed bottom-6 ${sidebarCollapsed && !isAiAssistantOpen ? "left-4 right-4 md:left-6 md:right-6" : "left-[calc(18rem+3rem)]"} ${sidebarCollapsed && !isAiAssistantOpen ? "" : isAiAssistantOpen ? "right-[calc(350px+2rem)]" : "right-6"} px-5 py-3.5 rounded-3xl z-40 flex items-center gap-4 transition-all duration-700 ease-out overflow-hidden backdrop-blur-[40px] shadow-[0_8px_40px_rgba(0,0,0,0.12)]`}
-          style={{
-            background:
-              theme === "dark"
-                ? "rgba(15,15,17,0.75)"
-                : "rgba(255,255,255,0.85)",
-            border:
-              theme === "dark"
-                ? "1px solid rgba(255,255,255,0.08)"
-                : "1px solid rgba(0,0,0,0.06)",
-            backdropFilter: "blur(40px) saturate(1.8)",
-            WebkitBackdropFilter: "blur(40px) saturate(1.8)",
-          }}
+          className="w-full z-40 flex items-center gap-4 transition-all duration-700 ease-out rounded-none"
         >
-          {/* Subtle glass reflection overlay */}
-          <div
-            className="absolute inset-0 z-[-1] pointer-events-none rounded-3xl"
-            style={{
-              background:
-                theme === "dark"
-                  ? "linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 50%)"
-                  : "linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 60%)",
-            }}
-          />
           {isExamActive && examStats ? (
             <div className="w-full flex items-center justify-between px-2 text-sm">
               <div className="flex items-center space-x-4 font-mono">

@@ -69,6 +69,12 @@ export async function middleware(request: NextRequest) {
     '/api/auth/callback',
     '/auth/callback',
     '/install',
+    '/home/about-us',
+    '/home/contact-us',
+    '/home/privacy-policy',
+    '/home/terms-of-service',
+    '/home/careers',
+    '/home/pricing',
   ]
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + '/')

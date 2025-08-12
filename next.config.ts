@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // No path redirects between /notes and /notes/new
+  async redirects() {
+    return []
+  },
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.module.rules.push({

@@ -36,20 +36,36 @@ export default function PwaInit() {
       setShowIosHint(true);
     }
 
-    // Register service worker
+    // Register/unregister service worker based on ENVIRONMENT cookie
     if ('serviceWorker' in navigator) {
-      const onLoad = () => {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' })
-          .then(registration => {
-            console.log('Service Worker registered successfully:', registration);
-          })
-          .catch(error => {
-            console.error('Service Worker registration failed:', error);
-          });
+      // Read ENVIRONMENT cookie written by the command palette
+      const env = (() => {
+        try {
+          const m = document.cookie.match(/(?:^|; )ENVIRONMENT=([^;]+)/)
+          return m ? decodeURIComponent(m[1]) : null
+        } catch {
+          return null
+        }
+      })()
+
+      if (env === 'prod') {
+        // Do NOT register SW in prod env (HSR interference). Attempt to unregister existing.
+        navigator.serviceWorker.getRegistrations?.().then((regs) => {
+          regs.forEach((r) => r.unregister().catch(() => {}))
+        }).catch(() => {})
+      } else {
+        const onLoad = () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(registration => {
+              console.log('Service Worker registered successfully:', registration)
+            })
+            .catch(error => {
+              console.error('Service Worker registration failed:', error)
+            })
+        }
+        if (document.readyState === 'complete') onLoad()
+        else window.addEventListener('load', onLoad, { once: true })
       }
-      
-      if (document.readyState === 'complete') onLoad()
-      else window.addEventListener('load', onLoad, { once: true })
     }
 
     return () => {
