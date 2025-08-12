@@ -1,4 +1,4 @@
-simport { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Brain, Github, Twitter, Linkedin, Mail } from "lucide-react";
 
