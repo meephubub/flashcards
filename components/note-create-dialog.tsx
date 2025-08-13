@@ -12,19 +12,22 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
+import { CategoryCombobox } from "@/components/ui/CategoryCombobox"
 
 export interface NoteCreateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (payload: { title: string; category?: string; content?: string }) => Promise<void> | void
+  onSubmit: (payload: { title: string; category?: string; content?: string; project?: string }) => Promise<void> | void
+  projects?: string[]
   isSubmitting?: boolean
   error?: string | null
 }
 
-export function NoteCreateDialog({ open, onOpenChange, onSubmit, isSubmitting = false, error = null }: NoteCreateDialogProps) {
+export function NoteCreateDialog({ open, onOpenChange, onSubmit, projects = [], isSubmitting = false, error = null }: NoteCreateDialogProps) {
   const [title, setTitle] = useState("")
   const [category, setCategory] = useState("")
   const [content, setContent] = useState("")
+  const [project, setProject] = useState("")
   const [touched, setTouched] = useState(false)
 
   useEffect(() => {
@@ -32,6 +35,7 @@ export function NoteCreateDialog({ open, onOpenChange, onSubmit, isSubmitting = 
       setTitle("")
       setCategory("")
       setContent("")
+      setProject("")
       setTouched(false)
     }
   }, [open])
@@ -41,7 +45,12 @@ export function NoteCreateDialog({ open, onOpenChange, onSubmit, isSubmitting = 
   const handleSubmit = async () => {
     setTouched(true)
     if (disabled) return
-    await onSubmit({ title: title.trim(), category: category.trim() || undefined, content: content.trim() || undefined })
+    await onSubmit({
+      title: title.trim(),
+      category: category.trim() || undefined,
+      content: content.trim() || undefined,
+      project: project.trim() || undefined,
+    })
   }
 
   return (
@@ -67,6 +76,18 @@ export function NoteCreateDialog({ open, onOpenChange, onSubmit, isSubmitting = 
               {touched && title.trim().length === 0 && (
                 <p className="text-xs text-red-500">Title is required.</p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Project (optional)</label>
+              <CategoryCombobox
+                categories={projects}
+                value={project}
+                onChange={setProject}
+                placeholder="Select project..."
+                inputPlaceholder="Search or create..."
+                emptyPlaceholder="No project found."
+              />
             </div>
 
             <div className="space-y-2">

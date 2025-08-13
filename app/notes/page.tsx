@@ -37,6 +37,7 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { Skeleton } from "@/components/ui/skeleton"
 import { makeGroqRequest } from "@/lib/groq"
+import ExamFromNotesPage from "@/app/exam-from-notes/page"
 
 export default function Page() {
   const { user } = useAuth()
@@ -51,6 +52,9 @@ export default function Page() {
   const setDeleteNoteById = useNoteContextStore((s) => s.setDeleteNoteById)
   const setOpenSelectNoteDialog = useNoteContextStore((s) => s.setOpenSelectNoteDialog)
   const setStartEditCurrentNote = useNoteContextStore((s) => s.setStartEditCurrentNote)
+  const setGetCurrentNoteForExam = useNoteContextStore((s) => s.setGetCurrentNoteForExam)
+  const showExamInNotes = useNoteContextStore((s) => s.showExamInNotes)
+  const setShowExamInNotes = useNoteContextStore((s) => s.setShowExamInNotes)
 
   // ActionSearchBar "Create note" integration
   const createOpen = useNoteDialogStore((s) => s.open)
@@ -63,6 +67,17 @@ export default function Page() {
   const [loadingNote, setLoadingNote] = useState(false)
   const [noteError, setNoteError] = useState<string | null>(null)
 
+  // Expose current note data to ActionSearchBar for exam generation
+  useEffect(() => {
+    // Provide a stable function that returns current note title/content when a note is selected
+    setGetCurrentNoteForExam(() => {
+      if (!currentNoteId) return null
+      return { title: noteTitle || "Untitled Note", content: noteContent || "" }
+    })
+    return () => setGetCurrentNoteForExam(undefined)
+    // Depend on values that affect the returned data
+  }, [setGetCurrentNoteForExam, currentNoteId, noteTitle, noteContent])
+
   // Inline editing state
   const [isEditing, setIsEditing] = useState(false)
   const [draftContent, setDraftContent] = useState<string>("")
@@ -70,6 +85,18 @@ export default function Page() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [aiFormatting, setAiFormatting] = useState(false)
   const [aiFormatError, setAiFormatError] = useState<string | null>(null)
+
+  // Reset embedded exam mode when switching notes or unmounting
+  useEffect(() => {
+    return () => {
+      try { setShowExamInNotes(false) } catch {}
+    }
+  }, [setShowExamInNotes])
+
+  useEffect(() => {
+    // When changing the selected note, leave exam mode
+    try { setShowExamInNotes(false) } catch {}
+  }, [currentNoteId, setShowExamInNotes])
 
   // Minimal select-note dialog state
   const [isSelectOpen, setIsSelectOpen] = useState(false)
@@ -378,13 +405,13 @@ Goals:
   // Create note submission wired to NoteCreateDialog and palette
   const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const handleCreateNote = async ({ title, category, content }: { title: string; category?: string; content?: string }) => {
+  const handleCreateNote = async ({ title, category, content, project }: { title: string; category?: string; content?: string; project?: string }) => {
     if (!user?.id) return
     setCreating(true)
     setCreateError(null)
     const { data, error } = await supabase
       .from("notes")
-      .insert([{ title, category: category ?? "", content: content ?? "", user_id: user.id }])
+      .insert([{ title, category: category ?? "", content: content ?? "", project: project ?? "", user_id: user.id }])
       .select("id")
       .single()
     if (error) {
@@ -430,6 +457,7 @@ Goals:
               open={createOpen}
               onOpenChange={setCreateOpen}
               onSubmit={handleCreateNote}
+              projects={teamOptions}
               isSubmitting={creating}
               error={createError}
             />
@@ -571,7 +599,18 @@ Goals:
                   </div>
                 ) : (
                   <div className="group/reader">
-                    <MarkdownContent content={noteContent} />
+                    {showExamInNotes ? (
+                      <div>
+                        <div className="mb-4 flex items-center justify-between">
+                          <Button variant="outline" size="sm" onClick={() => setShowExamInNotes(false)}>
+                            Back to note
+                          </Button>
+                        </div>
+                        <ExamFromNotesPage />
+                      </div>
+                    ) : (
+                      <MarkdownContent content={noteContent} />
+                    )}
                   </div>
                 )}
               </article>

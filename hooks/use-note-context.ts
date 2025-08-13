@@ -9,6 +9,12 @@ interface NoteContextStore {
   setOpenSelectNoteDialog: (fn: (() => void) | undefined) => void
   startEditCurrentNote?: () => void
   setStartEditCurrentNote: (fn: (() => void) | undefined) => void
+  // Provide current note data (title/content) to other components (e.g., ActionSearchBar)
+  getCurrentNoteForExam?: () => { title: string; content: string } | null
+  setGetCurrentNoteForExam: (fn: (() => { title: string; content: string } | null) | undefined) => void
+  // Control embedded exam mode when viewing notes
+  showExamInNotes: boolean
+  setShowExamInNotes: (show: boolean) => void
 }
 
 export const useNoteContextStore = create<NoteContextStore>((set) => ({
@@ -20,4 +26,8 @@ export const useNoteContextStore = create<NoteContextStore>((set) => ({
   setOpenSelectNoteDialog: (fn) => set({ openSelectNoteDialog: fn }),
   startEditCurrentNote: undefined,
   setStartEditCurrentNote: (fn) => set({ startEditCurrentNote: fn }),
+  getCurrentNoteForExam: undefined,
+  setGetCurrentNoteForExam: (fn) => set({ getCurrentNoteForExam: fn }),
+  showExamInNotes: false,
+  setShowExamInNotes: (show) => set({ showExamInNotes: show }),
 }))

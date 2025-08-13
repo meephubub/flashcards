@@ -240,6 +240,8 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const currentNoteId = useNoteContextStore((s) => s.currentNoteId)
   const deleteNoteById = useNoteContextStore((s) => s.deleteNoteById)
   const openSelectNoteDialog = useNoteContextStore((s) => s.openSelectNoteDialog)
+  const getCurrentNoteForExam = useNoteContextStore((s) => s.getCurrentNoteForExam)
+  const setShowExamInNotes = useNoteContextStore((s) => s.setShowExamInNotes)
   const [copied, setCopied] = useState(false)
   const setEnvironment = useEnvironmentStore((s) => s.setEnvironment)
   const [mounted, setMounted] = useState(false)
@@ -345,6 +347,100 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
     let base = [...actions]
     if (pathname && pathname.startsWith("/notes")) {
       const prepend: Action[] = [
+        {
+          id: "exam-from-note",
+          label: "Start exam from this note",
+          description: currentNoteId ? "Generate questions and begin" : "Select a note first",
+          icon: <BarChart2 className="h-4 w-4" />,
+          short: "Enter",
+          end: "Exam",
+          run: async () => {
+            try {
+              if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
+                if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
+                return
+              }
+              const data = getCurrentNoteForExam()
+              if (!data || !data.content.trim()) {
+                alert('No content found for the current note.')
+                return
+              }
+              const examName = `Exam from: ${data.title || 'Note'}`
+              const questionCount = 8
+              const difficulty = 'medium'
+              // Ask AI to produce ExamQuestion[] JSON
+              const systemMsg = 'You are an educational content generator. Always output strict JSON parsable by JSON.parse, representing an array of ExamQuestion objects.'
+              const userPrompt = `Create ${questionCount} diverse questions from the following note content. Mix types among: "multiple-choice", "true-false", "short-answer", and "matching". For MCQ include exactly 4 options and ensure correctAnswer is one of them. For matching, include 4-6 {left,right} pairs in matchingPairs. For short-answer, set correctAnswer to a concise expected answer. For true-false, set correctAnswer to "True" or "False". Schema keys: id (omit or set null), type, question, correctAnswer, options (for MCQ), matchingPairs (for matching), explanation (optional).
+
+Note content:\n\n${data.content}`
+              let questions: any[] = []
+              try {
+                const raw = await makeGroqRequest(userPrompt, false, systemMsg, true)
+                // Try to extract JSON array
+                const jsonMatch = raw.match(/\[([\s\S]*?)\]/)
+                const jsonText = jsonMatch ? `[${jsonMatch[1]}]` : raw
+                const parsed = JSON.parse(jsonText)
+                if (Array.isArray(parsed)) questions = parsed
+              } catch (e) {
+                console.warn('AI question generation failed, falling back', e)
+              }
+              // Fallback minimal questions if AI failed
+              if (!Array.isArray(questions) || questions.length === 0) {
+                const lines = data.content.split('\n').filter(l => l.trim())
+                const first = lines[0] || 'the main topic'
+                questions = [
+                  { type: 'short-answer', question: 'What is the main topic of the note?', correctAnswer: first },
+                  { type: 'true-false', question: 'The note contains factual information about the topic.', correctAnswer: 'True' },
+                  { type: 'multiple-choice', question: `Which best describes ${first}?`, options: ['Definition', 'Example', 'History', 'Unrelated concept'], correctAnswer: 'Definition' },
+                ]
+              }
+              // Normalize and add ids/difficulty
+              const normalized = questions.map((q, idx) => {
+                const t = q.type || 'short-answer'
+                const out: any = {
+                  id: idx + 1,
+                  type: t,
+                  question: q.question || 'Question',
+                  correctAnswer: q.correctAnswer || '',
+                  difficulty,
+                }
+                if (t === 'multiple-choice') {
+                  const opts = Array.isArray(q.options) ? q.options.slice(0, 4) : []
+                  if (opts.length < 4) {
+                    while (opts.length < 4) opts.push(`Option ${opts.length + 1}`)
+                  }
+                  // Ensure correctAnswer is one of options
+                  if (!opts.includes(q.correctAnswer)) out.correctAnswer = opts[0]
+                  out.options = opts
+                }
+                if (t === 'matching') {
+                  const mp = Array.isArray(q.matchingPairs) ? q.matchingPairs : []
+                  out.matchingPairs = mp
+                }
+                if (q.explanation) out.explanation = q.explanation
+                return out
+              })
+              const payload = {
+                examName,
+                questions: normalized,
+                difficulty,
+                questionCount: normalized.length,
+                source: 'notes' as const,
+                notesContent: data.content,
+                createdAt: new Date().toISOString(),
+              }
+              try {
+                localStorage.setItem('notes_exam_data', JSON.stringify(payload))
+              } catch {}
+              // Embed the exam inside the current note view
+              try { setShowExamInNotes(true) } catch {}
+              setOpen(false)
+            } catch (err) {
+              console.error('Failed to start exam from note', err)
+              alert('Failed to start exam from this note.')
+            }
+          },
+        },
         {
           id: "edit-note",
           label: "Edit current note",
