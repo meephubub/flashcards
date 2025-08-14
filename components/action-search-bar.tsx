@@ -14,6 +14,8 @@ import { makeGroqRequest } from "@/lib/groq"
 import { generateImage as generateSlowImageApi, type ImageModel } from "@/lib/generate-image"
 import { Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import NoteFromContentDialog from "@/components/note-from-content-dialog"
+import MoveNoteProjectDialog from "@/components/move-note-project-dialog"
 
 interface Action {
   id: string
@@ -152,15 +154,7 @@ const allActions: Action[] = [
     href: "/sign-in",
   },
   {
-    id: "1",
-    label: "Book tickets",
-    icon: <PlaneTakeoff className="h-4 w-4 text-green-500" />,
-    description: "Operator",
-    short: "⌘K",
-    end: "Agent",
-  },
-  {
-    id: "2",
+    id: "question",
     label: "Question",
     icon: <HelpCircle className="h-4 w-4 text-blue-500" />,
     description: "gpt-4o",
@@ -169,30 +163,6 @@ const allActions: Action[] = [
     run: () => {
       // Filled at runtime by ActionSearchBar via effectiveActions mapping if needed
     },
-  },
-  {
-    id: "3",
-    label: "Screen Studio",
-    icon: <Video className="h-4 w-4 text-purple-500" />,
-    description: "gpt-4o",
-    short: "",
-    end: "Application",
-  },
-  {
-    id: "4",
-    label: "Talk to Jarvis",
-    icon: <AudioLines className="h-4 w-4 text-green-500" />,
-    description: "gpt-4o voice",
-    short: "",
-    end: "Active",
-  },
-  {
-    id: "5",
-    label: "Translate",
-    icon: <Globe className="h-4 w-4 text-blue-500" />,
-    description: "gpt-4o",
-    short: "",
-    end: "Command",
   },
   {
     id: "fan-on",
@@ -236,6 +206,8 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [showAll, setShowAll] = useState(false)
   const pathname = usePathname()
   const { openDialog } = useNoteDialogStore()
+  const [openNoteFromContent, setOpenNoteFromContent] = useState(false)
+  const [openMoveProject, setOpenMoveProject] = useState(false)
   const startEditCurrentNote = useNoteContextStore((s) => s.startEditCurrentNote)
   const currentNoteId = useNoteContextStore((s) => s.currentNoteId)
   const deleteNoteById = useNoteContextStore((s) => s.deleteNoteById)
@@ -342,16 +314,41 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
     }
   }
 
-  // Build actions for current route (e.g., show Create Note on /notes)
-  function computeEffectiveActions(): Action[] {
-    let base = [...actions]
-    if (pathname && pathname.startsWith("/notes")) {
+  const computeEffectiveActions = (): Action[] => {
+    let base = actions
+    // Notes-specific quick actions
+    if (pathname.startsWith('/notes')) {
       const prepend: Action[] = [
         {
+          id: "create-note-from-content",
+          label: "Create note from content",
+          description: "Paste text or upload a file",
+          icon: <PlusCircle className="h-4 w-4 text-emerald-600" />,
+          short: "Enter",
+          end: "Notes",
+          run: () => setOpenNoteFromContent(true),
+        },
+        {
+          id: "move-note-project",
+          label: "Move note to project",
+          description: currentNoteId ? "Change this note's project" : "Select a note first",
+          icon: <Pencil className="h-4 w-4 text-violet-600" />,
+          short: "Enter",
+          end: "Notes",
+          run: () => {
+            if (!currentNoteId) {
+              if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
+              else alert('Select a note first')
+              return
+            }
+            setOpenMoveProject(true)
+          },
+        },
+        {
           id: "exam-from-note",
-          label: "Start exam from this note",
-          description: currentNoteId ? "Generate questions and begin" : "Select a note first",
-          icon: <BarChart2 className="h-4 w-4" />,
+          label: "Start exam from note",
+          description: currentNoteId ? "Generate questions from the current note" : "Select a note first",
+          icon: <BarChart2 className="h-4 w-4 text-indigo-600" />,
           short: "Enter",
           end: "Exam",
           run: async () => {
@@ -490,7 +487,7 @@ Note content:\n\n${data.content}`
       base = [...prepend, ...base]
     }
     // Enhance the "Question" action to prime the input with '? '
-    base = base.map(a => a.id === "2"
+    base = base.map(a => a.id === "question"
       ? {
           ...a,
           run: () => {
@@ -1189,22 +1186,28 @@ Note content:\n\n${data.content}`
   const portalTarget = typeof document !== 'undefined' ? document.body : null
   if (!portalTarget) return null
 
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="fixed inset-0 z-50 bg-neutral-900/60 backdrop-blur-xl flex items-center justify-center p-4"
-          onClick={() => setOpen(false)}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-        >
-          {content}
-        </motion.div>
+  return (
+    <>
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              className="fixed inset-0 z-50 bg-neutral-900/60 backdrop-blur-xl flex items-center justify-center p-4"
+              onClick={() => setOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              {content}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        portalTarget
       )}
-    </AnimatePresence>,
-    portalTarget
+      <NoteFromContentDialog open={openNoteFromContent} onOpenChange={setOpenNoteFromContent} />
+      <MoveNoteProjectDialog open={openMoveProject} onOpenChange={setOpenMoveProject} noteId={currentNoteId} />
+    </>
   )
 }
 
