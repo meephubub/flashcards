@@ -105,6 +105,7 @@
     "openai": "^5.8.3",
     "path": "latest",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^5.4.54",
     "picocolors": "^1.1.1",
     "react": "^19.1.0",
     "react-beautiful-dnd": "latest",

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, isValidElement, cloneElement } from "react"
 import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
@@ -16,6 +16,8 @@ import { Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import NoteFromContentDialog from "@/components/note-from-content-dialog"
 import MoveNoteProjectDialog from "@/components/move-note-project-dialog"
+import { supabase } from "@/lib/supabase"
+import { Progress } from "@/components/ui/progress"
 
 interface Action {
   id: string
@@ -26,6 +28,8 @@ interface Action {
   end?: string
   href?: string
   run?: () => void
+  // If true, keep the palette open after run(). We'll manage closing manually.
+  keepOpen?: boolean
 }
 
 interface SearchResult {
@@ -192,6 +196,68 @@ const allActions: Action[] = [
       )
     },
   },
+  {
+    id: "create-note-from-image",
+    label: "Create note from image",
+    description: "Upload image → process → create note",
+    icon: <ImageIcon className="h-4 w-4 text-purple-500" />,
+    short: "Enter",
+    end: "Image → Note",
+    run: () => {
+      // Open a file picker for a single image, then call our API and create a note
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'image/*'
+      input.multiple = false
+      input.onchange = async () => {
+        const file = input.files?.[0]
+        if (!file) return
+        try {
+          // 1) Upload to API which stores to Supabase Storage (service role) and returns Markdown
+          const fd = new FormData()
+          fd.append('file', file)
+          const res = await fetch('/api/note-from-image', { method: 'POST', body: fd })
+          if (!res.ok) throw new Error((await res.json().catch(() => ({ error: res.statusText }))).error || 'Failed to process image')
+          const j = await res.json()
+
+          const content: string = j.content || ''
+          let title: string = j.title || (file.name.replace(/\.[^.]+$/, '')) || 'Image Note'
+          if (!content) throw new Error('No markdown content returned from processor')
+
+          // 2) Create a note for current user
+          const { data: userRes } = await supabase.auth.getUser()
+          const userId = userRes?.user?.id
+          if (!userId) throw new Error('Not signed in')
+          const { data, error } = await supabase
+            .from('notes')
+            .insert([{ title, category: '', content, project: '', user_id: userId }])
+            .select('id')
+            .single()
+          if (error) throw new Error(error.message)
+
+          const newId = (data as { id?: string } | null)?.id
+          // Defer navigating to notes page; ActionSearchBar handles router
+          if (newId) {
+            try {
+              // Best-effort set current note id if store is available
+              const store = useNoteContextStore.getState?.()
+              store?.setCurrentNoteId?.(newId)
+            } catch {}
+          }
+          // Navigate to notes
+          const clickToNotes = document.createElement('a')
+          clickToNotes.href = '/notes'
+          document.body.appendChild(clickToNotes)
+          clickToNotes.click()
+          clickToNotes.remove()
+        } catch (err: any) {
+          console.error('Create note from image failed', err)
+          alert(err?.message || 'Create note from image failed')
+        }
+      }
+      input.click()
+    },
+  },
 ]
 
 function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
@@ -218,6 +284,45 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const setEnvironment = useEnvironmentStore((s) => s.setEnvironment)
   const [mounted, setMounted] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
+  // Image→Note sub-UI state
+  const [imageNoteOpen, setImageNoteOpen] = useState(false)
+  const [imageNoteTitle, setImageNoteTitle] = useState("")
+  const [imageNoteProject, setImageNoteProject] = useState("")
+  const [imageNoteFile, setImageNoteFile] = useState<File | null>(null)
+  const [imageNoteError, setImageNoteError] = useState<string | null>(null)
+  const [imageNoteWorking, setImageNoteWorking] = useState(false)
+  const [imageNoteProgress, setImageNoteProgress] = useState(0)
+  const [imageNoteMessage, setImageNoteMessage] = useState("Idle")
+  const imageNoteMessages = [
+    "Working on your request…",
+    "Uploading image to storage…",
+    "Processing image…",
+    "Extracting Markdown…",
+    "Linking images…",
+    "Saving note…",
+    "Almost done…",
+  ]
+  const resetImageNote = () => {
+    setImageNoteTitle("")
+    setImageNoteProject("")
+    setImageNoteFile(null)
+    setImageNoteError(null)
+    setImageNoteWorking(false)
+    setImageNoteProgress(0)
+    setImageNoteMessage("Idle")
+  }
+  // Fix Note loading UI state
+  const [fixOpen, setFixOpen] = useState(false)
+  const [fixWorking, setFixWorking] = useState(false)
+  const [fixProgress, setFixProgress] = useState(0)
+  const [fixMessage, setFixMessage] = useState("Preparing…")
+  const [fixError, setFixError] = useState<string | null>(null)
+  const fixMessages = [
+    "Analyzing note…",
+    "Applying formatting guidelines…",
+    "Generating revised content…",
+    "Finalizing update…",
+  ]
   const [aiAnswer, setAiAnswer] = useState<string | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   // Image generation state
@@ -327,6 +432,106 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
           short: "Enter",
           end: "Notes",
           run: () => setOpenNoteFromContent(true),
+        },
+        {
+          id: "create-note-from-image",
+          label: "Create note from image",
+          description: "Upload image → process → create note",
+          icon: <ImageIcon className="h-4 w-4 text-purple-500" />,
+          short: "Enter",
+          end: "Image → Note",
+          keepOpen: true,
+          run: () => {
+            // Open inline sub-UI instead of closing palette
+            setImageNoteOpen(true)
+            setTimeout(() => {
+              try {
+                const el = document.querySelector('input[type="file"]') as HTMLInputElement | null
+                el?.focus()
+              } catch {}
+            }, 0)
+          },
+        },
+        {
+          id: "fix-note-content",
+          label: "Fix note content (AI)",
+          description: currentNoteId ? "Send content + guidelines to Groq, create revised note" : "Select a note first",
+          icon: <Pencil className="h-4 w-4 text-blue-600" />,
+          short: "Enter",
+          end: "AI",
+          keepOpen: true,
+          run: async () => {
+            try {
+              if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
+                if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
+                return
+              }
+              const data = getCurrentNoteForExam()
+              if (!data || !data.content?.trim()) {
+                alert('No content found for the current note.')
+                return
+              }
+              setFixError(null)
+              setFixOpen(true)
+              setFixWorking(true)
+              setFixProgress(0)
+              // 2 minute timeline
+              const start = Date.now()
+              const total = 120000
+              const timer = setInterval(() => {
+                const elapsed = Date.now() - start
+                const pct = Math.min(100, (elapsed / total) * 100)
+                setFixProgress(pct)
+              }, 200)
+              let msgIdx = 0
+              setFixMessage(fixMessages[msgIdx])
+              const msgTimer = setInterval(() => {
+                msgIdx = (msgIdx + 1) % fixMessages.length
+                setFixMessage(fixMessages[msgIdx])
+              }, 9000)
+              const originalTitle = data.title || 'Note'
+              const guidelines = `
+You are an expert technical editor. Fix all errors and improve clarity without changing meaning.
+Formatting rules:
+- replace any <br> with a line break
+- Output MUST be Markdown only. No code fences, no backticks, no prose outside the note.
+- Keep headings structured (#, ##, ###) and use consistent title case.
+- Convert unordered text lists into proper bullet lists.
+- Keep and normalize fenced code blocks with correct language tags.
+- Fix broken or relative image links only if a clear absolute replacement exists; otherwise preserve as-is.
+- Remove duplicated sections, obvious OCR artifacts, and dangling references.
+- Keep important equations, examples, and tables; render in Markdown.
+- Do not add a preface or summary unless the note already contains one (then improve it).
+`
+              const systemMessage = 'You are a meticulous Markdown editor. Return ONLY the corrected Markdown. Do not include code fences or explanations.'
+              const userPrompt = `Please revise the following note according to the guidelines. Return ONLY the corrected Markdown content.\n\nGuidelines:\n${guidelines}\n\nNote Markdown:\n${data.content}`
+              // Call Groq
+              const revised = await makeGroqRequest(userPrompt, false, systemMessage)
+              const cleaned = (revised || '').trim()
+              if (!cleaned) {
+                alert('AI returned empty content. Please try again.')
+                throw new Error('AI returned empty content')
+              }
+              // Update current note with revised content (in-place)
+              const { error } = await supabase
+                .from('notes')
+                .update({ content: cleaned })
+                .eq('id', currentNoteId)
+                .single()
+              if (error) throw new Error(error.message)
+              // Done: fast-forward progress and close
+              setFixProgress(100)
+              clearInterval(timer)
+              clearInterval(msgTimer)
+              setOpen(false)
+              setFixOpen(false)
+              setFixWorking(false)
+            } catch (e: any) {
+              console.error('Fix note failed', e)
+              setFixError(e?.message || 'Failed to fix note content')
+              setFixWorking(false)
+            }
+          },
         },
         {
           id: "move-note-project",
@@ -707,11 +912,13 @@ Note content:\n\n${data.content}`
       if (action.run) action.run()
       else if (action.href) router.push(action.href)
     } finally {
-      // close and reset
-      setOpen(false)
-      setQuery("")
-      setResult(null)
-      setSelectedAction(null)
+      // Close and reset unless the action requests to keep the palette open
+      if (!action.keepOpen) {
+        setOpen(false)
+        setQuery("")
+        setResult(null)
+        setSelectedAction(null)
+      }
     }
   }
 
@@ -1125,7 +1332,7 @@ Note content:\n\n${data.content}`
                 exit="exit"
               >
                 <motion.ul>
-                  {result.actions.map((action) => (
+                  {!imageNoteOpen && result.actions.map((action) => (
                     <motion.li
                       key={action.id}
                       className="px-3 py-2 flex items-center justify-between hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
@@ -1143,7 +1350,11 @@ Note content:\n\n${data.content}`
                     >
                       <div className="flex items-center gap-2 justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-700 dark:text-gray-300">{action.icon}</span>
+                          <span className="text-black dark:text-white">
+                            {isValidElement(action.icon)
+                              ? cloneElement(action.icon as any, { className: "h-4 w-4 text-black dark:text-white" })
+                              : action.icon}
+                          </span>
                           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{action.label}</span>
                           <span className="text-xs text-gray-600 dark:text-gray-400">{action.description}</span>
                         </div>
@@ -1155,8 +1366,148 @@ Note content:\n\n${data.content}`
                     </motion.li>
                   ))}
                 </motion.ul>
+                {/* Image→Note sub-UI */}
+                {imageNoteOpen && (
+                  <div className="p-3 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">Title</label>
+                        <Input
+                          placeholder="Note title"
+                          value={imageNoteTitle}
+                          onChange={(e) => setImageNoteTitle(e.target.value)}
+                          disabled={imageNoteWorking}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">Project</label>
+                        <Input
+                          placeholder="Project (optional)"
+                          value={imageNoteProject}
+                          onChange={(e) => setImageNoteProject(e.target.value)}
+                          disabled={imageNoteWorking}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium">Image</label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        disabled={imageNoteWorking}
+                        onChange={(e) => setImageNoteFile((e.target.files && e.target.files[0]) || null)}
+                      />
+                    </div>
+                    {imageNoteError && (
+                      <div className="text-xs text-red-600">{imageNoteError}</div>
+                    )}
+                    {imageNoteWorking && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-neutral-600 dark:text-neutral-400">
+                          <span>{imageNoteMessage}</span>
+                          <span>{Math.round(imageNoteProgress)}%</span>
+                        </div>
+                        <Progress value={imageNoteProgress} className="h-2" />
+                        <div className="text-[10px] text-neutral-500">Estimated ~2 minutes</div>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-sm rounded-md border border-black/10 dark:border-white/10 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                        disabled={imageNoteWorking}
+                        onClick={() => {
+                          resetImageNote()
+                          setImageNoteOpen(false)
+                        }}
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                        disabled={imageNoteWorking || !imageNoteFile}
+                        onClick={async () => {
+                          setImageNoteError(null)
+                          if (!imageNoteFile) {
+                            setImageNoteError('Please select an image')
+                            return
+                          }
+                          try {
+                            setImageNoteWorking(true)
+                            setImageNoteProgress(0)
+                            // 2 minute timeline
+                            const start = Date.now()
+                            const total = 120000
+                            const timer = setInterval(() => {
+                              const elapsed = Date.now() - start
+                              const pct = Math.min(100, (elapsed / total) * 100)
+                              setImageNoteProgress(pct)
+                            }, 200)
+                            let msgIdx = 0
+                            setImageNoteMessage(imageNoteMessages[msgIdx])
+                            const msgTimer = setInterval(() => {
+                              msgIdx = (msgIdx + 1) % imageNoteMessages.length
+                              setImageNoteMessage(imageNoteMessages[msgIdx])
+                            }, 9000)
+
+                            // Upload/process
+                            const fd = new FormData()
+                            fd.append('file', imageNoteFile)
+                            const res = await fetch('/api/note-from-image', { method: 'POST', body: fd })
+                            if (!res.ok) throw new Error((await res.json().catch(() => ({ error: res.statusText }))).error || 'Failed to process image')
+                            const j = await res.json()
+
+                            // Create note
+                            const { data: userRes } = await supabase.auth.getUser()
+                            const userId = userRes?.user?.id
+                            if (!userId) throw new Error('Not signed in')
+                            const title = imageNoteTitle.trim() || j.title || (imageNoteFile.name.replace(/\.[^.]+$/, '')) || 'Image Note'
+                            const project = imageNoteProject.trim()
+                            const content: string = j.content || ''
+                            if (!content) throw new Error('No markdown content returned')
+                            setImageNoteMessage('Saving note…')
+                            const { data, error } = await supabase
+                              .from('notes')
+                              .insert([{ title, category: '', content, project, user_id: userId }])
+                              .select('id')
+                              .single()
+                            if (error) throw new Error(error.message)
+
+                            const newId = (data as { id?: string } | null)?.id
+                            if (newId) {
+                              try { useNoteContextStore.getState?.()?.setCurrentNoteId?.(newId) } catch {}
+                            }
+
+                            // Done: fast-forward progress and close
+                            setImageNoteProgress(100)
+                            clearInterval(timer)
+                            clearInterval(msgTimer)
+                            // Keep palette open feel but redirect to notes
+                            const a = document.createElement('a')
+                            a.href = '/notes'
+                            document.body.appendChild(a)
+                            a.click()
+                            a.remove()
+                            // Close palette after redirect
+                            setOpen(false)
+                            resetImageNote()
+                            setImageNoteOpen(false)
+                          } catch (e: any) {
+                            console.error(e)
+                            setImageNoteError(e?.message || 'Failed to create note from image')
+                          } finally {
+                            setImageNoteWorking(false)
+                          }
+                        }}
+                      >
+                        {imageNoteWorking ? 'Working…' : 'Create'}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Show more when query empty and limited list is shown */}
-                {!debouncedQuery && !showAll && computeEffectiveActions().length > 8 && (
+                {!imageNoteOpen && !debouncedQuery && !showAll && computeEffectiveActions().length > 8 && (
                   <button
                     type="button"
                     className="w-full px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 border-t border-black/5 dark:border-white/10"

@@ -3,15 +3,22 @@ import { NextResponse } from "next/server"
 export const runtime = "nodejs"
 
 // Lazy require to avoid bundling on edge
-let pdfParse: any
+let pdfjsLib: any
 let mammoth: any
 
 async function ensureDeps() {
-  if (!pdfParse) {
-    pdfParse = (await import("pdf-parse")).default
-  }
   if (!mammoth) {
     mammoth = await import("mammoth")
+  }
+  if (!pdfjsLib) {
+    // Use legacy build for broader Node compatibility
+    pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.js")
+    try {
+      // Avoid trying to load a separate worker file in Node
+      if ((pdfjsLib as any).GlobalWorkerOptions) {
+        ;(pdfjsLib as any).GlobalWorkerOptions.workerSrc = ''
+      }
+    } catch {}
   }
 }
 
@@ -34,8 +41,17 @@ export async function POST(req: Request) {
 
       if (name.endsWith(".pdf")) {
         try {
-          const res = await pdfParse(buf)
-          combined += `\n\n# ${file.name}\n\n${res.text}\n`
+          // Extract text with pdfjs-dist
+          const loadingTask = (pdfjsLib as any).getDocument({ data: new Uint8Array(buf) })
+          const pdf = await loadingTask.promise
+          let text = ""
+          for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p)
+            const content = await page.getTextContent()
+            const strings = (content.items || []).map((it: any) => (it.str || ""))
+            text += strings.join(" ") + "\n\n"
+          }
+          combined += `\n\n# ${file.name}\n\n${text}\n`
         } catch (e) {
           combined += `\n\n# ${file.name}\n\n[Failed to extract PDF text]\n`
         }
@@ -64,3 +80,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: err?.message || "Extraction failed" }, { status: 500 })
   }
 }
+
