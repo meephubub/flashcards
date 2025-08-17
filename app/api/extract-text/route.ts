@@ -12,7 +12,7 @@ async function ensureDeps() {
   }
   if (!pdfjsLib) {
     // Use legacy build for broader Node compatibility
-    pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.js")
+    pdfjsLib = await import("pdfjs-dist")
     try {
       // Avoid trying to load a separate worker file in Node
       if ((pdfjsLib as any).GlobalWorkerOptions) {
