@@ -55,6 +55,7 @@ export default function Page() {
   const setGetCurrentNoteForExam = useNoteContextStore((s) => s.setGetCurrentNoteForExam)
   const showExamInNotes = useNoteContextStore((s) => s.showExamInNotes)
   const setShowExamInNotes = useNoteContextStore((s) => s.setShowExamInNotes)
+  const setUpdateCurrentNoteContent = useNoteContextStore((s) => s.setUpdateCurrentNoteContent)
 
   // ActionSearchBar "Create note" integration
   const createOpen = useNoteDialogStore((s) => s.open)
@@ -77,6 +78,17 @@ export default function Page() {
     return () => setGetCurrentNoteForExam(undefined)
     // Depend on values that affect the returned data
   }, [setGetCurrentNoteForExam, currentNoteId, noteTitle, noteContent])
+
+  // Register an updater so external components (e.g., ActionSearchBar) can push refreshed content
+  useEffect(() => {
+    setUpdateCurrentNoteContent(() => (content: string) => {
+      // Update local state immediately for a seamless refresh
+      setNoteContent(content)
+      // Best-effort update timestamp locally for UI freshness
+      try { setNoteUpdatedAt(new Date().toISOString()) } catch {}
+    })
+    return () => setUpdateCurrentNoteContent(undefined)
+  }, [setUpdateCurrentNoteContent])
 
   // Inline editing state
   const [isEditing, setIsEditing] = useState(false)
@@ -636,6 +648,172 @@ function MarkdownContent({ content }: { content: string }) {
     walk(tree, null)
   }
 
+  // DOM-only Ctrl+D highlighter (temporary, not persisted)
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isCtrlD = (e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')
+      if (!isCtrlD) return
+      const root = containerRef.current
+      if (!root) return
+      const sel = window.getSelection()
+      if (!sel || sel.rangeCount === 0) return
+
+      // Helper: find closest existing highlight span within root
+      const closestHighlight = (node: Node | null): HTMLElement | null => {
+        if (!node) return null
+        let el: HTMLElement | null = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : (node.parentElement as HTMLElement | null)
+        while (el && el !== root) {
+          if (el.classList && el.classList.contains('dom-green-highlight')) return el
+          el = el.parentElement
+        }
+        return null
+      }
+
+      // If caret is inside an existing highlight, toggle it off
+      if (sel.isCollapsed) {
+        const inside = closestHighlight(sel.anchorNode)
+        if (inside) {
+          e.preventDefault()
+          const span = inside
+          const lastChild = span.lastChild
+          const parent = span.parentNode
+          if (parent) {
+            const frag = document.createDocumentFragment()
+            while (span.firstChild) frag.appendChild(span.firstChild)
+            parent.replaceChild(frag, span)
+            sel.removeAllRanges()
+            const after = document.createRange()
+            if (lastChild && lastChild.parentNode) {
+              after.setStartAfter(lastChild)
+            } else {
+              after.selectNodeContents(parent)
+              after.collapse(false)
+            }
+            sel.addRange(after)
+          }
+        }
+        return
+      }
+
+      const range = sel.getRangeAt(0)
+      const containerNode = range.commonAncestorContainer
+      // Only highlight if selection is within the markdown content container
+      if (!root.contains(containerNode)) return
+      e.preventDefault()
+
+      const anchorHL = closestHighlight(sel.anchorNode)
+      const focusHL = closestHighlight(sel.focusNode)
+
+      // If both ends are inside the same highlight, unwrap it (toggle off)
+      if (anchorHL && anchorHL === focusHL) {
+        const span = anchorHL
+        // Keep reference to last child to place caret after unwrapping
+        const lastChild = span.lastChild
+        const parent = span.parentNode
+        if (parent) {
+          const frag = document.createDocumentFragment()
+          while (span.firstChild) frag.appendChild(span.firstChild)
+          parent.replaceChild(frag, span)
+          // Restore caret after the previously last child
+          sel.removeAllRanges()
+          const after = document.createRange()
+          if (lastChild && lastChild.parentNode) {
+            after.setStartAfter(lastChild)
+          } else {
+            // Fallback: place caret at end of parent
+            after.selectNodeContents(parent)
+            after.collapse(false)
+          }
+          sel.addRange(after)
+        }
+        return
+      }
+
+      // Otherwise, apply highlight normally
+      try {
+        const fragment = range.extractContents()
+        const span = document.createElement('span')
+        span.className = 'dom-green-highlight'
+        span.style.backgroundColor = 'rgba(34,197,94,0.35)' // emerald-500 @ ~35%
+        span.style.borderRadius = '4px'
+        span.appendChild(fragment)
+        range.insertNode(span)
+        // Move caret to after the inserted span
+        sel.removeAllRanges()
+        const after = document.createRange()
+        after.setStartAfter(span)
+        after.collapse(true)
+        sel.addRange(after)
+      } catch {
+        // Ignore selections that cannot be highlighted cleanly
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // Mermaid rendering helpers
+  const mermaidInitializedRef = React.useRef(false)
+  const renderMermaidInto = React.useCallback(async (el: HTMLElement, code: string) => {
+    try {
+      const mod = await import('mermaid')
+      const mermaid = (mod as any).default || (mod as any)
+      if (!mermaidInitializedRef.current) {
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default' })
+        mermaidInitializedRef.current = true
+      }
+      const id = 'mermaid-' + Math.random().toString(36).slice(2)
+      const out = await mermaid.render(id, code)
+      el.innerHTML = out.svg || out
+    } catch (err: any) {
+      el.innerHTML = `<pre style="color:#ef4444">Mermaid error: ${String(err?.message || err)}</pre>`
+    }
+  }, [])
+
+  const MermaidDiagram: React.FC<{ code: string }> = ({ code }) => {
+    const ref = React.useRef<HTMLDivElement | null>(null)
+    React.useEffect(() => {
+      const el = ref.current
+      if (!el) return
+      void renderMermaidInto(el, code)
+    }, [code, renderMermaidInto])
+    return (
+      <div className="my-4 overflow-x-auto">
+        <div ref={ref} className="min-w-[320px]" />
+      </div>
+    )
+  }
+
+  // Ensure unclosed mermaid fences don't swallow following content
+  function fixUnclosedMermaidFences(src: string): string {
+    const lines = src.split(/\r?\n/)
+    const out: string[] = []
+    let inMermaid = false
+    for (const raw of lines) {
+      const line = raw
+      const t = line.trim()
+      if (!inMermaid) {
+        out.push(line)
+        if (/^```\s*mermaid\s*$/i.test(t)) {
+          inMermaid = true
+        }
+      } else {
+        out.push(line)
+        if (/^```\s*$/.test(t)) {
+          inMermaid = false
+        }
+      }
+    }
+    if (inMermaid) {
+      out.push('```')
+    }
+    return out.join('\n')
+  }
+
+  const safeContent = React.useMemo(() => fixUnclosedMermaidFences(content || ''), [content])
+
   // Custom remark plugin to handle directives like :::center and info boxes :::info/:::warning/etc
   const directivePlugin = React.useCallback(function () {
     return (tree: any) => {
@@ -712,11 +890,25 @@ function MarkdownContent({ content }: { content: string }) {
   }, [])
 
   return (
-    <div className="prose prose-neutral dark:prose-invert max-w-none">
+    <div ref={containerRef} className="prose prose-neutral dark:prose-invert max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, directivePlugin, gapPlugin]}
         rehypePlugins={[rehypeKatex]}
         components={{
+          // Intercept <pre><code class="language-mermaid">...</code></pre> and render Mermaid without pre wrapper
+          pre: (props: any) => {
+            try {
+              const child: any = Array.isArray(props.children) ? props.children[0] : props.children
+              const className: string | undefined = child?.props?.className
+              const isMermaid = typeof className === 'string' && /language-mermaid/.test(className)
+              if (isMermaid) {
+                const raw = child?.props?.children
+                const codeText = Array.isArray(raw) ? String(raw.join('')) : String(raw ?? '')
+                return <MermaidDiagram code={(codeText || '').trim()} />
+              }
+            } catch {}
+            return <pre {...props} />
+          },
           // Inline gap element renderer
           gap: ({ node, ...props }: any) => {
             const answer: string = (props as any)?.answer || (node as any)?.properties?.answer || ''
@@ -870,6 +1062,13 @@ function MarkdownContent({ content }: { content: string }) {
                 </code>
               )
             }
+            // Detect Mermaid blocks
+            const langMatch = typeof className === 'string' ? className.match(/language-(\w+)/) : null
+            const lang = langMatch?.[1]?.toLowerCase()
+            const codeText = String(children ?? '').trim()
+            if (lang === 'mermaid') {
+              return <MermaidDiagram code={codeText} />
+            }
             // Block code: single, minimal element (no outer wrapper), tight spacing
             return (
               <code
@@ -882,7 +1081,7 @@ function MarkdownContent({ content }: { content: string }) {
           },
         } as any}
       >
-        {content}
+        {safeContent}
       </ReactMarkdown>
     </div>
   )

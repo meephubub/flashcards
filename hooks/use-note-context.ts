@@ -15,6 +15,9 @@ interface NoteContextStore {
   // Control embedded exam mode when viewing notes
   showExamInNotes: boolean
   setShowExamInNotes: (show: boolean) => void
+  // Allow external components (e.g., ActionSearchBar) to push updated content into current view state
+  updateCurrentNoteContent?: (content: string) => void
+  setUpdateCurrentNoteContent: (fn: ((content: string) => void) | undefined) => void
 }
 
 export const useNoteContextStore = create<NoteContextStore>((set) => ({
@@ -30,4 +33,6 @@ export const useNoteContextStore = create<NoteContextStore>((set) => ({
   setGetCurrentNoteForExam: (fn) => set({ getCurrentNoteForExam: fn }),
   showExamInNotes: false,
   setShowExamInNotes: (show) => set({ showExamInNotes: show }),
+  updateCurrentNoteContent: undefined,
+  setUpdateCurrentNoteContent: (fn) => set({ updateCurrentNoteContent: fn }),
 }))

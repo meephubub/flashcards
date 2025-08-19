@@ -280,6 +280,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const openSelectNoteDialog = useNoteContextStore((s) => s.openSelectNoteDialog)
   const getCurrentNoteForExam = useNoteContextStore((s) => s.getCurrentNoteForExam)
   const setShowExamInNotes = useNoteContextStore((s) => s.setShowExamInNotes)
+  const updateCurrentNoteContent = useNoteContextStore((s) => s.updateCurrentNoteContent)
   const [copied, setCopied] = useState(false)
   const setEnvironment = useEnvironmentStore((s) => s.setEnvironment)
   const [mounted, setMounted] = useState(false)
@@ -330,6 +331,19 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [imgUrl, setImgUrl] = useState<string | null>(null)
   const [imgError, setImgError] = useState<string | null>(null)
   const [imgCopied, setImgCopied] = useState(false)
+  // Edit with AI (custom instruction) state
+  const [editAiOpen, setEditAiOpen] = useState(false)
+  const [editAiPrompt, setEditAiPrompt] = useState('')
+  const [editAiLoading, setEditAiLoading] = useState(false)
+  const [editAiError, setEditAiError] = useState<string | null>(null)
+  const [editAiPreview, setEditAiPreview] = useState<string | null>(null)
+  const resetEditAi = () => {
+    setEditAiOpen(false)
+    setEditAiPrompt('')
+    setEditAiLoading(false)
+    setEditAiError(null)
+    setEditAiPreview(null)
+  }
   // Slow (server-backed) image generation state
   const [slowLoading, setSlowLoading] = useState(false)
   const [slowUrl, setSlowUrl] = useState<string | null>(null)
@@ -453,6 +467,31 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
           },
         },
         {
+          id: "edit-with-ai",
+          label: "Edit with AI…",
+          description: currentNoteId ? "Enter custom instruction, preview, then save" : "Select a note first",
+          icon: <Pencil className="h-4 w-4 text-blue-500" />,
+          short: "Enter",
+          end: "AI",
+          keepOpen: true,
+          run: () => {
+            if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
+              if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
+              return
+            }
+            setEditAiError(null)
+            setEditAiPreview(null)
+            setEditAiOpen(true)
+            // focus later on textarea
+            setTimeout(() => {
+              try {
+                const el = document.getElementById('edit-ai-textarea') as HTMLTextAreaElement | null
+                el?.focus()
+              } catch {}
+            }, 0)
+          },
+        },
+        {
           id: "fix-note-content",
           label: "Fix note content (AI)",
           description: currentNoteId ? "Send content + guidelines to Groq, create revised note" : "Select a note first",
@@ -519,6 +558,8 @@ Formatting rules:
                 .eq('id', currentNoteId)
                 .single()
               if (error) throw new Error(error.message)
+              // Push refreshed content into the current view immediately
+              try { updateCurrentNoteContent?.(cleaned) } catch {}
               // Done: fast-forward progress and close
               setFixProgress(100)
               clearInterval(timer)
@@ -1074,6 +1115,122 @@ Note content:\n\n${data.content}`
               {aiAnswer && (
                 <div className="mt-1 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
                   {aiAnswer}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Edit with AI (custom instruction) inline UI */}
+        {(editAiOpen || editAiLoading || editAiPreview || editAiError) && (
+          <div className="w-full px-4 pb-2 -mt-2">
+            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-blue-600" />
+                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Edit with AI</div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-gray-600 dark:text-gray-400" htmlFor="edit-ai-textarea">Instruction</label>
+                <textarea
+                  id="edit-ai-textarea"
+                  rows={3}
+                  value={editAiPrompt}
+                  onChange={(e) => setEditAiPrompt(e.target.value)}
+                  disabled={editAiLoading}
+                  placeholder="e.g., Rewrite concisely, fix grammar, keep code blocks, and preserve Markdown structure."
+                  className="w-full rounded-md border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
+                          if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
+                          return
+                        }
+                        const data = getCurrentNoteForExam()
+                        if (!data || !data.content?.trim()) {
+                          alert('No content found for the current note.')
+                          return
+                        }
+                        const instruction = editAiPrompt.trim()
+                        if (!instruction) {
+                          setEditAiError('Please enter an instruction')
+                          return
+                        }
+                        setEditAiLoading(true)
+                        setEditAiError(null)
+                        setEditAiPreview(null)
+                        const systemMessage = 'You are a meticulous Markdown editor. Return ONLY the edited Markdown. No code fences or explanations.'
+                        const userPrompt = `Instruction:\n${instruction}\n\nEdit the following Markdown accordingly and return ONLY the final Markdown (no backticks, no fences):\n\n${data.content}`
+                        const revised = await makeGroqRequest(userPrompt, false, systemMessage)
+                        const cleaned = (revised || '').trim()
+                        if (!cleaned) {
+                          throw new Error('AI returned empty content')
+                        }
+                        setEditAiPreview(cleaned)
+                      } catch (e: any) {
+                        console.error('Edit with AI failed', e)
+                        setEditAiError(e?.message || 'Failed to edit with AI')
+                      } finally {
+                        setEditAiLoading(false)
+                      }
+                    }}
+                    disabled={editAiLoading || !editAiPrompt.trim()}
+                    className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    {editAiLoading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>) : 'Generate' }
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetEditAi}
+                    disabled={editAiLoading}
+                    className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+              {editAiError && <div className="text-xs text-red-500">{editAiError}</div>}
+              {editAiPreview && (
+                <div className="space-y-2">
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Preview</div>
+                  <div className="max-h-64 overflow-auto rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 p-2 text-sm whitespace-pre-wrap break-words">
+                    {editAiPreview}
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (!currentNoteId || !editAiPreview) return
+                          const { error } = await supabase
+                            .from('notes')
+                            .update({ content: editAiPreview })
+                            .eq('id', currentNoteId)
+                            .single()
+                          if (error) throw new Error(error.message)
+                          // Update UI immediately with the saved content
+                          try { updateCurrentNoteContent?.(editAiPreview) } catch {}
+                          setOpen(false)
+                          resetEditAi()
+                        } catch (e: any) {
+                          console.error('Save failed', e)
+                          setEditAiError(e?.message || 'Failed to save changes')
+                        }
+                      }}
+                      className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                      Save changes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetEditAi}
+                      className="px-3 py-1.5 text-sm rounded-md border border-black/10 dark:border-white/10 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    >
+                      Discard
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

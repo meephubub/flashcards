@@ -87,6 +87,7 @@ export function NoteCreateDialog({ open, onOpenChange, onSubmit, projects = [], 
                 placeholder="Select project..."
                 inputPlaceholder="Search or create..."
                 emptyPlaceholder="No project found."
+                theme="light"
               />
             </div>
 
