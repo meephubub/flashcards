@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -23,6 +23,24 @@ export function Sidebar({ onLinkClick }: { onLinkClick?: () => void }) {
   const [searchQuery, setSearchQuery] = useState("")
   const { decks, loading } = useDecks()
   const pathname = usePathname()
+  
+  // Listen for Action Search Bar events to open dialogs
+  useEffect(() => {
+    const openCreate = () => setIsCreateDeckOpen(true)
+    const openImport = () => setIsImportOpen(true)
+    const openGenerate = () => setIsGenerateOpen(true)
+    const openMerge = () => setIsMergeDecksOpen(true)
+    window.addEventListener('open-create-deck', openCreate as EventListener)
+    window.addEventListener('open-import-markdown', openImport as EventListener)
+    window.addEventListener('open-generate-flashcards', openGenerate as EventListener)
+    window.addEventListener('open-merge-decks', openMerge as EventListener)
+    return () => {
+      window.removeEventListener('open-create-deck', openCreate as EventListener)
+      window.removeEventListener('open-import-markdown', openImport as EventListener)
+      window.removeEventListener('open-generate-flashcards', openGenerate as EventListener)
+      window.removeEventListener('open-merge-decks', openMerge as EventListener)
+    }
+  }, [])
 
   const filteredDecks = decks.filter((deck) => deck.name.toLowerCase().includes(searchQuery.toLowerCase()))
 

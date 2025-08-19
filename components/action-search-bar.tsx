@@ -4,7 +4,7 @@ import { useState, useEffect, isValidElement, cloneElement } from "react"
 import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon, Download, Pencil } from "lucide-react"
+import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon, Download, Pencil, GitMerge } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
@@ -156,6 +156,51 @@ const allActions: Action[] = [
     short: "Enter",
     end: "⌘K",
     href: "/sign-in",
+  },
+  // Deck actions
+  {
+    id: "create-deck",
+    label: "Create deck",
+    description: "Open create deck dialog",
+    icon: <PlusCircle className="h-4 w-4 text-emerald-600" />,
+    short: "Enter",
+    end: "Decks",
+    run: () => {
+      try { window.dispatchEvent(new Event('open-create-deck')) } catch {}
+    },
+  },
+  {
+    id: "import-markdown",
+    label: "Import markdown",
+    description: "Import cards from Markdown",
+    icon: <Download className="h-4 w-4 text-blue-600" />,
+    short: "Enter",
+    end: "Decks",
+    run: () => {
+      try { window.dispatchEvent(new Event('open-import-markdown')) } catch {}
+    },
+  },
+  {
+    id: "generate-flashcards",
+    label: "Generate flashcards (AI)",
+    description: "Create flashcards with AI",
+    icon: <Search className="h-4 w-4 text-purple-600" />,
+    short: "Enter",
+    end: "AI",
+    run: () => {
+      try { window.dispatchEvent(new Event('open-generate-flashcards')) } catch {}
+    },
+  },
+  {
+    id: "merge-decks",
+    label: "Merge decks",
+    description: "Combine two decks",
+    icon: <GitMerge className="h-4 w-4 text-pink-600" />,
+    short: "Enter",
+    end: "Decks",
+    run: () => {
+      try { window.dispatchEvent(new Event('open-merge-decks')) } catch {}
+    },
   },
   {
     id: "question",

@@ -19,9 +19,17 @@ import { useToast } from "@/hooks/use-toast"
 
 interface StudyModeProps {
   deckId: number
+  onProgressInfo?: (info: {
+    current: number
+    total: number
+    reviewMode: boolean
+    reviewCurrent: number
+    reviewTotal: number
+    remaining: number
+  }) => void
 }
 
-export function StudyMode({ deckId }: StudyModeProps) {
+export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
   const { getDeck, loading, getDueCards } = useDecks()
   const { settings } = useSettings()
   const router = useRouter()
@@ -112,6 +120,24 @@ export function StudyMode({ deckId }: StudyModeProps) {
       setProgress((currentCardIndex / cards.length) * 100)
     }
   }, [currentCardIndex, cards.length])
+
+  // Notify parent about progress info for header display
+  useEffect(() => {
+    if (typeof onProgressInfo === 'function') {
+      const remaining = reviewMode
+        ? Math.max(0, reviewIndices.length - reviewCurrent)
+        : Math.max(0, cards.length - currentCardIndex)
+      const info = {
+        current: currentCardIndex + 1,
+        total: cards.length,
+        reviewMode,
+        reviewCurrent: reviewCurrent + 1,
+        reviewTotal: reviewIndices.length,
+        remaining,
+      }
+      onProgressInfo(info)
+    }
+  }, [currentCardIndex, cards.length, reviewMode, reviewCurrent, reviewIndices.length, onProgressInfo])
 
   // Define all handler functions first before using them in useEffect
   const handleFlip = () => {
@@ -477,76 +503,18 @@ export function StudyMode({ deckId }: StudyModeProps) {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between mb-4 bg-muted/20 p-3 rounded-lg shadow-sm">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild className="hover:bg-background hover:shadow-sm transition-all duration-200">
-            <Link href={`/deck/${deckId}`}>
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <h1 className="text-xl font-semibold">
-            {reviewMode ? "Review Mode: " : "Studying: "}
-            {deck.name}
-          </h1>
+      {/* Top bar simplified: remove internal title 'Studying: ...' and count (moved to page header) */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
           {reviewMode && (
-            <div className="bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary/90 text-xs px-2 py-1 rounded-md animate-pulse">
-              Reviewing cards that need attention
-            </div>
+            <div className="text-xs text-muted-foreground">Review mode</div>
           )}
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            {isSpacedRepetitionEnabled && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-md">
-                      <Calendar className="h-4 w-4 text-primary" />
-                      <span className="text-xs font-medium text-primary">SR Mode</span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Spaced Repetition Enabled</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            <div className="bg-background px-2 py-0.5 rounded-md shadow-sm">
-              {!reviewMode ? (
-                <>Card {currentCardIndex + 1} of {cards.length}</>
-              ) : (
-                <>Review card {reviewCurrent + 1} of {reviewIndices.length}</>
-              )}
-            </div>
+        {isSpacedRepetitionEnabled && (
+          <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <Calendar className="h-4 w-4" /> SR enabled
           </div>
-          
-          {/* Mini stats display */}
-          <div className="text-xs flex items-center gap-2 bg-background px-2 py-1 rounded-md shadow-sm">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger className="flex items-center">
-                  <span className="text-primary font-medium">{stats.knownCards}</span>
-                  <Check className="h-3 w-3 text-primary ml-0.5" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Cards you knew</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <span className="text-muted-foreground">/</span>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger className="flex items-center">
-                  <span className="text-primary/70 font-medium">{stats.unknownCards}</span>
-                  <X className="h-3 w-3 text-primary/70 ml-0.5" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Cards you didn't know</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
+        )}
       </div>
 
       {settings.studySettings.showProgressBar && (

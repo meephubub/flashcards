@@ -29,6 +29,10 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/context/auth-context"
+import { CreateDeckDialog } from "@/components/create-deck-dialog"
+import { ImportMarkdownDialog } from "@/components/import-markdown-dialog"
+import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
+import { MergeDecksDialog } from "@/components/merge-decks-dialog"
 
 // This is sample data.
 const data = {
@@ -161,6 +165,28 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
+  const [isCreateDeckOpen, setIsCreateDeckOpen] = React.useState(false)
+  const [isImportOpen, setIsImportOpen] = React.useState(false)
+  const [isGenerateOpen, setIsGenerateOpen] = React.useState(false)
+  const [isMergeDecksOpen, setIsMergeDecksOpen] = React.useState(false)
+
+  // Listen for Action Search Bar events to open dialogs
+  React.useEffect(() => {
+    const openCreate = () => setIsCreateDeckOpen(true)
+    const openImport = () => setIsImportOpen(true)
+    const openGenerate = () => setIsGenerateOpen(true)
+    const openMerge = () => setIsMergeDecksOpen(true)
+    window.addEventListener('open-create-deck', openCreate as EventListener)
+    window.addEventListener('open-import-markdown', openImport as EventListener)
+    window.addEventListener('open-generate-flashcards', openGenerate as EventListener)
+    window.addEventListener('open-merge-decks', openMerge as EventListener)
+    return () => {
+      window.removeEventListener('open-create-deck', openCreate as EventListener)
+      window.removeEventListener('open-import-markdown', openImport as EventListener)
+      window.removeEventListener('open-generate-flashcards', openGenerate as EventListener)
+      window.removeEventListener('open-merge-decks', openMerge as EventListener)
+    }
+  }, [])
   const navUser = React.useMemo(
     () => ({
       name:
@@ -176,19 +202,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     [user]
   )
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <TeamSwitcher />
-      </SidebarHeader>
-      <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavSearch />
-        <NavDecks />
-      </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={navUser} />
-      </SidebarFooter>
-      <SidebarRail />
-    </Sidebar>
+    <>
+      <Sidebar collapsible="icon" {...props}>
+        <SidebarHeader>
+          <TeamSwitcher />
+        </SidebarHeader>
+        <SidebarContent>
+          <NavMain items={data.navMain} />
+          <NavSearch />
+          <NavDecks />
+        </SidebarContent>
+        <SidebarFooter>
+          <NavUser user={navUser} />
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+
+      {/* Dialogs controlled by global Action Search Bar events */}
+      <CreateDeckDialog open={isCreateDeckOpen} onOpenChange={setIsCreateDeckOpen} />
+      <ImportMarkdownDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
+      <GenerateFlashcardsDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} />
+      <MergeDecksDialog isOpen={isMergeDecksOpen} onOpenChange={setIsMergeDecksOpen} />
+    </>
   )
 }
