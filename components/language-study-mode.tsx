@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { LanguageCard } from "@/components/language-card";
-import { getSentenceEmbedding, cosineSimilarity, spellcheckAnswer } from "@/app/actions/xenova-similarity";
+import { getSentenceEmbedding, cosineSimilarity, spellcheckAnswer, preloadModel, getModelInfo } from "@/lib/ai/xenova-similarity.client";
 import { useDecks } from "@/context/deck-context";
 import { useSettings } from '@/context/settings-context';
 import { ArrowLeft, ArrowRight, RotateCw, CheckCircle, XCircle } from 'lucide-react';
@@ -49,7 +49,7 @@ function shuffleArray<T>(array: T[]): T[] {
   return newArray;
 }
 
-export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
+export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: LanguageStudyModeProps & { compactHeader?: boolean; onMetricsChange?: (m: { streak: number; current: number; total: number; progress: number; }) => void; }) {
   const { getDeck, loading: decksLoading } = useDecks();
   const { settings } = useSettings();
   const { toast } = useToast();
@@ -71,6 +71,46 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
   const [showConfetti, setShowConfetti] = useState(false);
   // Initialize with 1 since we're showing the first card
   const [questionsAnsweredThisSession, setQuestionsAnsweredThisSession] = useState(1);
+
+  // Preload the similarity model and show toasts
+  const modelPreloadedRef = useRef(false);
+  useEffect(() => {
+    if (modelPreloadedRef.current) return;
+    modelPreloadedRef.current = true;
+    try {
+      const info = getModelInfo();
+      toast({
+        title: "Loading similarity model",
+        description: `Preparing ${info.defaultModel} (${info.webglAvailable ? 'WebGL' : 'CPU'} backend)...`,
+      });
+    } catch {}
+    preloadModel()
+      .then(() => {
+        toast({
+          title: "Model ready",
+          description: "Semantic similarity is ready for grading.",
+          variant: "default",
+        });
+      })
+      .catch(() => {
+        toast({
+          title: "Model load failed",
+          description: "Similarity grading may be slower or unavailable.",
+          variant: "destructive",
+        });
+      });
+  }, [toast]);
+
+  // Emit metrics to parent when values change
+  useEffect(() => {
+    const totalTarget = settings.studySettings.cardsPerSession || cards.length;
+    onMetricsChange?.({
+      streak: currentStreak,
+      current: questionsAnsweredThisSession,
+      total: totalTarget,
+      progress: studyProgress,
+    });
+  }, [onMetricsChange, currentStreak, questionsAnsweredThisSession, studyProgress, cards.length, settings.studySettings.cardsPerSession]);
 
   const currentCard = cards.find(card => card.id === currentCardId);
 
@@ -466,22 +506,26 @@ export function LanguageStudyMode({ deckId }: LanguageStudyModeProps) {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 p-4 md:p-8">
-      <div className="flex items-center justify-between">
-        <Link href={`/deck/${deckId}`} className="text-sm hover:underline">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to {deck.name}
-          </Button>
-        </Link>
-        <div className="text-sm text-muted-foreground">
-          Current Streak: {currentStreak} 🔥
-        </div>
-        <div className="text-sm text-muted-foreground">
-          Card {questionsAnsweredThisSession} of {settings.studySettings.cardsPerSession || cards.length}
-        </div>
-      </div>
+      {!compactHeader && (
+        <>
+          <div className="flex items-center justify-between">
+            <Link href={`/deck/${deckId}`} className="text-sm hover:underline">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back to {deck.name}
+              </Button>
+            </Link>
+            <div className="text-sm text-muted-foreground">
+              Current Streak: {currentStreak} 🔥
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Card {questionsAnsweredThisSession} of {settings.studySettings.cardsPerSession || cards.length}
+            </div>
+          </div>
 
-      <Progress value={studyProgress} className="w-full" />
+          <Progress value={studyProgress} className="w-full" />
+        </>
+      )}
 
       {currentCard && (
         <LanguageCard

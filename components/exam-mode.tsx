@@ -33,7 +33,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { generateQuestionsFromCards, type ExamQuestion, type GradingResult } from "@/app/actions/generate-questions"
 import { gradeAnswer } from "@/app/actions/grade-answer"
 import { gradeAnswerWithGroq } from "@/lib/groq";
-import { getSentenceEmbedding, cosineSimilarity } from "@/app/actions/xenova-similarity"
+import { getSentenceEmbedding, cosineSimilarity } from "@/lib/ai/xenova-similarity.client"
 import { useToast } from "@/hooks/use-toast"
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd"
 import confetti from "canvas-confetti"

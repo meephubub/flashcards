@@ -29,6 +29,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/context/auth-context"
 import { useProjectStore } from "@/hooks/use-project-store"
 import { useNoteContextStore } from "@/hooks/use-note-context"
+import { useRouter } from "next/navigation"
 
 type NoteItem = { id: string; title: string }
 
@@ -38,6 +39,7 @@ export function NavProjects() {
   const supabase = React.useMemo(() => createClient(), [])
   const selectedProject = useProjectStore((s) => s.selectedProject)
   const setCurrentNoteId = useNoteContextStore((s) => s.setCurrentNoteId)
+  const router = useRouter()
 
   const [notes, setNotes] = React.useState<NoteItem[]>([])
   const [loading, setLoading] = React.useState(false)
@@ -83,7 +85,13 @@ export function NavProjects() {
           notes.length > 0 ? (
             notes.map((n) => (
               <SidebarMenuItem key={n.id}>
-                <SidebarMenuButton asChild onClick={() => setCurrentNoteId(n.id)}>
+                <SidebarMenuButton
+                  asChild
+                  onClick={() => {
+                    setCurrentNoteId(n.id)
+                    router.push("/notes")
+                  }}
+                >
                   <button type="button">
                     <Folder />
                     <span>{n.title}</span>

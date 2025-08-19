@@ -8,14 +8,17 @@ import {
   Command,
   Frame,
   GalleryVerticalEnd,
+  Link,
   Map,
   PieChart,
   Settings2,
   SquareTerminal,
+  Earth,
 } from "lucide-react"
 
 import { NavMain } from "@/components/notes/nav-main"
 import { NavSearch } from "@/components/notes/nav-search"
+import { NavDecks } from "@/components/notes/nav-decks"
 import { NavUser } from "@/components/notes/nav-user"
 import { TeamSwitcher } from "@/components/notes/team-switcher"
 import {
@@ -25,14 +28,10 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/context/auth-context"
 
 // This is sample data.
 const data = {
-  user: {
-    name: "sam",
-    email: "samthelegend68@gmail.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   teams: [
     {
       name: "Acme Inc",
@@ -72,21 +71,25 @@ const data = {
       ],
     },
     {
-      title: "AI Urls",
+      title: "Links",
       url: "#",
-      icon: Bot,
+      icon: Earth,
       items: [
         {
-          title: "ChatGPT",
-          url: "https://chatgpt.com/?model=auto",
+          title: "Home",
+          url: "/home",
         },
         {
-          title: "Claude",
-          url: "https://claude.ai/",
+          title: "Decks",
+          url: "/",
         },
         {
-          title: "Grok",
-          url: "https://grok.com/",
+          title: "Notes",
+          url: "/notes",
+        },
+        {
+          title: "Account",
+          url: "/account",
         },
       ],
     },
@@ -157,6 +160,21 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user } = useAuth()
+  const navUser = React.useMemo(
+    () => ({
+      name:
+        (user as any)?.user_metadata?.full_name ||
+        (user as any)?.user_metadata?.name ||
+        (user?.email ? user.email.split("@")[0] : "User"),
+      email: user?.email || "",
+      avatar:
+        (user as any)?.user_metadata?.avatar_url ||
+        (user as any)?.user_metadata?.picture ||
+        "",
+    }),
+    [user]
+  )
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -165,9 +183,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <NavMain items={data.navMain} />
         <NavSearch />
+        <NavDecks />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={navUser} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

@@ -159,7 +159,7 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
         <h1 className="text-2xl font-semibold">Edit Deck</h1>
       </div>
 
-      <div className="space-y-4 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
+      <div className="space-y-4 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border-2 border-gray-200 dark:border-gray-200">
         <div>
           <label htmlFor="deckName" className="block text-sm font-medium mb-1">
             Deck Name

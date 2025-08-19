@@ -29,6 +29,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/context/auth-context"
 
 export function NavUser({
   user,
@@ -40,6 +42,42 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const displayName = user?.name || user?.email?.split("@")[0] || "User"
+  const displayEmail = user?.email || ""
+  const avatarUrl = user?.avatar || ""
+  const router = useRouter()
+  const { signOut } = useAuth()
+
+  const getInitials = (nameOrEmail: string) => {
+    const base = nameOrEmail?.trim() || "User"
+    const parts = base.split(/\s+/).filter(Boolean)
+    if (parts.length === 0) return "U"
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  const initials = getInitials(displayName || displayEmail)
+
+  const go = (path: string) => router.push(path)
+  const onUpgrade = (e: Event) => {
+    e.preventDefault()
+    go("/home/pricing")
+  }
+  const onAccount = (e: Event) => {
+    e.preventDefault()
+    go("/account")
+  }
+  const onBilling = (e: Event) => {
+    e.preventDefault()
+    go("/account")
+  }
+  const onLogout = async (e: Event) => {
+    e.preventDefault()
+    try {
+      await signOut()
+    } finally {
+      router.replace("/")
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -51,12 +89,12 @@ export function NavUser({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarImage src={avatarUrl} alt={displayName} />
+                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
+                <span className="truncate font-medium">{displayName}</span>
+                <span className="truncate text-xs">{displayEmail}</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -70,29 +108,29 @@ export function NavUser({
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarImage src={avatarUrl} alt={displayName} />
+                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">{user.email}</span>
+                  <span className="truncate font-medium">{displayName}</span>
+                  <span className="truncate text-xs">{displayEmail}</span>
                 </div>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onSelect={onUpgrade as any}>
                 <Sparkles />
                 Upgrade to Pro
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onSelect={onAccount as any}>
                 <BadgeCheck />
                 Account
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onSelect={onBilling as any}>
                 <CreditCard />
                 Billing
               </DropdownMenuItem>
@@ -102,7 +140,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={onLogout as any}>
               <LogOut />
               Log out
             </DropdownMenuItem>

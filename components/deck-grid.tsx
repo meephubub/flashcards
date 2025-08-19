@@ -55,7 +55,7 @@ function DeckCard({ deck, index }: { deck: any, index: number }) {
           }}
         />
         
-        <Card className="overflow-hidden border-0 rounded-2xl bg-white/50 dark:bg-gray-900/50 backdrop-blur-xl h-full flex flex-col shadow-[0_10px_20px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_20px_-15px_rgba(0,0,0,0.3)]">
+        <Card className="overflow-hidden rounded-2xl bg-white/50 dark:bg-gray-900/50 backdrop-blur-xl h-full flex flex-col shadow-[0_10px_20px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_20px_-15px_rgba(0,0,0,0.3)] border border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300/70 dark:hover:border-gray-700/70 transition-colors">
           <Link href={`/deck/${deck.id}`} className="flex-1">
             <CardContent className="p-6 cursor-pointer">
               <div className="flex justify-between items-start">
