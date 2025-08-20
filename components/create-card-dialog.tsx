@@ -20,7 +20,8 @@ interface CreateCardDialogProps {
 export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialogProps) {
   const [front, setFront] = useState("")
   const [back, setBack] = useState("")
-  const [img_url, setImgUrl] = useState<string | null>(null)
+  const [front_img_url, setFrontImgUrl] = useState<string | null>(null)
+  const [back_img_url, setBackImgUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { addCard } = useDecks()
   const { toast } = useToast()
@@ -31,7 +32,7 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
 
     try {
       // Add the new card to the deck
-      await addCard(deckId, front, back, img_url)
+      await addCard(deckId, front, back, front_img_url, back_img_url)
 
       // Show success toast
       toast({
@@ -42,7 +43,8 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
       // Reset form and close dialog
       setFront("")
       setBack("")
-      setImgUrl(null)
+      setFrontImgUrl(null)
+      setBackImgUrl(null)
       onOpenChange(false)
     } catch (error) {
       toast({
@@ -86,8 +88,12 @@ export function CreateCardDialog({ open, onOpenChange, deckId }: CreateCardDialo
               />
             </div>
             <div className="grid gap-2">
-              <Label>Image (Optional)</Label>
-              <ImageUpload value={img_url} onChange={setImgUrl} />
+              <Label>Front Image (Optional)</Label>
+              <ImageUpload value={front_img_url} onChange={setFrontImgUrl} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Back Image (Optional)</Label>
+              <ImageUpload value={back_img_url} onChange={setBackImgUrl} />
             </div>
           </div>
           <DialogFooter>

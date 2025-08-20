@@ -6,23 +6,25 @@ import { Textarea } from "./ui/textarea"
 import { ImageUpload } from "./ui/image-upload"
 
 interface CardFormProps {
-  onSubmit: (data: { front: string; back: string; img_url?: string | null }) => void
-  initialData?: { front: string; back: string; img_url?: string | null }
+  onSubmit: (data: { front: string; back: string; front_img_url?: string | null; back_img_url?: string | null }) => void
+  initialData?: { front: string; back: string; front_img_url?: string | null; back_img_url?: string | null }
   submitLabel?: string
 }
 
 export function CardForm({ onSubmit, initialData, submitLabel = "Add Card" }: CardFormProps) {
   const [front, setFront] = React.useState(initialData?.front || "")
   const [back, setBack] = React.useState(initialData?.back || "")
-  const [img_url, setImgUrl] = React.useState<string | null>(initialData?.img_url || null)
+  const [frontImgUrl, setFrontImgUrl] = React.useState<string | null>(initialData?.front_img_url || null)
+  const [backImgUrl, setBackImgUrl] = React.useState<string | null>(initialData?.back_img_url || null)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit({ front, back, img_url })
+    onSubmit({ front, back, front_img_url: frontImgUrl, back_img_url: backImgUrl })
     if (!initialData) {
       setFront("")
       setBack("")
-      setImgUrl(null)
+      setFrontImgUrl(null)
+      setBackImgUrl(null)
     }
   }
 
@@ -51,11 +53,17 @@ export function CardForm({ onSubmit, initialData, submitLabel = "Add Card" }: Ca
       </div>
 
       <div>
-        <Label>Image (Optional)</Label>
-        <ImageUpload value={img_url} onChange={setImgUrl} className="mt-1" />
+        <Label>Front Image (Optional)</Label>
+        <ImageUpload value={frontImgUrl} onChange={setFrontImgUrl} />
+      </div>
+
+      <div>
+        <Label>Back Image (Optional)</Label>
+        <ImageUpload value={backImgUrl} onChange={setBackImgUrl} />
       </div>
 
       <Button type="submit">{submitLabel}</Button>
     </form>
   )
-} 
+}
+ 

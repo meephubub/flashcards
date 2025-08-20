@@ -3,14 +3,13 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ArrowLeft, ArrowRight, RotateCw, Check, X, Sparkles, Calendar } from "lucide-react"
+import { ArrowLeft, ArrowRight, RotateCw, Check, X, Calendar } from "lucide-react"
 import Link from "next/link"
 import { Progress } from "@/components/ui/progress"
 import { useDecks } from "@/context/deck-context"
 import { useSettings } from "@/context/settings-context"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AIChat } from "@/components/ai-chat"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ConfidenceRatingComponent } from "@/components/confidence-rating"
 import type { ConfidenceRating } from "@/lib/spaced-repetition"
@@ -42,7 +41,6 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
   const [currentCardIndex, setCurrentCardIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [isAIChatOpen, setIsAIChatOpen] = useState(false)
   const [studyComplete, setStudyComplete] = useState(false)
   const [cardsToReview, setCardsToReview] = useState<number[]>([])
   const [reviewMode, setReviewMode] = useState(false)
@@ -159,11 +157,22 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
     setReviewMode(false)
   }
 
+  const finishSession = () => {
+    setIsFlipped(false)
+    setReviewMode(false)
+    setStudyComplete(true)
+    // ensure endTime is captured
+    setStats(prev => ({
+      ...prev,
+      endTime: prev.endTime ?? new Date(),
+    }))
+  }
+
   const moveToNextCard = () => {
     if (reviewMode) {
       // In review mode, move to next review card or end session if done
       if (reviewIndices.length === 0) {
-        setStudyComplete(true)
+        finishSession()
         return
       }
       if (reviewCurrent < reviewIndices.length - 1) {
@@ -200,7 +209,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
           description: `Reviewing ${cardsToReview.length} cards that need attention`,
         })
       } else {
-        setStudyComplete(true)
+        finishSession()
       }
     }
   }
@@ -213,7 +222,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
       const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent)
       setReviewIndices(newReviewIndices)
       if (newReviewIndices.length === 0) {
-        setStudyComplete(true)
+        finishSession()
         return
       }
       // If we removed the last card, go to the new last card
@@ -502,92 +511,90 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 text-black">
       {/* Top bar simplified: remove internal title 'Studying: ...' and count (moved to page header) */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           {reviewMode && (
-            <div className="text-xs text-muted-foreground">Review mode</div>
+            <div className="text-[11px] uppercase tracking-wider text-neutral-500">Review mode</div>
           )}
         </div>
         {isSpacedRepetitionEnabled && (
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <Calendar className="h-4 w-4" /> SR enabled
+          <div className="text-[11px] uppercase tracking-wider text-neutral-500 flex items-center gap-1">
+            <Calendar className="h-3.5 w-3.5" /> SR enabled
           </div>
         )}
       </div>
 
       {settings.studySettings.showProgressBar && (
-        <div className="mb-4">
-          <div className="flex justify-between text-xs text-muted-foreground mb-1">
+        <div className="mb-2">
+          <div className="flex justify-between text-[11px] text-neutral-500 mb-1">
             <span>Progress</span>
             <span>{Math.round(progress)}%</span>
           </div>
-          <Progress value={progress} className="h-1.5" />
+          <Progress value={progress} className="h-1.5 bg-neutral-200" />
         </div>
       )}
-
-      <div 
-        className={`card-flip ${isFlipped ? "flipped" : ""} transition-all duration-300 hover:shadow-lg`} 
+      {!studyComplete && (
+      <>
+      <div
+        className={`card-flip ${isFlipped ? "flipped" : ""} transition-all duration-300`} 
         onClick={handleFlip}
       >
-        <div className="card-flip-inner relative h-[350px] w-full transition-transform duration-500 ease-in-out">
-          <Card className="card-front absolute w-full h-full flex items-center justify-center p-8 cursor-pointer bg-gradient-to-br from-background to-background/80 border-2 hover:border-primary/30 transition-all duration-300">
-            <div className="text-center text-xl space-y-6 max-w-[90%]">
-              <div className="font-medium text-2xl">{currentCard.front}</div>
-              <div className="text-xs text-muted-foreground mt-4 absolute bottom-3 left-0 right-0 text-center">
-                Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Space</kbd> to flip
-              </div>
-            </div>
-          </Card>
-          <Card className="card-back absolute w-full h-full flex items-center justify-center p-8 cursor-pointer bg-gradient-to-br from-background to-background/80 border-2 hover:border-primary/30 transition-all duration-300">
-            <div className="text-center space-y-5 max-w-[90%]">
-              {currentCard.img_url && (
-                <div className="relative w-full flex justify-center items-center bg-white/10 rounded-lg p-3 shadow-inner">
-                  <img 
-                    src={currentCard.img_url} 
-                    alt="Card image" 
-                    className="max-h-[220px] w-auto object-contain rounded-md shadow-md" 
-                    style={{ mixBlendMode: 'multiply' }}
+        <div className="card-flip-inner relative h-[420px] w-full transition-transform duration-500 ease-in-out">
+          <Card className="card-front absolute w-full h-full flex items-center justify-center p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300">
+            <div className="text-center text-2xl space-y-6 max-w-[88%]">
+              {currentCard.front_img_url && (
+                <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
+                  <img
+                    src={currentCard.front_img_url}
+                    alt="Front side image"
+                    className="max-h-[240px] w-auto object-contain rounded-md"
                   />
                 </div>
               )}
-              <div className="font-medium text-xl">{currentCard.back}</div>
+              <div className="font-semibold text-3xl leading-snug">{currentCard.front}</div>
+              <div className="text-[11px] text-neutral-500 mt-4 absolute bottom-4 left-0 right-0 text-center">
+                Press <kbd className="px-1.5 py-0.5 border border-black/20 rounded text-[10px] bg-white">Space</kbd> to flip
+              </div>
+            </div>
+          </Card>
+          <Card className="card-back absolute w-full h-full flex items-center justify-center p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300">
+            <div className="text-center space-y-6 max-w-[88%]">
+              {currentCard.back_img_url && (
+                <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
+                  <img
+                    src={currentCard.back_img_url}
+                    alt="Back side image"
+                    className="max-h-[240px] w-auto object-contain rounded-md"
+                  />
+                </div>
+              )}
+              <div className="font-semibold text-2xl leading-snug">{currentCard.back}</div>
               
               {/* Show confidence rating buttons directly on the back of the card when using spaced repetition */}
               {isFlipped && (
                 <div className="mt-6 animate-fadeIn">
                   {isSpacedRepetitionEnabled ? (
                     <>
-                      <div className="text-sm text-muted-foreground mb-3">How well did you know this? (Press 0-5)</div>
+                      <div className="text-sm text-neutral-600 mb-3">How well did you know this? (Press 0-5)</div>
                       <div className="flex justify-center gap-2">
                         {[0, 1, 2, 3, 4, 5].map((rating) => {
                           // Use different button variants based on rating
                           let variant = "outline"
-                          let bgColor = ""
-                          
-                          if (rating < 2) {
-                            variant = "destructive"
-                            bgColor = "bg-primary/10"
-                          } else if (rating < 3) {
-                            variant = "destructive"
-                            bgColor = "bg-primary/20"
-                          } else if (rating < 4) {
-                            variant = "default"
-                            bgColor = "bg-primary/30"
-                          } else if (rating < 5) {
-                            variant = "default"
-                            bgColor = "bg-primary/40"
-                          } else {
-                            variant = "default"
-                            bgColor = "bg-primary/50"
-                          }
+                          let extra = ""
+                          if (rating === 0) extra = "bg-neutral-100"
+                          if (rating === 1) extra = "bg-neutral-200"
+                          if (rating === 2) extra = "bg-neutral-300"
+                          if (rating === 3) extra = "bg-neutral-400 text-white"
+                          if (rating === 4) extra = "bg-neutral-600 text-white"
+                          if (rating === 5) extra = "bg-black text-white"
 
                           return (
                             <Button
                               key={rating}
                               variant={variant as any}
-                              className={`h-11 w-11 font-medium text-lg ${bgColor} hover:scale-110 transition-all duration-200`}
+                              className={`h-11 w-11 font-medium text-lg border border-black/20 ${extra} hover:scale-105 transition-all duration-150`}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleRating(rating as ConfidenceRating)
@@ -601,7 +608,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
                           )
                         })}
                       </div>
-                      <div className="mt-3 text-xs text-muted-foreground">
+                      <div className="mt-3 text-xs text-neutral-500">
                         {hoveredRating !== null && (
                           <div className="animate-fadeIn">{getRatingDescription(hoveredRating)}</div>
                         )}
@@ -609,11 +616,11 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
                     </>
                   ) : (
                     <div className="flex flex-col items-center">
-                      <div className="text-sm text-muted-foreground mb-3">Did you know this card?</div>
+                      <div className="text-sm text-neutral-600 mb-3">Did you know this card?</div>
                       <div className="flex justify-center gap-4">
                         <Button
                           variant="default"
-                          className="px-5 py-6 bg-primary/20 hover:bg-primary/30 hover:scale-105 transition-all duration-200"
+                          className="px-5 py-6 bg-black text-white hover:bg-neutral-800 hover:scale-105 transition-all duration-150"
                           onClick={(e) => {
                             e.stopPropagation()
                             handleCardKnown()
@@ -623,8 +630,8 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
                           Yes (Press 1)
                         </Button>
                         <Button
-                          variant="destructive"
-                          className="px-5 py-6 bg-primary/10 hover:bg-primary/20 hover:scale-105 transition-all duration-200"
+                          variant="outline"
+                          className="px-5 py-6 border border-black/20 hover:bg-black hover:text-white hover:scale-105 transition-all duration-150"
                           onClick={(e) => {
                             e.stopPropagation()
                             handleCardNeedsReview()
@@ -643,12 +650,12 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
         </div>
       </div>
 
-      <div className="flex justify-between items-center mt-4 bg-muted/30 p-3 rounded-lg shadow-sm">
+      <div className="flex justify-between items-center mt-4 border border-black/10 p-3 rounded-xl bg-white">
         <Button 
           variant="outline" 
           onClick={handlePrevious} 
           disabled={currentCardIndex === 0}
-          className="hover:bg-background hover:shadow-sm transition-all duration-200"
+          className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Previous
@@ -662,7 +669,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
                   variant="outline" 
                   size="icon" 
                   onClick={resetStudySession}
-                  className="hover:bg-background hover:shadow-sm transition-all duration-200"
+                  className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"
                 >
                   <RotateCw className="h-4 w-4" />
                 </Button>
@@ -672,23 +679,13 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant={isAIChatOpen ? "default" : "outline"} 
-                  size="icon" 
-                  onClick={() => setIsAIChatOpen(!isAIChatOpen)}
-                  className={isAIChatOpen ? "" : "hover:bg-background hover:shadow-sm transition-all duration-200"}
-                >
-                  <Sparkles className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Ask AI about this card</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            variant="outline"
+            onClick={finishSession}
+            className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"
+          >
+            Finish
+          </Button>
           {isFlipped && !isSpacedRepetitionEnabled && (
             <>
               <TooltipProvider>
@@ -698,7 +695,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
                       variant="default" 
                       size="icon" 
                       onClick={handleCardKnown}
-                      className="bg-primary/80 hover:bg-primary hover:scale-105 transition-all duration-200"
+                      className="bg-black text-white hover:bg-neutral-800 hover:scale-105 transition-all duration-150"
                     >
                       <Check className="h-4 w-4" />
                     </Button>
@@ -712,10 +709,10 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button 
-                      variant="destructive" 
+                      variant="outline" 
                       size="icon" 
                       onClick={handleCardNeedsReview}
-                      className="bg-primary/20 hover:bg-primary/30 hover:scale-105 transition-all duration-200"
+                      className="border border-black/20 text-black hover:bg-black hover:text-white hover:scale-105 transition-all duration-150"
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -734,8 +731,8 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
           onClick={isFlipped ? (isSpacedRepetitionEnabled ? undefined : handleCardKnown) : handleFlip}
           disabled={(isLastCard && isFlipped && studyComplete) || (isFlipped && isSpacedRepetitionEnabled)}
           className={isFlipped ? 
-            "bg-primary hover:bg-primary/90 hover:shadow-md transition-all duration-200" : 
-            "hover:bg-background hover:shadow-sm transition-all duration-200"}
+            "bg-black text-white hover:bg-neutral-800 hover:shadow transition-all duration-150" : 
+            "border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"}
         >
             {isFlipped ? (
               <>
@@ -745,21 +742,23 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
             ) : (
               <>
                 Flip
-                <kbd className="ml-2 px-1.5 py-0.5 bg-muted rounded text-xs">Space</kbd>
+                <kbd className="ml-2 px-1.5 py-0.5 border border-black/20 rounded text-[10px] bg-white">Space</kbd>
               </>
             )}
           </Button>
       </div>
+      </>
+      )}
 
       {studyComplete && (
-        <div className="text-center p-6 bg-secondary rounded-lg shadow-md mt-6 animate-fadeIn">
+        <div className="text-center p-6 bg-white border border-black/10 rounded-xl shadow-sm mt-6 animate-fadeIn">
           <div className="flex items-center justify-center mb-2">
-            <div className="bg-primary/10 p-2 rounded-full">
-              <Check className="h-6 w-6 text-primary" />
+            <div className="bg-black text-white p-2 rounded-full">
+              <Check className="h-6 w-6" />
             </div>
-            <h3 className="font-semibold text-xl ml-2">Study Session Complete!</h3>
+            <h3 className="font-semibold text-xl ml-2">Study Session Complete</h3>
           </div>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-neutral-600 mt-1">
             {reviewMode 
               ? "You've completed reviewing all marked cards." 
               : cardsToReview.length > 0 
@@ -768,18 +767,18 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
           </p>
           
           {/* Study Statistics */}
-          <div className="mt-6 grid grid-cols-2 gap-4 text-sm bg-background/50 p-4 rounded-lg shadow-inner">
-            <div className="stats-card bg-background p-3 rounded-md shadow-sm">
+          <div className="mt-6 grid grid-cols-2 gap-4 text-sm bg-white p-4 rounded-xl">
+            <div className="stats-card bg-white border border-black/10 p-3 rounded-md">
               <div className="flex flex-col items-center">
-                <span className="text-muted-foreground text-xs uppercase tracking-wide">Cards Studied</span>
+                <span className="text-neutral-500 text-xs uppercase tracking-wide">Cards Studied</span>
                 <span className="font-bold text-2xl mt-1">{stats.cardsStudied}</span>
-                <span className="text-xs text-muted-foreground">of {stats.totalCards}</span>
+                <span className="text-xs text-neutral-500">of {stats.totalCards}</span>
               </div>
             </div>
             
-            <div className="stats-card bg-background p-3 rounded-md shadow-sm">
+            <div className="stats-card bg-white border border-black/10 p-3 rounded-md">
               <div className="flex flex-col items-center">
-                <span className="text-muted-foreground text-xs uppercase tracking-wide">Success Rate</span>
+                <span className="text-neutral-500 text-xs uppercase tracking-wide">Success Rate</span>
                 <span className="font-bold text-2xl mt-1">
                   {stats.cardsStudied > 0 
                     ? `${Math.round((stats.knownCards / stats.cardsStudied) * 100)}%` 
@@ -788,31 +787,31 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
               </div>
             </div>
             
-            <div className="stats-card bg-background p-3 rounded-md shadow-sm">
+            <div className="stats-card bg-white border border-black/10 p-3 rounded-md">
               <div className="flex flex-col items-center">
-                <span className="text-muted-foreground text-xs uppercase tracking-wide">Known Cards</span>
+                <span className="text-neutral-500 text-xs uppercase tracking-wide">Known Cards</span>
                 <div className="flex items-center mt-1">
-                  <span className="font-bold text-2xl text-primary">{stats.knownCards}</span>
-                  <Check className="h-4 w-4 text-primary ml-1" />
+                  <span className="font-bold text-2xl text-black">{stats.knownCards}</span>
+                  <Check className="h-4 w-4 text-black ml-1" />
                 </div>
               </div>
             </div>
             
-            <div className="stats-card bg-background p-3 rounded-md shadow-sm">
+            <div className="stats-card bg-white border border-black/10 p-3 rounded-md">
               <div className="flex flex-col items-center">
-                <span className="text-muted-foreground text-xs uppercase tracking-wide">Need Review</span>
+                <span className="text-neutral-500 text-xs uppercase tracking-wide">Need Review</span>
                 <div className="flex items-center mt-1">
-                  <span className="font-bold text-2xl text-primary/70">{stats.unknownCards}</span>
-                  <X className="h-4 w-4 text-primary/70 ml-1" />
+                  <span className="font-bold text-2xl text-neutral-700">{stats.unknownCards}</span>
+                  <X className="h-4 w-4 text-neutral-700 ml-1" />
                 </div>
               </div>
             </div>
             
             {stats.endTime && (
-              <div className="stats-card bg-background p-3 rounded-md shadow-sm col-span-2">
+              <div className="stats-card bg-white border border-black/10 p-3 rounded-md col-span-2">
                 <div className="flex items-center justify-center">
                   <div>
-                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Total Time</span>
+                    <span className="text-neutral-500 text-xs uppercase tracking-wide">Total Time</span>
                     <div className="font-bold text-xl mt-1">
                       {Math.round((stats.endTime.getTime() - stats.startTime.getTime()) / 1000)} seconds
                     </div>
@@ -821,10 +820,10 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
               </div>
             )}
             
-            <div className="stats-card bg-background p-3 rounded-md shadow-sm col-span-2">
+            <div className="stats-card bg-white border border-black/10 p-3 rounded-md col-span-2">
               <div className="flex items-center justify-center">
                 <div>
-                  <span className="text-muted-foreground text-xs uppercase tracking-wide">Avg. Time per Card</span>
+                  <span className="text-neutral-500 text-xs uppercase tracking-wide">Avg. Time per Card</span>
                   <div className="font-bold text-xl mt-1">
                     {Math.round(stats.averageTimePerCard / 1000)} seconds
                   </div>
@@ -837,7 +836,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
             <Button 
               variant="outline" 
               onClick={resetStudySession}
-              className="hover:bg-background hover:shadow-sm transition-all duration-200"
+              className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"
             >
               <RotateCw className="h-4 w-4 mr-2" />
               Study Again
@@ -853,14 +852,14 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
                   setIsFlipped(false)
                   setStudyComplete(false)
                 }}
-                className="bg-primary/70 hover:bg-primary/80 transition-all duration-200"
+                className="bg-black text-white hover:bg-neutral-800 transition-all duration-150"
               >
                 Review Marked Cards ({cardsToReview.length})
               </Button>
             )}
             <Button 
               asChild
-              className="hover:shadow-sm transition-all duration-200"
+              className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"
             >
               <Link href={`/deck/${deckId}`}>Return to Deck</Link>
             </Button>
@@ -868,16 +867,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
         </div>
       )}
 
-      {currentCard && (
-        <div className="mt-6">
-          <AIChat
-            cardFront={currentCard.front}
-            cardBack={currentCard.back}
-            isOpen={isAIChatOpen}
-            onClose={() => setIsAIChatOpen(false)}
-          />
-        </div>
-      )}
+      
     </div>
   )
 }

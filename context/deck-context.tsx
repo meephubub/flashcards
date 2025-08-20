@@ -28,8 +28,21 @@ interface DeckContextType {
   addDeck: (name: string, description: string, tag?: string | null) => Promise<Deck>
   updateDeck: (deck: Deck) => Promise<Deck>
   deleteDeck: (id: number) => Promise<boolean>
-  addCard: (deckId: number, front: string, back: string, img_url?: string | null) => Promise<Card>
-  updateCard: (deckId: number, cardId: number, front: string, back: string, img_url?: string | null) => Promise<Card>
+  addCard: (
+    deckId: number,
+    front: string,
+    back: string,
+    front_img_url?: string | null,
+    back_img_url?: string | null,
+  ) => Promise<Card>
+  updateCard: (
+    deckId: number,
+    cardId: number,
+    front: string,
+    back: string,
+    front_img_url?: string | null,
+    back_img_url?: string | null,
+  ) => Promise<Card>
   deleteCard: (deckId: number, cardId: number) => Promise<boolean>
   getDeck: (id: number) => Deck | undefined
   refreshDecks: () => Promise<void>
@@ -208,9 +221,15 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     return success
   }
 
-  const addCard = async (deckId: number, front: string, back: string, img_url?: string | null): Promise<Card> => {
+  const addCard = async (
+    deckId: number,
+    front: string,
+    back: string,
+    front_img_url?: string | null,
+    back_img_url?: string | null,
+  ): Promise<Card> => {
     if (!user) throw new Error("User not authenticated");
-    const newCard = await dataService.addCard(supabase, deckId, front, back, img_url)
+    const newCard = await dataService.addCard(supabase, deckId, front, back, front_img_url, back_img_url)
     if (!newCard) {
       throw new Error("Failed to add card")
     }
@@ -233,9 +252,16 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     return newCard
   }
 
-  const updateCard = async (deckId: number, cardId: number, front: string, back: string, img_url?: string | null): Promise<Card> => {
+  const updateCard = async (
+    deckId: number,
+    cardId: number,
+    front: string,
+    back: string,
+    front_img_url?: string | null,
+    back_img_url?: string | null,
+  ): Promise<Card> => {
     if (!user) throw new Error("User not authenticated");
-    const updatedCard = await dataService.updateCard(supabase, deckId, cardId, front, back, img_url)
+    const updatedCard = await dataService.updateCard(supabase, deckId, cardId, front, back, front_img_url, back_img_url)
     if (!updatedCard) {
       throw new Error("Failed to update card")
     }
@@ -367,6 +393,7 @@ export function useDecks() {
     return {
       decks: [],
       loading: true,
+      user: null,
       refreshDecks: async () => {},
       addDeck: async () => {},
       updateDeck: async () => {},
@@ -374,7 +401,8 @@ export function useDecks() {
       addCard: async () => {},
       updateCard: async () => {},
       deleteCard: async () => {},
-      getDeck: async () => null,
+      getDeck: () => undefined,
+      updateCardProgress: async () => true,
       getDueCards: async () => [],
     }
   }

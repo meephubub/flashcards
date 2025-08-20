@@ -500,7 +500,14 @@ export async function deleteDeck(supabase: SupabaseClient, deckId: number): Prom
 }
 
 // Add a card to a deck
-export async function addCard(supabase: SupabaseClient, deckId: number, front: string, back: string, img_url?: string | null): Promise<Card | undefined> {
+export async function addCard(
+  supabase: SupabaseClient,
+  deckId: number,
+  front: string,
+  back: string,
+  front_img_url?: string | null,
+  back_img_url?: string | null,
+): Promise<Card | undefined> {
   try {
     const {
       data: { user },
@@ -544,7 +551,11 @@ export async function addCard(supabase: SupabaseClient, deckId: number, front: s
           deck_id: deckId,
           front,
           back,
-          img_url: img_url || null, // Ensure null is passed if undefined
+          // per-side image fields
+          front_img_url: front_img_url ?? null,
+          back_img_url: back_img_url ?? null,
+          // ensure RLS insert passes with user ownership
+          user_id: user.id,
         },
       ])
       .select() // Select all columns of the new card
@@ -590,7 +601,8 @@ export async function updateCard(
   cardId: number,
   front: string,
   back: string,
-  img_url?: string | null,
+  front_img_url?: string | null,
+  back_img_url?: string | null,
 ): Promise<Card | undefined> {
   try {
     const {
@@ -648,14 +660,19 @@ export async function updateCard(
     }
 
     // 3. Perform the update
-    const updatePayload: { front: string; back: string; img_url?: string | null; updated_at: string } = {
+    const updatePayload: {
+      front: string;
+      back: string;
+      front_img_url?: string | null;
+      back_img_url?: string | null;
+      updated_at: string;
+    } = {
       front,
       back,
       updated_at: new Date().toISOString(),
     };
-    if (img_url !== undefined) { // Only include img_url if provided, allows setting to null
-      updatePayload.img_url = img_url;
-    }
+    if (front_img_url !== undefined) updatePayload.front_img_url = front_img_url;
+    if (back_img_url !== undefined) updatePayload.back_img_url = back_img_url;
 
     const { data: updatedDbCard, error: updateError } = await supabase
       .from("cards")
@@ -1027,7 +1044,14 @@ export async function importCardsFromMarkdown(supabase: SupabaseClient, parsedDe
       }
 
       // addCard has been refactored and returns a Card object or undefined
-      const addedCard = await addCard(supabase, newDeck.id, frontContent, backContent, card.img_url || null);
+      const addedCard = await addCard(
+        supabase,
+        newDeck.id,
+        frontContent,
+        backContent,
+        (card as any).front_img_url ?? null,
+        (card as any).back_img_url ?? null,
+      );
       if (!addedCard) {
         // Potentially log an error or collect failures if some cards couldn't be added
         console.warn(`Failed to add card: {front: "${frontContent.substring(0,20)}..."} to deck ${newDeck.id}`);

@@ -26,7 +26,8 @@ interface Flashcard {
   id: string | number;
   front: string;
   back: string;
-  img_url?: string | null;
+  front_img_url?: string | null;
+  back_img_url?: string | null;
   // Add other card properties if necessary
 }
 

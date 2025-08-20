@@ -6,13 +6,14 @@ import { CardProgress } from "@/lib/spaced-repetition"
 interface CardDisplayProps {
   front: string
   back: string
-  img_url?: string | null
+  front_img_url?: string | null
+  back_img_url?: string | null
   progress?: CardProgress
   onAnswer: (correct: boolean) => void
   className?: string
 }
 
-export function CardDisplay({ front, back, img_url, progress, onAnswer, className }: CardDisplayProps) {
+export function CardDisplay({ front, back, front_img_url, back_img_url, progress, onAnswer, className }: CardDisplayProps) {
   const [isFlipped, setIsFlipped] = React.useState(false)
 
   const handleFlip = () => {
@@ -26,7 +27,8 @@ export function CardDisplay({ front, back, img_url, progress, onAnswer, classNam
 
   return (
     <Card className={className}>
-      {img_url && !isFlipped && <CardImage src={img_url} alt="Card image" />}
+      {!isFlipped && front_img_url && <CardImage src={front_img_url} alt="Front image" />}
+      {isFlipped && back_img_url && <CardImage src={back_img_url} alt="Back image" />}
       <CardContent className="p-6">
         <div className="text-center space-y-4">
           <div className="text-xl font-medium">
@@ -52,4 +54,5 @@ export function CardDisplay({ front, back, img_url, progress, onAnswer, classNam
       </CardContent>
     </Card>
   )
-} 
+}
+ 

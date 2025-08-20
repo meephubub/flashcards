@@ -63,7 +63,8 @@ export type Database = {
           deck_id: number | null
           front: string
           id: number
-          img_url: string | null
+          front_img_url: string | null
+          back_img_url: string | null
           updated_at: string | null
           user_id: string | null
         }
@@ -73,7 +74,8 @@ export type Database = {
           deck_id?: number | null
           front: string
           id?: number
-          img_url?: string | null
+          front_img_url?: string | null
+          back_img_url?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -83,7 +85,8 @@ export type Database = {
           deck_id?: number | null
           front?: string
           id?: number
-          img_url?: string | null
+          front_img_url?: string | null
+          back_img_url?: string | null
           updated_at?: string | null
           user_id?: string | null
         }

@@ -67,7 +67,8 @@ export type Card = {
   deck_id: number
   front: string
   back: string
-  img_url: string | null
+  front_img_url: string | null
+  back_img_url: string | null
   created_at: string
   updated_at: string
 }
@@ -98,7 +99,8 @@ export type CardProgressInput = {
 export type ParsedDeckCardImport = {
   front: string;
   back: string;
-  img_url?: string | null; // Optional image URL
+  front_img_url?: string | null;
+  back_img_url?: string | null;
 };
 
 export type ParsedDeckImport = {
