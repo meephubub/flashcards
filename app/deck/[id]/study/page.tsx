@@ -30,6 +30,8 @@ export default function StudyPage({ params }: { params: { id: string } }) {
     reviewCurrent: number
     reviewTotal: number
     remaining: number
+    correct: number
+    wrong: number
   } | null>(null);
 
   useEffect(() => {
@@ -135,6 +137,10 @@ export default function StudyPage({ params }: { params: { id: string } }) {
                 {progressInfo && (
                   <div className="text-xs text-neutral-600 border border-black/10 rounded-md px-2 py-1">
                     Remaining: {progressInfo.remaining}
+                    <span className="mx-1">•</span>
+                    Correct: {progressInfo.correct}
+                    <span className="mx-1">•</span>
+                    Wrong: {progressInfo.wrong}
                   </div>
                 )}
               </div>

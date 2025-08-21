@@ -25,6 +25,8 @@ interface StudyModeProps {
     reviewCurrent: number
     reviewTotal: number
     remaining: number
+    correct: number
+    wrong: number
   }) => void
 }
 
@@ -45,7 +47,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
   const [cardsToReview, setCardsToReview] = useState<number[]>([])
   const [reviewMode, setReviewMode] = useState(false)
   const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null)
-  const FLIP_ANIMATION_DURATION = 500 // ms, should match CSS duration
+  const FLIP_ANIMATION_DURATION = 300 // ms, should match CSS duration
   
   // Statistics tracking
   const [stats, setStats] = useState({
@@ -132,10 +134,12 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
         reviewCurrent: reviewCurrent + 1,
         reviewTotal: reviewIndices.length,
         remaining,
+        correct: stats.knownCards,
+        wrong: stats.unknownCards,
       }
       onProgressInfo(info)
     }
-  }, [currentCardIndex, cards.length, reviewMode, reviewCurrent, reviewIndices.length, onProgressInfo])
+  }, [currentCardIndex, cards.length, reviewMode, reviewCurrent, reviewIndices.length, stats.knownCards, stats.unknownCards, onProgressInfo])
 
   // Define all handler functions first before using them in useEffect
   const handleFlip = () => {
@@ -185,14 +189,19 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
       return
     }
     if (isFlipped) {
+      // We're on the back of the card; flip first, then navigate/finish after animation
       setIsFlipped(false)
-      setPendingCardIndex(
+      // Decide next action:
+      // - If there's a next card in the initial pass, go there
+      // - Else if there are cards to review, enter review mode (use >= length sentinel already handled)
+      // - Else finish session (use -1 sentinel to finish after animation)
+      const nextPending =
         currentCardIndex < cards.length - 1
           ? currentCardIndex + 1
-          : !reviewMode && cardsToReview.length > 0
-            ? [...cardsToReview].sort((a, b) => a - b)[0]
-            : null
-      )
+          : (!reviewMode && cardsToReview.length > 0)
+            ? cards.length // triggers review mode in pending effect
+            : -1 // sentinel to finish after animation
+      setPendingCardIndex(nextPending)
     } else {
       if (currentCardIndex < cards.length - 1) {
         setCurrentCardIndex((prev) => prev + 1)
@@ -329,7 +338,11 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
   useEffect(() => {
     if (pendingCardIndex !== null) {
       const timer = setTimeout(() => {
-        if (!reviewMode && cardsToReview.length > 0 && pendingCardIndex !== null && pendingCardIndex >= cards.length) {
+        // Finish after animation if sentinel -1 was set
+        if (pendingCardIndex === -1) {
+          finishSession()
+        } else if (!reviewMode && cardsToReview.length > 0 && pendingCardIndex >= cards.length) {
+          // Enter review mode after animation
           setReviewMode(true)
           const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
           setReviewIndices(sortedReviewIndices)
@@ -339,7 +352,8 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
             title: "Review Mode",
             description: `Reviewing ${cardsToReview.length} cards that need attention`,
           })
-        } else if (pendingCardIndex !== null) {
+        } else {
+          // Go to the next card index
           setCurrentCardIndex(pendingCardIndex)
           setIsFlipped(false)
         }
@@ -503,7 +517,11 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold mb-2">No cards to study</h2>
         <p className="text-gray-500 mb-6">There are no cards available for study in this session.</p>
-        <Button asChild>
+        <Button 
+          variant="outline" 
+          asChild 
+          className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"
+        >
           <Link href={`/deck/${deckId}`}>Return to Deck</Link>
         </Button>
       </div>
@@ -541,7 +559,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
         className={`card-flip ${isFlipped ? "flipped" : ""} transition-all duration-300`} 
         onClick={handleFlip}
       >
-        <div className="card-flip-inner relative h-[420px] w-full transition-transform duration-500 ease-in-out">
+        <div className="card-flip-inner relative h-[420px] w-full transition-transform duration-300 ease-in-out">
           <Card className="card-front absolute w-full h-full flex items-center justify-center p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300">
             <div className="text-center text-2xl space-y-6 max-w-[88%]">
               {currentCard.front_img_url && (
@@ -731,8 +749,8 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
           onClick={isFlipped ? (isSpacedRepetitionEnabled ? undefined : handleCardKnown) : handleFlip}
           disabled={(isLastCard && isFlipped && studyComplete) || (isFlipped && isSpacedRepetitionEnabled)}
           className={isFlipped ? 
-            "bg-black text-white hover:bg-neutral-800 hover:shadow transition-all duration-150" : 
-            "border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"}
+            "group bg-black text-white hover:bg-neutral-800 hover:shadow transition-all duration-150" : 
+            "group border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"}
         >
             {isFlipped ? (
               <>
@@ -742,7 +760,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
             ) : (
               <>
                 Flip
-                <kbd className="ml-2 px-1.5 py-0.5 border border-black/20 rounded text-[10px] bg-white">Space</kbd>
+                <kbd className="ml-2 px-1.5 py-0.5 border border-black/20 rounded text-[10px] bg-white text-black">Space</kbd>
               </>
             )}
           </Button>
@@ -859,7 +877,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
             )}
             <Button 
               asChild
-              className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"
+              className="bg-black text-white hover:bg-neutral-800 transition-all duration-150"
             >
               <Link href={`/deck/${deckId}`}>Return to Deck</Link>
             </Button>
