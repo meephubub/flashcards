@@ -38,6 +38,9 @@ import 'katex/dist/katex.min.css'
 import { Skeleton } from "@/components/ui/skeleton"
 import { makeGroqRequest } from "@/lib/groq"
 import ExamFromNotesPage from "@/app/exam-from-notes/page"
+import { Canvas } from '@react-three/fiber'
+import { OrbitControls, Environment, Bounds, useGLTF } from '@react-three/drei'
+import { STLLoader } from 'three-stdlib'
 
 export default function Page() {
   const { user } = useAuth()
@@ -97,6 +100,10 @@ export default function Page() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [aiFormatting, setAiFormatting] = useState(false)
   const [aiFormatError, setAiFormatError] = useState<string | null>(null)
+  const [uploadingModel, setUploadingModel] = useState(false)
+  const [uploadModelError, setUploadModelError] = useState<string | null>(null)
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+  const editorRef = React.useRef<HTMLTextAreaElement | null>(null)
 
   // Reset embedded exam mode when switching notes or unmounting
   useEffect(() => {
@@ -376,6 +383,56 @@ Goals:
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isEditing, saveDraft, currentNoteId])
 
+  // Upload a 3D model to Supabase Storage and insert a Markdown directive at the caret
+  const onPickModel = React.useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.id) return
+    setUploadModelError(null)
+    setUploadingModel(true)
+    try {
+      // Restrict to common formats
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      if (!ext || !['glb','gltf','stl'].includes(ext)) {
+        throw new Error('Unsupported model type. Use .glb, .gltf or .stl')
+      }
+      // Send to server route that uses SUPABASE_SERVICE_ROLE_KEY
+      const form = new FormData()
+      form.set('file', file)
+      form.set('user_id', user.id)
+      const res = await fetch('/api/upload-cad', { method: 'POST', body: form })
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '')
+        throw new Error(txt || `Upload failed (${res.status})`)
+      }
+      const payload = await res.json().catch(() => ({})) as { url?: string }
+      const publicUrl = payload.url
+      if (!publicUrl) throw new Error('Upload failed: missing URL')
+      // Insert directive using remark-directive attribute syntax (attributes inside braces)
+      const insertion = `\n\n:::model{src="${publicUrl}" scale="1" autoRotate="true"}\n:::\n\n`
+      const el = editorRef.current
+      if (el) {
+        const start = el.selectionStart ?? draftContent.length
+        const end = el.selectionEnd ?? start
+        const before = draftContent.slice(0, start)
+        const after = draftContent.slice(end)
+        const next = `${before}${insertion}${after}`
+        setDraftContent(next)
+        const caret = start + insertion.length
+        setTimeout(() => {
+          try { el.focus(); el.setSelectionRange(caret, caret) } catch {}
+        }, 0)
+      } else {
+        setDraftContent((prev) => prev + insertion)
+      }
+    } catch (err: any) {
+      setUploadModelError(err?.message || 'Failed to upload model')
+    } finally {
+      setUploadingModel(false)
+      // reset value so the same file can be picked again
+      try { if (e.target) e.target.value = '' } catch {}
+    }
+  }, [draftContent, user?.id])
+
   // Provide delete handler for ActionSearchBar (opens confirm dialog)
   useEffect(() => {
     // Register a function that opens confirmation dialog
@@ -567,8 +624,8 @@ Goals:
                   <NoteSkeleton />
                 ) : isEditing ? (
                   <div>
-                    {(saveError || aiFormatError) && (
-                      <div className="mb-3 text-sm text-red-600">{saveError ?? aiFormatError}</div>
+                    {(saveError || aiFormatError || uploadModelError) && (
+                      <div className="mb-3 text-sm text-red-600">{saveError ?? aiFormatError ?? uploadModelError}</div>
                     )}
                     <div className="mb-3 flex items-center gap-2">
                       <Button
@@ -586,6 +643,21 @@ Goals:
                       >
                         {aiFormatting ? 'Formatting…' : 'Format with AI'}
                       </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".glb,.gltf,.stl"
+                        className="hidden"
+                        onChange={onPickModel}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingModel}
+                      >
+                        {uploadingModel ? 'Uploading…' : 'Insert 3D model'}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -594,6 +666,7 @@ Goals:
                           setDraftContent(noteContent || "")
                           setSaveError(null)
                           setAiFormatError(null)
+                          setUploadModelError(null)
                         }}
                         disabled={saving}
                       >
@@ -601,6 +674,7 @@ Goals:
                       </Button>
                     </div>
                     <Textarea
+                      ref={editorRef as any}
                       value={draftContent}
                       onChange={(e) => setDraftContent(e.target.value)}
                       onKeyDown={onEditorKeyDown}
@@ -812,7 +886,20 @@ function MarkdownContent({ content }: { content: string }) {
     return out.join('\n')
   }
 
-  const safeContent = React.useMemo(() => fixUnclosedMermaidFences(content || ''), [content])
+  // Normalize legacy ':::model src="..."' (no braces) into ':::model{src="..."}' so remark-directive recognizes it
+  function normalizeModelDirectives(src: string): string {
+    if (!src) return src
+    // Replace lines starting with :::model <attrs> until end of line, followed by closing :::
+    // Example:
+    // :::model src="URL" scale="1" autoRotate="true"
+    // :::
+    return src.replace(/(^|\n):::model\s+([^\n]+)\n:::/g, (_m, p1, attrs) => {
+      const trimmed = String(attrs).trim()
+      return `${p1}:::model{${trimmed}}\n:::`
+    })
+  }
+
+  const safeContent = React.useMemo(() => normalizeModelDirectives(fixUnclosedMermaidFences(content || '')), [content])
 
   // Custom remark plugin to handle directives like :::center and info boxes :::info/:::warning/etc
   const directivePlugin = React.useCallback(function () {
@@ -844,6 +931,32 @@ function MarkdownContent({ content }: { content: string }) {
             data.hName = 'div'
             const base = 'my-4 rounded-lg border px-3 py-2 shadow-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0'
             hast.className = (hast.className ? hast.className + ' ' : '') + base + ' ' + boxMap[name]
+            return
+          }
+
+          // 3D model directive: :::model src="..." [scale="1"] [autoRotate="true|false"]
+          if (name === 'model') {
+            data.hName = 'model3d'
+            // pass through attributes
+            if (node.attributes) {
+              Object.assign(hast, node.attributes)
+            }
+            // Back-compat: if attributes were written on the same line without braces
+            // e.g., :::model src="..." scale="1" -> remark-directive treats them as text children
+            // Try to parse the first child text for key="value" pairs.
+            if ((!hast.src || !Object.keys(hast).length) && Array.isArray((node as any).children)) {
+              const first = (node as any).children[0]
+              const txt = typeof first?.value === 'string' ? first.value : ''
+              if (txt) {
+                const attrs: Record<string, string> = {}
+                const re = /(\w+)="([^"]*)"/g
+                let m: RegExpExecArray | null
+                while ((m = re.exec(txt)) !== null) {
+                  attrs[m[1]] = m[2]
+                }
+                Object.assign(hast, attrs)
+              }
+            }
             return
           }
         }
@@ -895,6 +1008,60 @@ function MarkdownContent({ content }: { content: string }) {
         remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, directivePlugin, gapPlugin]}
         rehypePlugins={[rehypeKatex]}
         components={{
+          // 3D model renderer component
+          model3d: (props: any) => {
+            const src: string | undefined = (props as any)?.src
+            const scaleStr: string | undefined = (props as any)?.scale
+            const autoRotateStr: string | undefined = (props as any)?.autoRotate
+            const scale = isNaN(Number(scaleStr)) ? 1 : Number(scaleStr)
+            const autoRotate = String(autoRotateStr).toLowerCase() === 'true'
+
+            if (!src) return <div className="text-sm text-red-600">Missing model src</div>
+
+            const ext = src.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase()
+
+            const GLTF: React.FC = () => {
+              const { scene } = useGLTF(src) as any
+              return <primitive object={scene} scale={scale} />
+            }
+
+            const STL: React.FC = () => {
+              const geom = (window as any) ? undefined : undefined
+              // useLoader cannot be used conditionally without a component split; we wrap per ext below
+              return null
+            }
+
+            const STLMesh: React.FC = () => {
+              const geom = (require('@react-three/fiber').useLoader as any)(STLLoader, src)
+              return (
+                <mesh geometry={geom} scale={scale} castShadow receiveShadow>
+                  <meshStandardMaterial color="#bbbbbb" metalness={0.2} roughness={0.6} />
+                </mesh>
+              )
+            }
+
+            const ModelInner: React.FC = () => {
+              if (ext === 'glb' || ext === 'gltf') return <GLTF />
+              if (ext === 'stl') return <STLMesh />
+              return <group />
+            }
+
+            return (
+              <div className="my-4 w-full h-[360px] rounded-md border bg-neutral-50 dark:bg-neutral-900">
+                <Canvas shadows camera={{ position: [2.5, 1.5, 2.5], fov: 45 }}>
+                  <ambientLight intensity={0.6} />
+                  <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
+                  <React.Suspense fallback={null}>
+                    <Bounds fit clip observe margin={1.2}>
+                      <ModelInner />
+                    </Bounds>
+                    <Environment preset="city" />
+                  </React.Suspense>
+                  <OrbitControls enableDamping makeDefault autoRotate={autoRotate} autoRotateSpeed={0.5} />
+                </Canvas>
+              </div>
+            )
+          },
           // Intercept <pre><code class="language-mermaid">...</code></pre> and render Mermaid without pre wrapper
           pre: (props: any) => {
             try {
