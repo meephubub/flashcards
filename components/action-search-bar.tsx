@@ -203,6 +203,17 @@ const allActions: Action[] = [
     },
   },
   {
+    id: "create-model",
+    label: "Create model",
+    description: "Open create model dialog",
+    icon: <PlusCircle className="h-4 w-4 text-emerald-600" />,
+    short: "Enter",
+    end: "Models",
+    run: () => {
+      try { window.dispatchEvent(new Event('open-create-model')) } catch {}
+    },
+  },
+  {
     id: "question",
     label: "Question",
     icon: <HelpCircle className="h-4 w-4 text-blue-500" />,

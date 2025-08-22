@@ -19,6 +19,7 @@ import {
 import { NavMain } from "@/components/notes/nav-main"
 import { NavSearch } from "@/components/notes/nav-search"
 import { NavDecks } from "@/components/notes/nav-decks"
+import { NavModels } from "@/components/notes/nav-models"
 import { NavUser } from "@/components/notes/nav-user"
 import { TeamSwitcher } from "@/components/notes/team-switcher"
 import {
@@ -33,6 +34,7 @@ import { CreateDeckDialog } from "@/components/create-deck-dialog"
 import { ImportMarkdownDialog } from "@/components/import-markdown-dialog"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
 import { MergeDecksDialog } from "@/components/merge-decks-dialog"
+import { CreateModelDialog } from "@/components/create-model-dialog"
 
 // This is sample data.
 const data = {
@@ -169,6 +171,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isImportOpen, setIsImportOpen] = React.useState(false)
   const [isGenerateOpen, setIsGenerateOpen] = React.useState(false)
   const [isMergeDecksOpen, setIsMergeDecksOpen] = React.useState(false)
+  const [isCreateModelOpen, setIsCreateModelOpen] = React.useState(false)
 
   // Listen for Action Search Bar events to open dialogs
   React.useEffect(() => {
@@ -176,15 +179,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const openImport = () => setIsImportOpen(true)
     const openGenerate = () => setIsGenerateOpen(true)
     const openMerge = () => setIsMergeDecksOpen(true)
+    const openCreateModel = () => setIsCreateModelOpen(true)
     window.addEventListener('open-create-deck', openCreate as EventListener)
     window.addEventListener('open-import-markdown', openImport as EventListener)
     window.addEventListener('open-generate-flashcards', openGenerate as EventListener)
     window.addEventListener('open-merge-decks', openMerge as EventListener)
+    window.addEventListener('open-create-model', openCreateModel as EventListener)
     return () => {
       window.removeEventListener('open-create-deck', openCreate as EventListener)
       window.removeEventListener('open-import-markdown', openImport as EventListener)
       window.removeEventListener('open-generate-flashcards', openGenerate as EventListener)
       window.removeEventListener('open-merge-decks', openMerge as EventListener)
+      window.removeEventListener('open-create-model', openCreateModel as EventListener)
     }
   }, [])
   const navUser = React.useMemo(
@@ -211,6 +217,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <NavMain items={data.navMain} />
           <NavSearch />
           <NavDecks />
+          <NavModels />
         </SidebarContent>
         <SidebarFooter>
           <NavUser user={navUser} />
@@ -223,6 +230,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <ImportMarkdownDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
       <GenerateFlashcardsDialog open={isGenerateOpen} onOpenChange={setIsGenerateOpen} />
       <MergeDecksDialog isOpen={isMergeDecksOpen} onOpenChange={setIsMergeDecksOpen} />
+      <CreateModelDialog open={isCreateModelOpen} onOpenChange={setIsCreateModelOpen} />
     </>
   )
 }

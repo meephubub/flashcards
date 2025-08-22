@@ -17,6 +17,7 @@ import EnvBannerClient from "@/components/env-banner-client";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "Flashcard App",
   description: "A modern flashcard app with an Obsidian-like interface",
   generator: "me - sam",
