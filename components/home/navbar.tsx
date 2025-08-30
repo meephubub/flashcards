@@ -32,6 +32,12 @@ const Navbar04Page = () => {
             >
               Pricing
             </Link>
+            <Link
+              href="/verify"
+              className="text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white transition-colors rounded-full px-3 py-1 text-sm"
+            >
+              Verify
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">

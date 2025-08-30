@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
@@ -37,6 +37,66 @@ export default function AccountPage() {
   const email = user?.email || ""
   const userId = user?.id || ""
   const created = user?.created_at ? new Date(user.created_at).toLocaleString() : ""
+
+  // Wallet state
+  const [walletAddress, setWalletAddress] = useState<string>("")
+  const [tokenSymbol, setTokenSymbol] = useState<string>("")
+  const [tokenBalance, setTokenBalance] = useState<string>("")
+  const [walletLoading, setWalletLoading] = useState<boolean>(false)
+  const [walletActionLoading, setWalletActionLoading] = useState<boolean>(false)
+
+  const loadWalletAndBalance = async () => {
+    if (!userId) return
+    setWalletLoading(true)
+    try {
+      // Get custodial wallet address
+      const { data: wallet, error: wErr } = await supabase
+        .from("wallets")
+        .select("address")
+        .eq("user_id", userId)
+        .maybeSingle()
+      if (wErr) throw wErr
+      const address = wallet?.address || ""
+      setWalletAddress(address)
+
+      if (address) {
+        const res = await fetch(`/api/balance?address=${encodeURIComponent(address)}`, { cache: "no-store" })
+        if (res.ok) {
+          const json = await res.json()
+          setTokenBalance(String(json.balance ?? ""))
+          setTokenSymbol(String(json.symbol ?? ""))
+        } else {
+          setTokenBalance("")
+          setTokenSymbol("")
+        }
+      } else {
+        setTokenBalance("")
+        setTokenSymbol("")
+      }
+    } catch (e) {
+      // Silent fail to avoid disrupting account page
+    } finally {
+      setWalletLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadWalletAndBalance()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  const createWalletNow = async () => {
+    setWalletActionLoading(true)
+    try {
+      const res = await fetch("/api/wallet/create", { method: "POST" })
+      if (!res.ok) throw new Error("Create wallet failed")
+      await loadWalletAndBalance()
+    } catch (e) {
+      // no-op
+    } finally {
+      setWalletActionLoading(false)
+    }
+  }
 
   const canSubmitProfile = fullName !== String(user?.user_metadata?.full_name ?? "")
   const canSubmitPassword = password.trim().length >= 8
@@ -142,6 +202,45 @@ export default function AccountPage() {
                       >
                         {updatingProfile ? "Saving…" : "Save changes"}
                       </Button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Wallet Card */}
+              <section className="mb-8 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
+                <div className="p-6 md:p-8">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Wallet</h2>
+                      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Your custodial wallet details.</p>
+                    </div>
+                    <Button onClick={() => void loadWalletAndBalance()} disabled={walletLoading} className="bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white">
+                      {walletLoading ? "Refreshing…" : "Refresh"}
+                    </Button>
+                  </div>
+
+                  <div className="mt-6 grid gap-4">
+                    <div>
+                      <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">Wallet address</label>
+                      <Input value={walletAddress || "Not created yet"} readOnly className="bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300" />
+                      {!walletAddress && (
+                        <div className="mt-3">
+                          <Button onClick={() => void createWalletNow()} disabled={walletActionLoading} className="bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white">
+                            {walletActionLoading ? "Creating…" : "Create wallet"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">Balance</label>
+                        <Input value={tokenBalance ? `${tokenBalance}` : ""} readOnly className="bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300" />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">Symbol</label>
+                        <Input value={tokenSymbol} readOnly className="bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300" />
+                      </div>
                     </div>
                   </div>
                 </div>

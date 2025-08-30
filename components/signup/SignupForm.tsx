@@ -30,7 +30,13 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     setLoading(true);
     try {
       await signUp(email, password);
-      // Redirect immediately after signup
+      // Create custodial wallet and fund 100 tokens (best-effort)
+      try {
+        await fetch("/api/wallet/create", { method: "POST" });
+        await fetch("/api/wallet/fund", { method: "POST" });
+      } catch (e) {
+        console.warn("Post-signup wallet setup failed", e);
+      }
       router.push("/");
     } catch (err: any) {
       setError(err.message || "Signup failed");
@@ -42,6 +48,12 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   const handleGoogleSignIn = async () => {
     try {
       await signInWithGoogle();
+      try {
+        await fetch("/api/wallet/create", { method: "POST" });
+        await fetch("/api/wallet/fund", { method: "POST" });
+      } catch (e) {
+        console.warn("Google sign-in wallet setup failed", e);
+      }
     } catch (error) {
       console.error("Google sign in error:", error);
     }
@@ -50,6 +62,12 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   const handleGitHubSignIn = async () => {
     try {
       await signInWithGitHub();
+      try {
+        await fetch("/api/wallet/create", { method: "POST" });
+        await fetch("/api/wallet/fund", { method: "POST" });
+      } catch (e) {
+        console.warn("GitHub sign-in wallet setup failed", e);
+      }
     } catch (error) {
       console.error("GitHub sign in error:", error);
     }
