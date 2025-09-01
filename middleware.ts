@@ -208,6 +208,7 @@ export async function middleware(request: NextRequest) {
 
   const publicRoutes = [
     '/home',
+    '/verify',
     '/login',
     '/signup',
     '/reset-password',
