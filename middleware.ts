@@ -208,6 +208,8 @@ export async function middleware(request: NextRequest) {
 
   const publicRoutes = [
     '/home',
+    '/sitemap.xml',
+    '/google-sitemap.xml',
     '/verify',
     '/login',
     '/signup',
