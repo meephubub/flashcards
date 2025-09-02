@@ -140,11 +140,11 @@ export default function AccountPage() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
+        <header className="flex h-12 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-3">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-            <Breadcrumb>
+            <Breadcrumb className="text-xs md:text-sm">
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
                   <BreadcrumbLink href="#">Settings</BreadcrumbLink>
@@ -158,22 +158,22 @@ export default function AccountPage() {
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="bg-background min-h-[100vh] flex-1 rounded-xl md:min-h-min p-6 md:p-10">
+        <div className="flex flex-1 flex-col gap-3 p-3 pt-0">
+          <div className="bg-background flex-1 rounded-xl p-4 md:p-6">
             <div className="mx-auto max-w-3xl">
               {/* Title */}
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold tracking-tight mb-2 text-neutral-900 dark:text-neutral-100">Account</h1>
+              <div className="mb-3">
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight mb-1.5 text-neutral-900 dark:text-neutral-100">Account</h1>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">Manage your profile and security settings.</p>
               </div>
 
               {/* Profile Card */}
-              <section className="mb-8 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
-                <div className="p-6 md:p-8">
+              <section className="mb-5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
+                <div className="p-4 md:p-5">
                   <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Profile</h2>
                   <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Basic information associated with your account.</p>
 
-                  <div className="mt-6 grid gap-4">
+                  <div className="mt-5 grid gap-3.5">
                     <div>
                       <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">Email</label>
                       <Input value={email} disabled className="bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300" />
@@ -208,8 +208,8 @@ export default function AccountPage() {
               </section>
 
               {/* Wallet Card */}
-              <section className="mb-8 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
-                <div className="p-6 md:p-8">
+              <section className="mb-6 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
+                <div className="p-4 md:p-5">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Wallet</h2>
@@ -220,19 +220,19 @@ export default function AccountPage() {
                     </Button>
                   </div>
 
-                  <div className="mt-6 grid gap-4">
+                  <div className="mt-5 grid gap-3.5">
                     <div>
                       <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">Wallet address</label>
                       <Input value={walletAddress || "Not created yet"} readOnly className="bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300" />
                       {!walletAddress && (
-                        <div className="mt-3">
+                        <div className="mt-2.5">
                           <Button onClick={() => void createWalletNow()} disabled={walletActionLoading} className="bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white">
                             {walletActionLoading ? "Creating…" : "Create wallet"}
                           </Button>
                         </div>
                       )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
                         <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">Balance</label>
                         <Input value={tokenBalance ? `${tokenBalance}` : ""} readOnly className="bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300" />
@@ -247,12 +247,12 @@ export default function AccountPage() {
               </section>
 
               {/* Security Card */}
-              <section className="mb-8 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
-                <div className="p-6 md:p-8">
+              <section className="mb-6 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
+                <div className="p-4 md:p-5">
                   <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Security</h2>
                   <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Update your password.</p>
 
-                  <div className="mt-6 grid gap-4">
+                  <div className="mt-5 grid gap-3.5">
                     <div>
                       <label className="block text-sm text-neutral-600 dark:text-neutral-400 mb-1">New password</label>
                       <Input
@@ -281,14 +281,15 @@ export default function AccountPage() {
 
               {/* Danger Zone */}
               <section className="rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
-                <div className="p-6 md:p-8">
+                <div className="p-4 md:p-5">
                   <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Sign out</h2>
                   <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">End your current session on this device.</p>
-                  <div className="mt-4">
+                  <div className="mt-3">
                     <Button
                       variant="outline"
                       onClick={() => void signOut()}
                       className="border-neutral-300 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                      href="/home"
                     >
                       Sign out
                     </Button>

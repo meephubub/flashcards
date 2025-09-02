@@ -16,6 +16,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import React, { useEffect, useMemo, useState } from "react"
+import { distance as levenshteinDistance } from 'fastest-levenshtein'
 import { createClient } from "@/lib/supabase/client"
 import type { Note } from "@/lib/supabase"
 import { useAuth } from "@/context/auth-context"
@@ -122,6 +123,37 @@ export default function Page() {
   const [selectLoading, setSelectLoading] = useState(false)
   const [selectError, setSelectError] = useState<string | null>(null)
   const [userNotes, setUserNotes] = useState<Pick<Note, "id" | "title" | "updated_at" | "category">[]>([])
+
+  // Search state for overlay selector in empty state
+  const [search, setSearch] = useState('')
+  const filteredNotes = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return userNotes
+    return userNotes.filter(n => (n.title || 'Untitled').toLowerCase().includes(q) || (n.category || '').toLowerCase().includes(q))
+  }, [search, userNotes])
+
+  // Lazy-load notes for the empty-state overlay if not already fetched
+  useEffect(() => {
+    if (!user?.id) return
+    if (userNotes.length > 0) return
+    let cancelled = false
+    ;(async () => {
+      setSelectLoading(true)
+      setSelectError(null)
+      const { data, error } = await supabase
+        .from("notes")
+        .select("id, title, updated_at, category")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(50)
+      if (!cancelled) {
+        if (error) setSelectError(error.message)
+        else setUserNotes((data as any) ?? [])
+        setSelectLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [supabase, user?.id, userNotes.length])
 
   // Delete confirmation dialog state/handlers (slide-to-delete)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
@@ -342,6 +374,35 @@ Goals:
       } catch {}
     }, 0)
   }, [draftContent])
+  // Extend paste handler to also embed YouTube links as directives
+  const _prevOnEditorPaste = onEditorPaste
+  const onEditorPasteExtended = React.useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = (e.clipboardData?.getData('text/plain') || '').trim()
+    // If previous handler already handled images, let it run first
+    // but we need to duplicate minimal logic to detect YouTube links before early return
+    const YT_RE = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=[^\s&]+|youtu\.be\/[^\s?&#]+|youtube\.com\/shorts\/[^\s?&#]+|youtube\.com\/embed\/[^\s?&#]+)/i
+    if (YT_RE.test(text)) {
+      e.preventDefault()
+      const el = e.currentTarget
+      const start = el.selectionStart ?? draftContent.length
+      const end = el.selectionEnd ?? start
+      const before = draftContent.slice(0, start)
+      const after = draftContent.slice(end)
+      const insertion = `\n\n:::youtube{url="${text}"}\n:::\n\n`
+      const next = `${before}${insertion}${after}`
+      setDraftContent(next)
+      const caret = start + insertion.length
+      setTimeout(() => {
+        try {
+          el.focus()
+          el.setSelectionRange(caret, caret)
+        } catch {}
+      }, 0)
+      return
+    }
+    // Fallback to original paste handler (handles image URL conversion)
+    _prevOnEditorPaste(e)
+  }, [draftContent, _prevOnEditorPaste])
 
   // Editor: Ctrl+I on selected link -> wrap as markdown image
   const onEditorKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -599,9 +660,41 @@ Goals:
               <div className="mx-auto max-w-3xl">
                 <div className="mb-6 text-center">
                   <h2 className="text-xl font-semibold mb-1">Select a note</h2>
-                  <p className="text-sm text-muted-foreground">Choose a note from the sidebar to preview its content.</p>
+                  <p className="text-sm text-muted-foreground">Choose a note to preview its content.</p>
                 </div>
-                <NoteSkeleton />
+                <div className="mx-auto w-full max-w-md rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-lg">
+                  <div className="p-3 border-b border-neutral-200 dark:border-neutral-800">
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search notes..."
+                      className="w-full rounded-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700"
+                      aria-label="Search notes"
+                    />
+                  </div>
+                  <div className="max-h-[70vh] overflow-y-auto divide-y divide-neutral-200 dark:divide-neutral-800">
+                    {selectLoading ? (
+                      <div className="p-3 text-sm text-neutral-500">Loading…</div>
+                    ) : filteredNotes.length === 0 ? (
+                      <div className="p-3 text-sm text-neutral-500">{search.trim() === '' ? 'No notes yet.' : 'No matching notes.'}</div>
+                    ) : (
+                      filteredNotes.map((n) => (
+                        <button
+                          key={n.id}
+                          className="w-full text-left p-3 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                          onClick={() => setCurrentNoteId(n.id)}
+                        >
+                          <div className="font-medium truncate">{n.title || 'Untitled'}</div>
+                          <div className="text-xs text-neutral-500 truncate">
+                            {n.category ? `${n.category} • ` : ''}
+                            {n.updated_at ? new Date(n.updated_at as any).toLocaleDateString() : ''}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
             {currentNoteId && (
@@ -678,7 +771,7 @@ Goals:
                       value={draftContent}
                       onChange={(e) => setDraftContent(e.target.value)}
                       onKeyDown={onEditorKeyDown}
-                      onPaste={onEditorPaste}
+                      onPaste={onEditorPasteExtended}
                       placeholder="Write your note in Markdown…"
                       className="min-h-[220px] w-full resize-y bg-transparent font-mono text-sm"
                     />
@@ -915,7 +1008,6 @@ function MarkdownContent({ content }: { content: string }) {
           if (name === 'center') {
             data.hName = 'div'
             hast.className = (hast.className ? hast.className + ' ' : '') + 'text-center'
-            return
           }
 
           // Info boxes with color variants
@@ -931,6 +1023,126 @@ function MarkdownContent({ content }: { content: string }) {
             data.hName = 'div'
             const base = 'my-4 rounded-lg border px-3 py-2 shadow-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0'
             hast.className = (hast.className ? hast.className + ' ' : '') + base + ' ' + boxMap[name]
+            return
+          }
+
+          // Matching directive: :::matching{shuffle="true|false" title="..."}
+          // Content: list items formatted as "Term :: Definition"
+          if (name === 'matching') {
+            data.hName = 'matching'
+            if (node.attributes) Object.assign(hast, node.attributes)
+
+            const nodeToText = (n: any): string => {
+              if (!n) return ''
+              if (typeof n.value === 'string') return n.value
+              const parts: string[] = []
+              const kids = Array.isArray(n.children) ? n.children : []
+              for (const k of kids) parts.push(nodeToText(k))
+              return parts.join('')
+            }
+
+            const pairs: Array<{ left: string; right: string }> = []
+            const children = Array.isArray((node as any).children) ? (node as any).children : []
+            for (const ch of children) {
+              if (ch.type === 'list' && Array.isArray(ch.children)) {
+                for (const li of ch.children) {
+                  const raw = nodeToText(li).trim()
+                  if (!raw) continue
+                  const segs = raw.split(/\s+::\s+/)
+                  if (segs.length >= 2) {
+                    const left = segs[0]?.trim() || ''
+                    const right = segs.slice(1).join(' :: ').trim()
+                    if (left && right) pairs.push({ left, right })
+                  }
+                }
+              } else if (ch.type === 'paragraph') {
+                const raw = nodeToText(ch)
+                const lines = raw.split(/\n+/)
+                for (const line of lines) {
+                  const segs = line.split(/\s+::\s+/)
+                  if (segs.length >= 2) {
+                    const left = segs[0]?.trim() || ''
+                    const right = segs.slice(1).join(' :: ').trim()
+                    if (left && right) pairs.push({ left, right })
+                  }
+                }
+              }
+            }
+
+            ;(data as any).hProperties = {
+              ...hast,
+              pairs,
+              pairsJson: JSON.stringify(pairs),
+            }
+            return
+          }
+
+          // YouTube directive: :::youtube url="..." [start="SECONDS"] [title="..."]
+          if (name === 'youtube') {
+            data.hName = 'youtube'
+            if (node.attributes) {
+              Object.assign(hast, node.attributes)
+            }
+            // Back-compat: attributes specified as text children without braces
+            if ((!Object.keys(hast).length) && Array.isArray((node as any).children)) {
+              const first = (node as any).children[0]
+              const txt = typeof first?.value === 'string' ? first.value : ''
+              if (txt) {
+                const attrs: Record<string, string> = {}
+                const re = /(\w+)="([^"]*)"/g
+                let m: RegExpExecArray | null
+                while ((m = re.exec(txt)) !== null) {
+                  attrs[m[1]] = m[2]
+                }
+                Object.assign(hast, attrs)
+              }
+            }
+            return
+          }
+
+          // MCQ directive: :::mcq{question="..." multi="true|false" shuffle="true|false"}
+          // Content should include a task list where [x] marks correct answers, e.g.
+          // - [ ] Option A
+          // - [x] Option B
+          if (name === 'mcq') {
+            data.hName = 'mcq'
+            if (node.attributes) Object.assign(hast, node.attributes)
+
+            const nodeToText = (n: any): string => {
+              if (!n) return ''
+              if (typeof n.value === 'string') return n.value
+              const parts: string[] = []
+              const kids = Array.isArray(n.children) ? n.children : []
+              for (const k of kids) parts.push(nodeToText(k))
+              return parts.join('')
+            }
+
+            let question: string | undefined = (hast as any).question
+            const options: Array<{ text: string; correct: boolean }> = []
+
+            const children = Array.isArray((node as any).children) ? (node as any).children : []
+            for (const ch of children) {
+              if (!question && ch.type === 'paragraph') {
+                const qtxt = nodeToText(ch).trim()
+                if (qtxt) question = qtxt
+              }
+              if (ch.type === 'list' && Array.isArray(ch.children)) {
+                for (const li of ch.children) {
+                  if (!li) continue
+                  const raw = nodeToText(li)
+                  const correct = typeof li.checked === 'boolean' ? !!li.checked : /^\s*\[[xX]\]/.test(raw)
+                  const txt = raw.replace(/^\s*\[[xX\s]\]\s*/, '').trim()
+                  if (txt) options.push({ text: txt, correct })
+                }
+              }
+            }
+
+            ;(data as any).hProperties = {
+              ...hast,
+              question: question || '',
+              options,
+              optionsJson: JSON.stringify(options),
+            }
             return
           }
 
@@ -966,11 +1178,49 @@ function MarkdownContent({ content }: { content: string }) {
 
   // Gap syntax plugin: transform (gap:answer) into <gap answer="..." /> hast nodes
   const gapPlugin = React.useCallback(function () {
-    const GAP_RE = /\(gap:([^\)]+)\)/g
+    // Allow optional whitespace around colon and tolerate soft line breaks inside
+    // Examples matched: (gap:Paris), (gap: Paris), (gap:\nParis)
+    const GAP_RE = /\(gap\s*:\s*([\s\S]*?)\)/g
     return (tree: any) => {
+      const toPlain = (n: any): string => {
+        if (!n) return ''
+        if (n.type === 'text' && typeof n.value === 'string') return n.value
+        if (n.type === 'break') return '\n'
+        const kids = Array.isArray(n.children) ? n.children : []
+        let out = ''
+        for (const k of kids) out += toPlain(k)
+        return out
+      }
+
       visitWithParent(tree, (node, parent, index) => {
         if (!parent || typeof node?.type !== 'string') return
-        // Only split text nodes
+
+        // Case 1: operate on paragraphs/headings as a whole to catch cross-node patterns
+        if ((node.type === 'paragraph' || node.type === 'heading') && Array.isArray(node.children)) {
+          const text = toPlain(node)
+          if (!GAP_RE.test(text)) return
+          GAP_RE.lastIndex = 0
+
+          const parts: any[] = []
+          let lastIndex = 0
+          let m: RegExpExecArray | null
+          while ((m = GAP_RE.exec(text)) !== null) {
+            const start = m.index
+            const end = GAP_RE.lastIndex
+            const before = text.slice(lastIndex, start)
+            if (before) parts.push({ type: 'text', value: before })
+            const answer = (m[1] || '').replace(/\s+/g, ' ').trim()
+            parts.push({ type: 'gap', data: { hName: 'gap', hProperties: { answer } } })
+            lastIndex = end
+          }
+          const after = text.slice(lastIndex)
+          if (after) parts.push({ type: 'text', value: after })
+          // Replace the node's children with flattened parts
+          node.children = parts
+          return
+        }
+
+        // Case 2: fallback for single text nodes
         if (node.type !== 'text' || typeof node.value !== 'string') return
         const text: string = node.value
         if (!GAP_RE.test(text)) return
@@ -984,20 +1234,44 @@ function MarkdownContent({ content }: { content: string }) {
           const end = GAP_RE.lastIndex
           const before = text.slice(lastIndex, start)
           if (before) parts.push({ type: 'text', value: before })
-          const answer = (m[1] || '').trim()
-          parts.push({
-            type: 'gap',
-            data: {
-              hName: 'gap',
-              hProperties: { answer },
-            },
-          })
+          const answer = (m[1] || '').replace(/\s+/g, ' ').trim()
+          parts.push({ type: 'gap', data: { hName: 'gap', hProperties: { answer } } })
           lastIndex = end
         }
         const after = text.slice(lastIndex)
         if (after) parts.push({ type: 'text', value: after })
-        // Replace this child with expanded parts
         parent.children.splice(index, 1, ...parts)
+      })
+    }
+  }, [])
+
+  // Autolink YouTube plugin: transform a paragraph containing only a YouTube URL
+  // into a <youtube url="..." /> node so it renders as an embed.
+  const youtubeAutolinkPlugin = React.useCallback(function () {
+    const YT_RE = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=[^\s&]+|youtu\.be\/[^\s?&#]+|youtube\.com\/shorts\/[^\s?&#]+|youtube\.com\/embed\/[^\s?&#]+)/i
+    return (tree: any) => {
+      visitWithParent(tree, (node, parent, index) => {
+        if (!parent || typeof node?.type !== 'string') return
+        if (node.type !== 'paragraph') return
+        const children = Array.isArray(node.children) ? node.children : []
+        if (children.length !== 1) return
+        const only = children[0]
+        let url: string | null = null
+        if (only.type === 'link' && typeof only.url === 'string' && YT_RE.test(only.url)) {
+          url = only.url
+        } else if (only.type === 'text' && typeof only.value === 'string') {
+          const t = only.value.trim()
+          if (YT_RE.test(t)) url = t
+        }
+        if (!url) return
+        // Replace paragraph with a lightweight node that maps to a custom component
+        parent.children.splice(index, 1, {
+          type: 'youtube',
+          data: {
+            hName: 'youtube',
+            hProperties: { url },
+          },
+        })
       })
     }
   }, [])
@@ -1005,9 +1279,466 @@ function MarkdownContent({ content }: { content: string }) {
   return (
     <div ref={containerRef} className="prose prose-neutral dark:prose-invert max-w-none">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, directivePlugin, gapPlugin]}
+        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, youtubeAutolinkPlugin, directivePlugin, gapPlugin]}
         rehypePlugins={[rehypeKatex]}
         components={{
+          // Fill-the-gaps renderer for nodes created by gapPlugin
+          gap: (props: any) => {
+            const answer: string = (props as any)?.answer || ''
+            const [value, setValue] = React.useState('')
+            const [touched, setTouched] = React.useState(false)
+            const [revealed, setRevealed] = React.useState(false)
+            const [justFilled, setJustFilled] = React.useState(false)
+            const pressTimer = React.useRef<number | null>(null)
+            const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
+            const valNorm = norm(value)
+            const ansNorm = norm(answer)
+            const dist = value ? levenshteinDistance(valNorm, ansNorm) : Infinity
+            const autoCompleteIfClose = (v: string) => {
+              const d = levenshteinDistance(norm(v), ansNorm)
+              if (v && d <= 2) {
+                setValue(answer)
+                setTouched(true)
+                setRevealed(true)
+                setJustFilled(true)
+                window.setTimeout(() => setJustFilled(false), 220)
+                return true
+              }
+              return false
+            }
+            const bgByDist = () => {
+              if (revealed) return 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-800'
+              if (!value) return 'bg-transparent'
+              if (dist <= 2) return 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-800'
+              if (dist <= 5) return 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800'
+              return 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800'
+            }
+            const onReveal = () => { setValue(answer); setTouched(true); setRevealed(true) }
+            const onPointerDown = () => {
+              try { if (pressTimer.current) window.clearTimeout(pressTimer.current) } catch {}
+              pressTimer.current = window.setTimeout(onReveal, 600) as unknown as number
+            }
+            const clearTimer = () => { if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null } }
+            return (
+              <span className="inline-flex items-center align-baseline">
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-colors transition-transform duration-200 border ${bgByDist()} ${justFilled ? 'scale-105' : 'scale-100'}`}
+                  onPointerDown={onPointerDown}
+                  onPointerUp={clearTimer}
+                  onPointerLeave={clearTimer}
+                  title="Long-press to reveal"
+                >
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setValue(v)
+                      if (!autoCompleteIfClose(v)) {
+                        // if user edits again after reveal, remove revealed state
+                        if (revealed && norm(v) !== ansNorm) setRevealed(false)
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouched(true)
+                      if (!revealed) autoCompleteIfClose(value)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setTouched(true)
+                        if (!revealed) autoCompleteIfClose(value)
+                      }
+                    }}
+                    placeholder="…"
+                    size={Math.max(5, Math.min(24, (value || '').length || 5))}
+                    className={`bg-transparent outline-none focus:outline-none border-b-2 border-transparent transition-colors duration-200 text-[0.95em] leading-5`}
+                    aria-label="Fill the gap"
+                  />
+                </span>
+              </span>
+            )
+          },
+
+          // Matching question renderer
+          matching: (props: any) => {
+            type Pair = { left: string; right: string }
+            let initialPairs: Pair[] = []
+            const propPairs = (props as any)?.pairs
+            const pairsJson = (props as any)?.pairsJson
+            if (Array.isArray(propPairs)) initialPairs = propPairs as Pair[]
+            else if (typeof pairsJson === 'string') { try { const p = JSON.parse(pairsJson); if (Array.isArray(p)) initialPairs = p as Pair[] } catch {} }
+
+            const title: string = (props as any)?.title || ''
+            const shuffleProp = String((props as any)?.shuffle ?? '').toLowerCase()
+            const shouldShuffle = shuffleProp === 'true'
+
+            const [left] = React.useState<string[]>(() => initialPairs.map(p => p.left))
+            const [right, setRight] = React.useState<string[]>(() => {
+              const arr = initialPairs.map(p => p.right)
+              if (shouldShuffle) {
+                for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]] }
+              }
+              return arr
+            })
+            const [selection, setSelection] = React.useState<{ l: number | null; r: number | null }>({ l: null, r: null })
+            // Confirmed correct matches: leftIdx -> rightIdx
+            const [confirmed, setConfirmed] = React.useState<Record<number, number>>({})
+            // Track a transient wrong attempt to flash feedback
+            const [wrong, setWrong] = React.useState<{ l: number | null; r: number | null }>({ l: null, r: null })
+            const wrongTimer = React.useRef<number | null>(null)
+            // Subtle pop animation when a correct match is made
+            const [justMatched, setJustMatched] = React.useState<{ l: number | null; r: number | null }>({ l: null, r: null })
+
+            const correctMap: Record<number, number> = {}
+            for (let i = 0; i < initialPairs.length; i++) {
+              const pair = initialPairs[i]
+              const rIndex = right.indexOf(pair.right)
+              if (rIndex >= 0) correctMap[i] = rIndex
+            }
+
+            const total = initialPairs.length
+            const score = Object.keys(confirmed).length
+
+            const reset = () => {
+              setConfirmed({})
+              setSelection({ l: null, r: null })
+              setWrong({ l: null, r: null })
+              if (wrongTimer.current) { window.clearTimeout(wrongTimer.current); wrongTimer.current = null }
+              if (shouldShuffle) setRight(prev => [...prev].sort(() => Math.random() - 0.5))
+            }
+
+            const shuffle = () => {
+              // Clear state, then reshuffle right side
+              setConfirmed({})
+              setSelection({ l: null, r: null })
+              setWrong({ l: null, r: null })
+              if (wrongTimer.current) { try { window.clearTimeout(wrongTimer.current) } catch {} ; wrongTimer.current = null }
+              setRight(prev => {
+                const arr = [...prev]
+                for (let i = arr.length - 1; i > 0; i--) {
+                  const j = Math.floor(Math.random() * (i + 1))
+                  ;[arr[i], arr[j]] = [arr[j], arr[i]]
+                }
+                return arr
+              })
+            }
+
+            // Handle selection and immediate grading
+            const pickLeft = (i: number) => {
+              if (i in confirmed) return
+              setSelection(s => ({ l: i, r: s.r }))
+            }
+            const pickRight = (i: number) => {
+              // Block if this right is already matched
+              const alreadyTaken = Object.values(confirmed).includes(i)
+              if (alreadyTaken) return
+              setSelection(s => ({ l: s.l, r: i }))
+            }
+            React.useEffect(() => {
+              const l = selection.l, r = selection.r
+              if (l == null || r == null) return
+              // Grade immediately
+              if (correctMap[l] === r) {
+                setConfirmed(prev => ({ ...prev, [l]: r }))
+                setSelection({ l: null, r: null })
+                setWrong({ l: null, r: null })
+                setJustMatched({ l, r })
+                window.setTimeout(() => setJustMatched({ l: null, r: null }), 220)
+              } else {
+                setWrong({ l, r })
+                if (wrongTimer.current) window.clearTimeout(wrongTimer.current)
+                wrongTimer.current = window.setTimeout(() => setWrong({ l: null, r: null }), 450) as unknown as number
+                setSelection({ l: null, r: null })
+              }
+              // eslint-disable-next-line react-hooks/exhaustive-deps
+            }, [selection.l, selection.r])
+
+            return (
+              <div className="my-4 rounded-xl border bg-white/60 dark:bg-neutral-950/40 backdrop-blur p-4 shadow-sm">
+                {title && <div className="mb-3 text-[15px] font-semibold tracking-tight">{title}</div>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-2">
+                    {left.map((txt, i) => {
+                      const active = selection.l === i
+                      const isMatched = i in confirmed
+                      const isWrong = wrong.l === i
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          disabled={isMatched}
+                          onClick={() => pickLeft(i)}
+                          className={`w-full text-left px-3 py-2 rounded-md border transition-all transition-transform
+                            ${isMatched ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/50'
+                              : isWrong ? 'border-red-400 bg-red-50 dark:border-red-600 dark:bg-red-950/50'
+                              : active ? 'border-neutral-900 dark:border-neutral-200 bg-neutral-100 dark:bg-neutral-800'
+                              : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50/70 dark:hover:bg-neutral-900'} ${justMatched.l === i ? 'scale-105' : 'scale-100'}`}
+                        >
+                          {txt}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {right.map((txt, i) => {
+                      const active = selection.r === i
+                      // Determine state from confirmed/wrong
+                      const matchedLeft = Object.entries(confirmed).find(([l, ri]) => Number(ri) === i)
+                      const isMatched = Boolean(matchedLeft)
+                      const isWrong = wrong.r === i
+                      const color = isMatched
+                        ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/50'
+                        : isWrong
+                          ? 'border-red-400 bg-red-50 dark:border-red-600 dark:bg-red-950/50'
+                          : active
+                            ? 'border-neutral-900 dark:border-neutral-200 bg-neutral-100 dark:bg-neutral-800'
+                            : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50/70 dark:hover:bg-neutral-900'
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          disabled={isMatched}
+                          onClick={() => pickRight(i)}
+                          className={`w-full text-left px-3 py-2 rounded-md border transition-all transition-transform ${color} ${justMatched.r === i ? 'scale-105' : 'scale-100'}`}
+                        >
+                          {txt}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className={`text-sm ${score === total ? 'text-emerald-600' : 'text-neutral-600 dark:text-neutral-400'}`}>{score}/{total} matched</span>
+                  <button type="button" onClick={shuffle} className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900">Shuffle</button>
+                  <button type="button" onClick={reset} className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900">Reset</button>
+                </div>
+              </div>
+            )
+          },
+          // Interactive Multiple Choice Question renderer
+          mcq: (props: any) => {
+            type Opt = { text: string; correct: boolean }
+            const question: string = (props as any)?.question || ''
+            let initialOptions: Opt[] = []
+            const propOptions = (props as any)?.options
+            const optionsJson = (props as any)?.optionsJson
+            if (Array.isArray(propOptions)) {
+              initialOptions = propOptions as Opt[]
+            } else if (typeof optionsJson === 'string') {
+              try {
+                const parsed = JSON.parse(optionsJson)
+                if (Array.isArray(parsed)) initialOptions = parsed as Opt[]
+              } catch {}
+            }
+            const multiProp = String((props as any)?.multi ?? '').toLowerCase()
+            const shuffleProp = String((props as any)?.shuffle ?? '').toLowerCase()
+            const allowMulti = multiProp === 'true' || (multiProp === '' && initialOptions.filter(o => o.correct).length > 1)
+            const shouldShuffle = shuffleProp === 'true'
+            const singleMode = !allowMulti
+
+            const [options, setOptions] = React.useState<Opt[]>(() => {
+              if (!shouldShuffle) return initialOptions
+              const arr = [...initialOptions]
+              for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1))
+                ;[arr[i], arr[j]] = [arr[j], arr[i]]
+              }
+              return arr
+            })
+            const [selected, setSelected] = React.useState<Set<number>>(new Set())
+            const [checked, setChecked] = React.useState(false)
+            const [justGradedIndex, setJustGradedIndex] = React.useState<number | null>(null)
+
+            const toggle = (idx: number) => {
+              if (checked && singleMode) return
+              setSelected(prev => {
+                const next = new Set(prev)
+                if (allowMulti) {
+                  if (next.has(idx)) next.delete(idx); else next.add(idx)
+                } else {
+                  next.clear(); next.add(idx)
+                }
+                return next
+              })
+              if (singleMode) {
+                // Auto-grade immediately on click for single-choice
+                setJustGradedIndex(idx)
+                setChecked(true)
+              }
+            }
+
+            const onCheck = () => setChecked(true)
+            const onReset = () => { setSelected(new Set()); setChecked(false); setJustGradedIndex(null); if (shouldShuffle) setOptions(prev => [...prev].sort(() => Math.random() - 0.5)) }
+
+            const totalCorrect = options.filter(o => o.correct).length
+            const userCorrect = Array.from(selected).filter(i => options[i]?.correct).length
+            const allMatched = checked && userCorrect === totalCorrect && selected.size === totalCorrect
+
+            return (
+              <div className="my-4 rounded-xl border bg-white/60 dark:bg-neutral-950/40 backdrop-blur p-4 shadow-sm">
+                {question && <div className="mb-3 text-[15px] font-semibold tracking-tight">{question}</div>}
+                <div className="flex flex-col gap-2">
+                  {options.map((opt, i) => {
+                    const isSel = selected.has(i)
+                    const isCorrect = opt.correct
+                    const graded = singleMode ? checked : checked
+                    const state = graded ? (isCorrect ? 'correct' : (isSel ? 'wrong' : 'idle')) : (isSel ? 'active' : 'idle')
+                    const base = 'group w-full text-left px-3 py-2 rounded-md border transition-all duration-200'
+                    const styles: Record<string,string> = {
+                      idle: 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50/70 dark:hover:bg-neutral-900 hover:shadow-sm hover:-translate-y-[1px]',
+                      active: 'border-neutral-900 dark:border-neutral-200 bg-neutral-100 dark:bg-neutral-800 shadow-sm',
+                      correct: 'border-emerald-500 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-200',
+                      wrong: 'border-red-400 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-950/50 dark:text-red-200',
+                    }
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => toggle(i)}
+                        className={`${base} ${styles[state]} ${!checked || allowMulti ? 'cursor-pointer' : 'cursor-default'} focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700`}
+                        disabled={singleMode && checked}
+                      >
+                        <div className="flex items-center gap-2">
+                          {allowMulti ? (
+                            <span
+                              className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[6px] border transition-all ${isSel ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-black border-neutral-900 dark:border-neutral-200' : 'border-neutral-400 group-hover:border-neutral-600 dark:group-hover:border-neutral-400'}`}
+                              aria-hidden
+                            >
+                              {isSel && (
+                                <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M5 10l3 3 7-7" />
+                                </svg>
+                              )}
+                            </span>
+                          ) : (
+                            <span
+                              className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${isSel ? 'border-neutral-900 dark:border-neutral-200' : 'border-neutral-400 group-hover:border-neutral-600 dark:group-hover:border-neutral-400'}`}
+                              aria-hidden
+                            >
+                              <span className={`h-2.5 w-2.5 rounded-full transition-transform ${isSel ? 'scale-100 bg-neutral-900 dark:bg-neutral-100' : 'scale-0'}`} />
+                            </span>
+                          )}
+                          <span className="leading-relaxed">{opt.text}</span>
+                          {graded && isCorrect && (
+                            <span className="ml-auto inline-flex items-center text-emerald-600 dark:text-emerald-400 text-sm opacity-0 animate-[fadeIn_.2s_ease-out_forwards]">✔</span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                {allowMulti ? (
+                  <div className="mt-3 flex items-center gap-2">
+                    {!checked ? (
+                      <button
+                        type="button"
+                        onClick={onCheck}
+                        className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                        disabled={selected.size === 0}
+                      >
+                        Check
+                      </button>
+                    ) : (
+                      <>
+                        <span className={`text-sm ${allMatched ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {allMatched ? 'All correct!' : `You got ${userCorrect}/${totalCorrect} correct`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={onReset}
+                          className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                        >
+                          Reset
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  checked && (
+                    <div className="mt-3 text-sm">
+                      {options[justGradedIndex ?? -1]?.correct ? (
+                        <span className="text-emerald-600">Correct</span>
+                      ) : (
+                        <span className="text-red-600">Incorrect</span>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+            )
+          },
+          // YouTube video renderer component
+          youtube: (props: any) => {
+            // Accept either a full URL or a videoId prop
+            const url: string | undefined = (props as any)?.url
+            const explicitId: string | undefined = (props as any)?.videoId || (props as any)?.id
+            const startStr: string | undefined = (props as any)?.start || (props as any)?.t
+            const title: string = (props as any)?.title || 'YouTube video'
+
+            function parseStartSec(v?: string): number {
+              if (!v) return 0
+              // support "90", "1m30s", "2h3m4s"
+              if (/^\d+$/.test(v)) return Number(v)
+              const re = /(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/i
+              const m = v.match(re)
+              if (!m) return 0
+              const h = Number(m[1] || 0), mnt = Number(m[2] || 0), s = Number(m[3] || 0)
+              return h * 3600 + mnt * 60 + s
+            }
+
+            function extractId(u?: string): { id: string | null; start: number } {
+              let start = parseStartSec(startStr)
+              if (!u && explicitId) return { id: explicitId, start }
+              if (!u) return { id: null, start }
+              try {
+                const parsed = new URL(u)
+                // time params
+                if (!start) {
+                  const t = parsed.searchParams.get('t') || parsed.searchParams.get('start')
+                  start = parseStartSec(t || undefined)
+                }
+                const host = parsed.hostname.toLowerCase()
+                if (host.includes('youtu.be')) {
+                  const id = parsed.pathname.replace(/^\//, '').split('/')[0]
+                  return { id: id || null, start }
+                }
+                if (host.includes('youtube.com')) {
+                  if (parsed.pathname.startsWith('/watch')) {
+                    const id = parsed.searchParams.get('v')
+                    return { id, start }
+                  }
+                  if (parsed.pathname.startsWith('/shorts/')) {
+                    const id = parsed.pathname.split('/')[2]
+                    return { id, start }
+                  }
+                  if (parsed.pathname.startsWith('/embed/')) {
+                    const id = parsed.pathname.split('/')[2]
+                    return { id, start }
+                  }
+                }
+              } catch {}
+              return { id: null, start }
+            }
+
+            const { id, start } = extractId(url)
+            if (!id) return <div className="text-sm text-red-600">Invalid YouTube URL</div>
+            const src = `https://www.youtube-nocookie.com/embed/${id}?rel=0${start ? `&start=${start}` : ''}`
+
+            return (
+              <div className="my-4 w-full overflow-hidden rounded-md border bg-black/5 dark:bg-white/5">
+                <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+                  <iframe
+                    src={src}
+                    title={title}
+                    className="absolute left-0 top-0 h-full w-full"
+                    frameBorder={0}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; web-share"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            )
+          },
           // 3D model renderer component
           model3d: (props: any) => {
             const src: string | undefined = (props as any)?.src
@@ -1055,7 +1786,6 @@ function MarkdownContent({ content }: { content: string }) {
                     <Bounds fit clip observe margin={1.2}>
                       <ModelInner />
                     </Bounds>
-                    <Environment preset="city" />
                   </React.Suspense>
                   <OrbitControls enableDamping makeDefault autoRotate={autoRotate} autoRotateSpeed={0.5} />
                 </Canvas>
@@ -1076,65 +1806,70 @@ function MarkdownContent({ content }: { content: string }) {
             } catch {}
             return <pre {...props} />
           },
-          // Inline gap element renderer
+          // Inline gap element renderer (Levenshtein-graded, long-press reveal)
           gap: ({ node, ...props }: any) => {
             const answer: string = (props as any)?.answer || (node as any)?.properties?.answer || ''
-            // Local state per instance
             const [value, setValue] = React.useState('')
-            const [status, setStatus] = React.useState<'idle' | 'pending' | 'correct' | 'incorrect'>('idle')
-            const answerEmbeddingRef = React.useRef<Float32Array | null>(null)
-            const timerRef = React.useRef<number | null>(null)
+            const [revealed, setRevealed] = React.useState(false)
+            const [justFilled, setJustFilled] = React.useState(false)
+            const pressTimer = React.useRef<number | null>(null)
 
-            const grade = React.useCallback(async (input: string) => {
-              const trimmed = input.trim()
-              if (!trimmed) {
-                setStatus('idle')
-                return
-              }
-              setStatus('pending')
-              try {
-                const mod = await import('@/app/actions/xenova-similarity')
-                const ref = answerEmbeddingRef
-                if (!ref.current) {
-                  ref.current = await mod.getSentenceEmbedding(answer)
-                }
-                // Optional spellcheck to reduce small typos
-                const maybeCorrected = mod.spellcheckAnswer ? mod.spellcheckAnswer(trimmed, answer) : trimmed
-                const userEmb = await mod.getSentenceEmbedding(maybeCorrected)
-                const sim = mod.cosineSimilarity(ref.current, userEmb)
-                if (sim >= 0.8 || maybeCorrected.toLowerCase() === answer.toLowerCase()) setStatus('correct')
-                else setStatus('incorrect')
-              } catch (e) {
-                // Fallback to simple match
-                setStatus(maybeEqual(trimmed, answer) ? 'correct' : 'incorrect')
-              }
-            }, [answer])
+            const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
+            const valNorm = norm(value)
+            const ansNorm = norm(answer)
+            const dist = value ? levenshteinDistance(valNorm, ansNorm) : Infinity
 
-            const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-              const v = e.target.value
-              setValue(v)
-              if (timerRef.current) window.clearTimeout(timerRef.current)
-              timerRef.current = window.setTimeout(() => {
-                void grade(v)
-              }, 500)
+            const autoCompleteIfClose = (v: string) => {
+              const d = levenshteinDistance(norm(v), ansNorm)
+              if (v && d <= 2) {
+                setValue(answer)
+                setRevealed(true)
+                setJustFilled(true)
+                window.setTimeout(() => setJustFilled(false), 220)
+                return true
+              }
+              return false
             }
 
-            React.useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current) }, [])
-
-            function maybeEqual(a: string, b: string) {
-              return a.trim().toLowerCase() === b.trim().toLowerCase()
+            const bgByDist = () => {
+              if (revealed) return 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-800'
+              if (!value) return 'bg-transparent border-neutral-300'
+              if (dist <= 2) return 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-800'
+              if (dist <= 5) return 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800'
+              return 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800'
             }
+
+            const onReveal = () => { setValue(answer); setRevealed(true) }
+            const onPointerDown = () => {
+              try { if (pressTimer.current) window.clearTimeout(pressTimer.current) } catch {}
+              pressTimer.current = window.setTimeout(onReveal, 600) as unknown as number
+            }
+            const clearTimer = () => { if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null } }
 
             return (
-              <span className="mx-1 inline-flex items-center gap-1 align-baseline">
-                <input
-                  aria-label="Fill in the gap"
-                  className={`inline-block w-32 bg-transparent border border-neutral-300 px-2 py-0.5 text-sm rounded focus:outline-none focus:ring-0 ${status === 'correct' ? 'border-black' : status === 'incorrect' ? 'border-neutral-500' : ''}`}
-                  value={value}
-                  onChange={onChange}
-                />
-                <span className="text-xs text-neutral-700 select-none">
-                  {status === 'pending' ? '…' : status === 'correct' ? '✓' : status === 'incorrect' ? '✗' : ''}
+              <span className="mx-1 inline-flex items-center align-baseline">
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-colors transition-transform duration-200 border ${bgByDist()} ${justFilled ? 'scale-105' : 'scale-100'}`}
+                  onPointerDown={onPointerDown}
+                  onPointerUp={clearTimer}
+                  onPointerLeave={clearTimer}
+                  title="Long-press to reveal"
+                >
+                  <input
+                    aria-label="Fill in the gap"
+                    className={`bg-transparent outline-none focus:outline-none border-b-2 border-transparent text-sm leading-5 px-1`}
+                    value={value}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setValue(v)
+                      if (!autoCompleteIfClose(v)) {
+                        if (revealed && norm(v) !== ansNorm) setRevealed(false)
+                      }
+                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { if (!revealed) autoCompleteIfClose(value) } }}
+                    placeholder="…"
+                    size={Math.max(5, Math.min(24, (value || '').length || 5))}
+                  />
                 </span>
               </span>
             )
