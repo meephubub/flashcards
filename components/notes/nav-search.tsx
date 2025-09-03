@@ -16,11 +16,16 @@ interface SearchResult {
   category: string | null
 }
 
-export function NavSearch() {
+export function NavSearch({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean
+  onToggle: () => void
+}) {
   const [query, setQuery] = React.useState("")
   const [results, setResults] = React.useState<SearchResult[]>([])
   const [loading, setLoading] = React.useState(false)
-  const [expanded, setExpanded] = React.useState(true)
   const supabase = React.useMemo(() => createClient(), [])
   const { user } = useAuth()
   const selectedProject = useProjectStore((s) => s.selectedProject)
@@ -74,7 +79,7 @@ export function NavSearch() {
         <button
           type="button"
           className="flex w-full items-center gap-2 select-none"
-          onClick={() => setExpanded((v) => !v)}
+          onClick={onToggle}
           aria-expanded={expanded}
         >
           {expanded ? (

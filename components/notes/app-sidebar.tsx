@@ -8,13 +8,13 @@ import {
   Command,
   Frame,
   GalleryVerticalEnd,
-  Link,
   Map,
   PieChart,
   Settings2,
   SquareTerminal,
   Earth,
 } from "lucide-react"
+import NextLink from "next/link"
 
 import { NavMain } from "@/components/notes/nav-main"
 import { NavSearch } from "@/components/notes/nav-search"
@@ -30,11 +30,13 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/context/auth-context"
+import { createClient } from "@/lib/supabase/client"
 import { CreateDeckDialog } from "@/components/create-deck-dialog"
 import { ImportMarkdownDialog } from "@/components/import-markdown-dialog"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
 import { MergeDecksDialog } from "@/components/merge-decks-dialog"
 import { CreateModelDialog } from "@/components/create-model-dialog"
+// Calendar date picker removed per request
 
 // This is sample data.
 const data = {
@@ -172,6 +174,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isGenerateOpen, setIsGenerateOpen] = React.useState(false)
   const [isMergeDecksOpen, setIsMergeDecksOpen] = React.useState(false)
   const [isCreateModelOpen, setIsCreateModelOpen] = React.useState(false)
+  // manage mutually exclusive expanded sections
+  const [openSection, setOpenSection] = React.useState<
+    null | "search" | "decks" | "models"
+  >("search")
+  const today = React.useMemo(() => new Date(), [])
+  const weekday = React.useMemo(
+    () => today.toLocaleDateString(undefined, { weekday: "long" }),
+    [today]
+  )
+  const dateStr = React.useMemo(
+    () =>
+      today.toLocaleDateString(undefined, {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
+    [today]
+  )
+  const [upcomingTasks, setUpcomingTasks] = React.useState<
+    { id: number; subject: string | null; due_date: string | null }[]
+  >([])
+  const supabase = React.useMemo(() => createClient(), [])
+  React.useEffect(() => {
+    let mounted = true
+    const run = async () => {
+      if (!user?.id) return
+      const { data, error } = await supabase
+        .from('homework')
+        .select('id, subject, due_date, "done ?":done')
+        .eq('user_id', user.id)
+        .eq('done ?', false)
+        // include overdue items as well; show soonest first
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .limit(5)
+      if (!mounted) return
+      if (error) {
+        setUpcomingTasks([])
+        return
+      }
+      setUpcomingTasks((data as any[])?.map((r) => ({
+        id: r.id,
+        subject: r.subject ?? null,
+        due_date: r.due_date ?? null,
+      })) || [])
+    }
+    run()
+    const onFocus = () => run()
+    window.addEventListener('focus', onFocus)
+    return () => { mounted = false; window.removeEventListener('focus', onFocus) }
+  }, [supabase, user?.id])
 
   // Listen for Action Search Bar events to open dialogs
   React.useEffect(() => {
@@ -215,11 +267,69 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          <NavSearch />
-          <NavDecks />
-          <NavModels />
+          <NavSearch
+            expanded={openSection === "search"}
+            onToggle={() =>
+              setOpenSection((s) => (s === "search" ? null : "search"))
+            }
+          />
+          <NavDecks
+            expanded={openSection === "decks"}
+            onToggle={() =>
+              setOpenSection((s) => (s === "decks" ? null : "decks"))
+            }
+          />
+          <NavModels
+            expanded={openSection === "models"}
+            onToggle={() =>
+              setOpenSection((s) => (s === "models" ? null : "models"))
+            }
+          />
         </SidebarContent>
         <SidebarFooter>
+          {/* Fixed Agenda panel */}
+          <div className="w-full px-2 pt-2 border-t">
+            <NextLink href="/tasks" className="block">
+              <div className="rounded-lg border bg-muted/30 backdrop-blur p-3 hover:bg-muted/40 transition-colors">
+              <div className="flex items-start justify-between">
+                <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[10px] font-medium">
+                  {weekday}
+                </span>
+              </div>
+              <div className="mt-1 text-2xl font-semibold tracking-tight leading-snug">
+                {dateStr}
+              </div>
+
+              <div className="mt-3">
+                <div className="text-xs font-medium text-foreground/90">Upcoming</div>
+                <ul className="mt-1 max-h-28 overflow-auto divide-y divide-border rounded-md">
+                  {upcomingTasks.length === 0 ? (
+                    <li className="py-2 px-2 text-xs text-muted-foreground">No upcoming tasks</li>
+                  ) : (
+                    upcomingTasks.map((t) => (
+                      <li
+                        key={t.id}
+                        className="py-2 px-2 text-xs hover:bg-muted/50 transition-colors"
+                        title={t.subject || undefined}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate">{t.subject || 'Homework'}</span>
+                          {t.due_date ? (() => {
+                            const d = new Date(t.due_date)
+                            const overdue = d.getTime() < Date.now()
+                            return (
+                              <span className={"shrink-0 text-[10px] " + (overdue ? "text-red-600" : "text-muted-foreground")}>{d.toLocaleDateString()}</span>
+                            )
+                          })() : null}
+                        </div>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+              </div>
+            </NextLink>
+          </div>
           <NavUser user={navUser} />
         </SidebarFooter>
         <SidebarRail />

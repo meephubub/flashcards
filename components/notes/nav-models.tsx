@@ -14,10 +14,15 @@ interface ModelRow {
   model_url: string
 }
 
-export function NavModels() {
+export function NavModels({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean
+  onToggle: () => void
+}) {
   const { user } = useAuth()
   const supabase = React.useMemo(() => createClient(), [])
-  const [expanded, setExpanded] = React.useState(true)
   const [filter, setFilter] = React.useState("")
   const [loading, setLoading] = React.useState(false)
   const [models, setModels] = React.useState<ModelRow[]>([])
@@ -53,7 +58,7 @@ export function NavModels() {
   return (
     <SidebarGroup className={expanded ? "group-data-[collapsible=icon]:hidden" : "group-data-[collapsible=icon]:hidden p-1 -mb-1"}>
       <SidebarGroupLabel>
-        <button type="button" className="flex w-full items-center gap-2 select-none" onClick={() => setExpanded(v => !v)} aria-expanded={expanded}>
+        <button type="button" className="flex w-full items-center gap-2 select-none" onClick={onToggle} aria-expanded={expanded}>
           {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
           <span>Models</span>
         </button>

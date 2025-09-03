@@ -7,9 +7,14 @@ import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, Sideba
 import { useDecks } from "@/context/deck-context"
 import { useRouter } from "next/navigation"
 
-export function NavDecks() {
+export function NavDecks({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean
+  onToggle: () => void
+}) {
   const { decks, loading } = useDecks()
-  const [expanded, setExpanded] = React.useState(true)
   const [filter, setFilter] = React.useState("")
   const router = useRouter()
 
@@ -31,7 +36,7 @@ export function NavDecks() {
         <button
           type="button"
           className="flex w-full items-center gap-2 select-none"
-          onClick={() => setExpanded((v) => !v)}
+          onClick={onToggle}
           aria-expanded={expanded}
         >
           {expanded ? (

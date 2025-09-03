@@ -3,8 +3,10 @@
 import { useState, useEffect, isValidElement, cloneElement } from "react"
 import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon, Download, Pencil, GitMerge } from "lucide-react"
+import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon, Download, Pencil, GitMerge, ListTodo } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
@@ -30,6 +32,18 @@ interface Action {
   run?: () => void
   // If true, keep the palette open after run(). We'll manage closing manually.
   keepOpen?: boolean
+  // Category for grouping/filtering in the left rail
+  category?:
+    | "basic"
+    | "ai"
+    | "notes"
+    | "decks"
+    | "models"
+    | "nav"
+    | "device"
+    | "todos"
+  // Higher appears earlier when searching (in addition to matching score)
+  priority?: number
 }
 
 interface SearchResult {
@@ -134,10 +148,12 @@ const allActions: Action[] = [
     id: "go-home",
     label: "Go to Home",
     description: "/",
-    icon: <Globe className="h-4 w-4 text-blue-500"/>,
+    icon: <Globe className="h-4 w-4 text-blue-500"/> ,
     short: "Enter",
     end: "⌘K",
     href: "/",
+    category: "nav",
+    priority: 90,
   },
   {
     id: "go-notes",
@@ -147,6 +163,8 @@ const allActions: Action[] = [
     short: "Enter",
     end: "⌘K",
     href: "/notes",
+    category: "nav",
+    priority: 90,
   },
   {
     id: "go-signin",
@@ -156,6 +174,8 @@ const allActions: Action[] = [
     short: "Enter",
     end: "⌘K",
     href: "/sign-in",
+    category: "nav",
+    priority: 10,
   },
   // Deck actions
   {
@@ -168,6 +188,8 @@ const allActions: Action[] = [
     run: () => {
       try { window.dispatchEvent(new Event('open-create-deck')) } catch {}
     },
+    category: "decks",
+    priority: 80,
   },
   {
     id: "import-markdown",
@@ -179,6 +201,8 @@ const allActions: Action[] = [
     run: () => {
       try { window.dispatchEvent(new Event('open-import-markdown')) } catch {}
     },
+    category: "decks",
+    priority: 70,
   },
   {
     id: "generate-flashcards",
@@ -190,6 +214,8 @@ const allActions: Action[] = [
     run: () => {
       try { window.dispatchEvent(new Event('open-generate-flashcards')) } catch {}
     },
+    category: "ai",
+    priority: 85,
   },
   {
     id: "merge-decks",
@@ -201,6 +227,8 @@ const allActions: Action[] = [
     run: () => {
       try { window.dispatchEvent(new Event('open-merge-decks')) } catch {}
     },
+    category: "decks",
+    priority: 60,
   },
   {
     id: "create-model",
@@ -212,6 +240,8 @@ const allActions: Action[] = [
     run: () => {
       try { window.dispatchEvent(new Event('open-create-model')) } catch {}
     },
+    category: "models",
+    priority: 70,
   },
   {
     id: "question",
@@ -223,6 +253,8 @@ const allActions: Action[] = [
     run: () => {
       // Filled at runtime by ActionSearchBar via effectiveActions mapping if needed
     },
+    category: "ai",
+    priority: 95,
   },
   {
     id: "fan-on",
@@ -237,6 +269,8 @@ const allActions: Action[] = [
         "https://api-v2.voicemonkey.io/trigger?token=814e797e65ae46a6828e1001150bd8ac_0a30f8185cdd6014f8a9b1d0ef1b326a&device=fan-on"
       )
     },
+    category: "device",
+    priority: 20,
   },
   {
     id: "fan-off",
@@ -251,6 +285,8 @@ const allActions: Action[] = [
         "https://api-v2.voicemonkey.io/trigger?token=814e797e65ae46a6828e1001150bd8ac_0a30f8185cdd6014f8a9b1d0ef1b326a&device=fan-off"
       )
     },
+    category: "device",
+    priority: 20,
   },
   {
     id: "create-note-from-image",
@@ -313,6 +349,8 @@ const allActions: Action[] = [
       }
       input.click()
     },
+    category: "notes",
+    priority: 85,
   },
 ]
 
@@ -323,6 +361,21 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [isFocused, setIsFocused] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
+  // Category rail state and config
+  const [selectedCategory, setSelectedCategory] = useState<
+    'all' | 'basic' | 'ai' | 'notes' | 'decks' | 'models' | 'nav' | 'device' | 'todos'
+  >('all')
+  const categories: { id: typeof selectedCategory; label: string; icon: React.ReactNode }[] = [
+    { id: 'all', label: 'All', icon: <Search className="w-4 h-4" /> },
+    { id: 'basic', label: 'Basic', icon: <PlusCircle className="w-4 h-4" /> },
+    { id: 'ai', label: 'AI', icon: <HelpCircle className="w-4 h-4" /> },
+    { id: 'notes', label: 'Notes', icon: <Pencil className="w-4 h-4" /> },
+    { id: 'decks', label: 'Decks', icon: <GitMerge className="w-4 h-4" /> },
+    { id: 'models', label: 'Models', icon: <BarChart2 className="w-4 h-4" /> },
+    { id: 'nav', label: 'Nav', icon: <Globe className="w-4 h-4" /> },
+    { id: 'device', label: 'Device', icon: <AudioLines className="w-4 h-4" /> },
+    { id: 'todos', label: 'Todos', icon: <ListTodo className="w-4 h-4" /> },
+  ]
   const debouncedQuery = useDebounce(query, 200)
   const router = useRouter()
   const [showAll, setShowAll] = useState(false)
@@ -417,9 +470,65 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   ]
   const [selectedModel, setSelectedModel] = useState<ImageModel>("flux-pro")
 
+  // Todos sub-UI state (homework table)
+  interface HomeworkRow { id: number; created_at: string; user_id: string; due_date: string | null; subject: string | null; priority: number | null; done: boolean | null }
+  const [todosLoading, setTodosLoading] = useState(false)
+  const [todos, setTodos] = useState<HomeworkRow[]>([])
+  const [todoError, setTodoError] = useState<string | null>(null)
+
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Fetch tasks when opening palette and switching to todos
+  useEffect(() => {
+    const maybeFetch = async () => {
+      if (!open || selectedCategory !== 'todos') return
+      try {
+        setTodosLoading(true)
+        setTodoError(null)
+        const { data: userRes, error: uErr } = await supabase.auth.getUser()
+        if (uErr) throw uErr
+        const uid = userRes?.user?.id
+        if (!uid) { setTodos([]); setTodosLoading(false); return }
+        const { data, error } = await supabase
+          .from('homework')
+          .select('id, created_at, user_id, due_date, subject, priority, "done ?":done')
+          .eq('user_id', uid)
+          .eq('done ?', false)
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        setTodos(((data as unknown) as HomeworkRow[]) || [])
+      } catch (e: any) {
+        console.error('Fetch homework failed', e)
+        setTodoError(e?.message || 'Failed to load tasks')
+      } finally {
+        setTodosLoading(false)
+      }
+    }
+    void maybeFetch()
+  }, [open, selectedCategory])
+
+  // ...
+
+  const toggleTodo = async (id: number, done: boolean) => {
+    try {
+      await supabase.from('homework').update({ ['done ?']: done } as any).eq('id', id)
+      if (done) {
+        // Remove from the list if marked done (we only show undone tasks)
+        setTodos((prev) => prev.filter((t) => t.id !== id))
+      } else {
+        setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, done } : t)))
+      }
+    } catch (e) {
+      console.error('Update task failed', e)
+    }
+  }
+
+  // Remove addTodo and removeTodo functions
+  // ...
+  
 
   // Allow external triggers (e.g., mobile button) to open the palette
   useEffect(() => {
@@ -502,6 +611,8 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
           short: "Enter",
           end: "Notes",
           run: () => setOpenNoteFromContent(true),
+          category: "notes",
+          priority: 92,
         },
         {
           id: "create-note-from-image",
@@ -521,6 +632,8 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
               } catch {}
             }, 0)
           },
+          category: "notes",
+          priority: 90,
         },
         {
           id: "edit-with-ai",
@@ -546,6 +659,8 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
               } catch {}
             }, 0)
           },
+          category: "ai",
+          priority: 88,
         },
         {
           id: "fix-note-content",
@@ -629,6 +744,8 @@ Formatting rules:
               setFixWorking(false)
             }
           },
+          category: "ai",
+          priority: 86,
         },
         {
           id: "move-note-project",
@@ -645,6 +762,8 @@ Formatting rules:
             }
             setOpenMoveProject(true)
           },
+          category: "notes",
+          priority: 75,
         },
         {
           id: "exam-from-note",
@@ -739,6 +858,8 @@ Note content:\n\n${data.content}`
               alert('Failed to start exam from this note.')
             }
           },
+          category: "notes",
+          priority: 70,
         },
         {
           id: "edit-note",
@@ -757,6 +878,8 @@ Note content:\n\n${data.content}`
             }
             if (typeof startEditCurrentNote === "function") startEditCurrentNote()
           },
+          category: "notes",
+          priority: 93,
         },
         {
           id: "delete-note",
@@ -775,6 +898,8 @@ Note content:\n\n${data.content}`
             }
             deleteNoteById(currentNoteId)
           },
+          category: "notes",
+          priority: 40,
         },
         {
           id: "create-note",
@@ -784,6 +909,8 @@ Note content:\n\n${data.content}`
           short: "Enter",
           end: "⌘K",
           run: () => openDialog(),
+          category: "basic",
+          priority: 96,
         },
       ]
       base = [...prepend, ...base]
@@ -805,6 +932,16 @@ Note content:\n\n${data.content}`
         }
       : a
     )
+    // Context-aware filtering
+    if (!pathname.startsWith('/notes')) {
+      base = base.filter(a => ![
+        'delete-note','edit-note','create-note','move-note-project','exam-from-note','fix-note-content','edit-with-ai','create-note-from-image','create-note-from-content'
+      ].includes(a.id))
+    }
+    if (pathname.startsWith('/models')) {
+      // Do not show note deletion (reinforced by the above), keep model-related only if present
+      base = base.filter(a => a.id !== 'delete-note')
+    }
     return base
   }
 
@@ -844,24 +981,38 @@ Note content:\n\n${data.content}`
       return
     }
 
+    // Category selection is applied after computing context-aware actions
+    const scoped = selectedCategory === 'all'
+      ? eff
+      : eff.filter(a => (a.category || 'basic') === selectedCategory)
+
     if (!debouncedQuery) {
-      setResult({ actions: showAll ? eff : eff.slice(0, 8) })
+      setResult({ actions: showAll ? scoped : scoped.slice(0, 8) })
       return
     }
 
     const normalizedQuery = debouncedQuery.toLowerCase().trim()
-    const filteredActions = eff.filter((action) => {
-      const searchableText = [action.label, action.description, action.id]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-      return searchableText.includes(normalizedQuery)
+
+    // Score actions
+    const scored = scoped.map(a => {
+      if (!normalizedQuery) return { a, score: (a.priority ?? 0) + (['basic','notes','nav'].includes(a.category || '') ? 10 : 0) }
+      const hay = [a.label, a.description, a.id].filter(Boolean).join(' ').toLowerCase()
+      let s = 0
+      if (hay.includes(normalizedQuery)) s += 10
+      if ((a.label || '').toLowerCase().startsWith(normalizedQuery)) s += 20
+      if ((a.id || '').toLowerCase().startsWith(normalizedQuery)) s += 10
+      if ((a.category && ['basic','notes','nav'].includes(a.category)) ) s += 5
+      s += (a.priority ?? 0)
+      return { a, score: s }
     })
+      .filter(x => normalizedQuery ? x.score > 0 : true)
+      .sort((x, y) => y.score - x.score)
+      .map(x => x.a)
 
     // If nothing matches, prefer showing navigation quick links so the user always has something to do
-    const navActions = eff.filter((a) => !!a.href)
-    setResult({ actions: filteredActions.length > 0 ? filteredActions : navActions })
-  }, [debouncedQuery, isFocused, open, showAll, pathname])
+    const navActions = scoped.filter((a) => !!a.href)
+    setResult({ actions: scored.length > 0 ? scored : navActions })
+  }, [debouncedQuery, isFocused, open, showAll, pathname, selectedCategory])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
@@ -1019,6 +1170,7 @@ Note content:\n\n${data.content}`
     }
   }
 
+
   const content = (
     <motion.div
       className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden bg-white/95 dark:bg-neutral-900/90 backdrop-blur-lg border border-black/5 dark:border-white/10 shadow-2xl text-gray-900 dark:text-gray-50"
@@ -1030,8 +1182,23 @@ Note content:\n\n${data.content}`
       exit={{ opacity: 0, y: 8, scale: 0.98 }}
       transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="relative flex flex-col justify-start items-center">
-        <div className="w-full px-4 pt-4 pb-2 bg-transparent">
+      <div className="relative flex flex-row justify-start items-stretch">
+        {/* Left category rail */}
+        <div className="hidden sm:flex flex-col gap-1 p-2 border-r border-black/5 dark:border-white/10 min-w-12 bg-white/40 dark:bg-neutral-900/40">
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              type="button"
+              title={cat.label}
+              className={`inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors ${selectedCategory === cat.id ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700'}`}
+              onClick={() => setSelectedCategory(cat.id)}
+            >
+              {cat.icon}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 flex flex-col">
+          <div className="w-full px-4 pt-4 pb-2 bg-transparent">
           <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block" htmlFor="search">
             Search Commands
           </label>
@@ -1289,6 +1456,48 @@ Note content:\n\n${data.content}`
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        {/* Todos UI */}
+        {selectedCategory === 'todos' && (
+          <div className="w-full px-4 pb-2 -mt-2">
+            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <ListTodo className="w-4 h-4 text-emerald-600" />
+                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Tasks</div>
+              </div>
+              {todoError && <div className="text-xs text-red-500">{todoError}</div>}
+              {todosLoading && (
+                <div className="p-2 text-xs text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                </div>
+              )}
+              {!todosLoading && todos.length === 0 && (
+                <div className="p-2 text-xs text-muted-foreground">No tasks</div>
+              )}
+              <div className="divide-y">
+                {todos.filter((t: HomeworkRow) => !t.done).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="w-full text-left p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+                    onClick={() => toggleTodo(t.id, true)}
+                    title="Mark as done"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{t.subject || 'Homework'}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {t.due_date ? `Due ${new Date(t.due_date).toLocaleDateString()}` : 'No due date'}
+                          {t.priority ? ` · Priority ${t.priority}` : ''}
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Done</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -1720,7 +1929,7 @@ Note content:\n\n${data.content}`
                   </div>
                 )}
                 {/* Show more when query empty and limited list is shown */}
-                {!imageNoteOpen && !debouncedQuery && !showAll && computeEffectiveActions().length > 8 && (
+                {!imageNoteOpen && selectedCategory !== 'todos' && !debouncedQuery && !showAll && computeEffectiveActions().length > 8 && (
                   <button
                     type="button"
                     className="w-full px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 border-t border-black/5 dark:border-white/10"
@@ -1732,16 +1941,11 @@ Note content:\n\n${data.content}`
                     Show more ({computeEffectiveActions().length - 8} more)
                   </button>
                 )}
-                <div className="mt-2 px-3 py-2 border-t border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900">
-                  <div className="flex items-center justify-between text-xs text-gray-700 dark:text-gray-400">
-                    <span>Press ⌘K to open commands</span>
-                    <span>ESC to cancel</span>
-                  </div>
-                </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+      </div>
       </div>
     </motion.div>
   )
