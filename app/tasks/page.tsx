@@ -65,7 +65,7 @@ export default function TasksPage() {
     setLoading(true)
     let q = supabase
       .from("homework")
-      .select("id, created_at, user_id, due_date, subject, priority, done")
+      .select('id, created_at, user_id, due_date, subject, priority, done')
       .eq("user_id", user.id)
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -133,7 +133,10 @@ export default function TasksPage() {
   }
 
   const updateDone = async (id: number, done: boolean) => {
-    await supabase.from("homework").update({ done }).eq("id", id)
+    await supabase
+      .from("homework")
+      .update({ done })
+      .eq("id", id)
     fetchTasks()
   }
 

@@ -106,6 +106,73 @@ export default function Page() {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const editorRef = React.useRef<HTMLTextAreaElement | null>(null)
 
+  // Pastel color style menu state
+  const [styleMenuOpen, setStyleMenuOpen] = useState(false)
+  const [styleMenuError, setStyleMenuError] = useState<string | null>(null)
+  const pastelColors = React.useMemo(() => (
+    [
+      { id: 'rose', label: 'Rose' },
+      { id: 'peach', label: 'Peach' },
+      { id: 'amber', label: 'Amber' },
+      { id: 'mint', label: 'Mint' },
+      { id: 'sky', label: 'Sky' },
+      { id: 'lavender', label: 'Lavender' },
+      { id: 'gray', label: 'Gray' },
+    ] as const
+  ), [])
+  const pastelHex: Record<string, string> = {
+    rose: '#f6d1d6',
+    peach: '#f7d7c3',
+    amber: '#f2e1b0',
+    mint: '#cfeee7',
+    sky: '#cfe3fb',
+    lavender: '#ddd3fb',
+    gray: '#e2e5ea',
+  }
+
+  // Insert or wrap selection with our custom color directive syntax
+  // Syntax options supported:
+  // 1) Shorthand: :rose[Text]
+  // 2) Explicit: :c[Text]{color="rose"}
+  const applyColorToSelection = React.useCallback((color: string) => {
+    const el = editorRef.current
+    if (!el) return
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? start
+    const before = draftContent.slice(0, start)
+    const selected = draftContent.slice(start, end)
+    const after = draftContent.slice(end)
+    const content = selected || 'text'
+    const insertion = `:${color}[${content}]`
+    const next = `${before}${insertion}${after}`
+    setDraftContent(next)
+    // place caret after inserted
+    const caret = before.length + insertion.length
+    setTimeout(() => {
+      try { el.focus(); el.setSelectionRange(caret, caret) } catch {}
+    }, 0)
+    setStyleMenuOpen(false)
+  }, [draftContent])
+
+  const wrapSelection = React.useCallback((wrapperStart: string, wrapperEnd: string = wrapperStart) => {
+    const el = editorRef.current
+    if (!el) return
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? start
+    const before = draftContent.slice(0, start)
+    const selected = draftContent.slice(start, end) || 'text'
+    const after = draftContent.slice(end)
+    const insertion = `${wrapperStart}${selected}${wrapperEnd}`
+    const next = `${before}${insertion}${after}`
+    setDraftContent(next)
+    const caretStart = before.length + wrapperStart.length
+    const caretEnd = caretStart + selected.length
+    setTimeout(() => {
+      try { el.focus(); el.setSelectionRange(caretStart, caretEnd) } catch {}
+    }, 0)
+    setStyleMenuOpen(false)
+  }, [draftContent])
+
   // Reset embedded exam mode when switching notes or unmounting
   useEffect(() => {
     return () => {
@@ -402,42 +469,55 @@ Goals:
     }
     // Fallback to original paste handler (handles image URL conversion)
     _prevOnEditorPaste(e)
-  }, [draftContent, _prevOnEditorPaste])
+  }, [draftContent])
 
-  // Editor: Ctrl+I on selected link -> wrap as markdown image
+  // Editor keydown: Ctrl+I wraps selected URL as image; Alt+C toggles style menu
   const onEditorKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Ctrl/Cmd + I: if selection is an image URL, wrap as markdown image
     const isCtrlI = (e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')
-    if (!isCtrlI) return
-    const el = e.currentTarget
-    const start = el.selectionStart ?? 0
-    const end = el.selectionEnd ?? 0
-    if (start === end) return
-    const selected = draftContent.slice(start, end).trim()
-    const isImageUrl = /^https?:\/\/\S+\.(png|jpe?g|gif|webp|bmp|svg)(\?\S*)?$/i.test(selected)
-    if (!isImageUrl) return
-    e.preventDefault()
-    const before = draftContent.slice(0, start)
-    const after = draftContent.slice(end)
-    const insertion = `![img](${selected})`
-    const next = `${before}${insertion}${after}`
-    setDraftContent(next)
-    const caret = (before.length + insertion.length)
-    setTimeout(() => {
-      try {
-        el.focus()
-        el.setSelectionRange(caret, caret)
-      } catch {}
-    }, 0)
+    if (isCtrlI) {
+      const el = e.currentTarget
+      const start = el.selectionStart ?? 0
+      const end = el.selectionEnd ?? 0
+      if (start === end) return
+      const selected = draftContent.slice(start, end).trim()
+      const isImageUrl = /^https?:\/\/\S+\.(png|jpe?g|gif|webp|bmp|svg)(\?\S*)?$/i.test(selected)
+      if (!isImageUrl) return
+      e.preventDefault()
+      const before = draftContent.slice(0, start)
+      const after = draftContent.slice(end)
+      const insertion = `![img](${selected})`
+      const next = `${before}${insertion}${after}`
+      setDraftContent(next)
+      const caret = before.length + insertion.length
+      setTimeout(() => {
+        try { el.focus(); el.setSelectionRange(caret, caret) } catch {}
+      }, 0)
+      return
+    }
+
+    // Alt + C: toggle style menu
+    if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault()
+      setStyleMenuOpen((v) => !v)
+    }
   }, [draftContent])
 
   // Keyboard: Ctrl+E toggles edit; if already editing, save
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // Toggle edit mode or save
       if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'E')) {
         e.preventDefault()
         if (!currentNoteId) return
         if (isEditing) void saveDraft()
         else setIsEditing(true)
+        return
+      }
+      // Quick open style menu with Alt+C when editing
+      if (isEditing && e.altKey && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault()
+        setStyleMenuOpen((v) => !v)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -552,6 +632,24 @@ Goals:
       setCreateOpen(false)
     }
     setCreating(false)
+  }
+
+  // Inline skeleton used while a note is loading
+  function InlineNoteSkeleton() {
+    return (
+      <article className="mx-auto max-w-3xl">
+        <div className="mb-8">
+          <Skeleton className="mb-2 h-9 w-2/3" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-11/12" />
+          <Skeleton className="h-4 w-10/12" />
+          <Skeleton className="h-4 w-9/12" />
+        </div>
+      </article>
+    )
   }
 
   return (
@@ -714,13 +812,13 @@ Goals:
                   )}
                 </header>
                 {loadingNote ? (
-                  <NoteSkeleton />
+                  <InlineNoteSkeleton />
                 ) : isEditing ? (
                   <div>
                     {(saveError || aiFormatError || uploadModelError) && (
                       <div className="mb-3 text-sm text-red-600">{saveError ?? aiFormatError ?? uploadModelError}</div>
                     )}
-                    <div className="mb-3 flex items-center gap-2">
+                    <div className="mb-2 flex items-center gap-2">
                       <Button
                         size="sm"
                         onClick={() => void saveDraft()}
@@ -736,13 +834,15 @@ Goals:
                       >
                         {aiFormatting ? 'Formatting…' : 'Format with AI'}
                       </Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".glb,.gltf,.stl"
-                        className="hidden"
-                        onChange={onPickModel}
-                      />
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".glb,.gltf,.stl"
+                      className="hidden"
+                      onChange={onPickModel}
+                    />
+                    <div className="flex items-center gap-2 mb-2">
                       <Button
                         size="sm"
                         variant="outline"
@@ -765,6 +865,37 @@ Goals:
                       >
                         Cancel
                       </Button>
+                    </div>
+                    <div className="mb-3 w-full rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 shadow-sm p-2">
+                      {styleMenuError && (
+                        <div className="text-xs text-red-600 mb-2">{styleMenuError}</div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-[10px] uppercase tracking-wide text-neutral-500">Text</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {pastelColors.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => applyColorToSelection(c.id)}
+                              title={c.label}
+                              className="text-xs px-2.5 py-1 rounded-md border border-transparent shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700"
+                              style={{
+                                backgroundColor: pastelHex[c.id] || '#eee',
+                                color: '#1f2937',
+                              }}
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="h-5 w-px bg-neutral-200 dark:bg-neutral-800" />
+                        <div className="text-[10px] uppercase tracking-wide text-neutral-500">Quick</div>
+                        <div className="flex gap-1.5">
+                          <button type="button" className="text-xs px-2.5 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-transparent" onClick={() => wrapSelection('**')}>Bold</button>
+                          <button type="button" className="text-xs px-2.5 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-transparent" onClick={() => wrapSelection('*')}>Italic</button>
+                        </div>
+                      </div>
                     </div>
                     <Textarea
                       ref={editorRef as any}
@@ -942,15 +1073,10 @@ function MarkdownContent({ content }: { content: string }) {
   const MermaidDiagram: React.FC<{ code: string }> = ({ code }) => {
     const ref = React.useRef<HTMLDivElement | null>(null)
     React.useEffect(() => {
-      const el = ref.current
-      if (!el) return
-      void renderMermaidInto(el, code)
+      if (!ref.current) return
+      void renderMermaidInto(ref.current, code)
     }, [code, renderMermaidInto])
-    return (
-      <div className="my-4 overflow-x-auto">
-        <div ref={ref} className="min-w-[320px]" />
-      </div>
-    )
+    return <div ref={ref} className="my-4" />
   }
 
   // Ensure unclosed mermaid fences don't swallow following content
@@ -1276,10 +1402,49 @@ function MarkdownContent({ content }: { content: string }) {
     }
   }, [])
 
+  // Color text directive plugin: turns :rose[Text] or :c[Text]{color="rose"} into <span class="c-rose">Text</span>
+  const colorTextDirectivePlugin = React.useCallback(function () {
+    const allowed = new Set(['rose','peach','amber','mint','sky','lavender','gray'])
+    const hex: Record<string, string> = {
+      rose: '#e07a88',
+      peach: '#e8a57a',
+      amber: '#d6a84b',
+      mint: '#4fb9a7',
+      sky: '#5aa9e6',
+      lavender: '#9b8ae6',
+      gray: '#8b8f98',
+    }
+    return (tree: any) => {
+      visit(tree, (node: any) => {
+        if (!node || typeof node !== 'object') return
+        if (node.type === 'textDirective') {
+          let color: string | null = null
+          if (typeof node.name === 'string' && allowed.has(node.name)) {
+            color = node.name
+          } else if (node.name === 'c' && node.attributes && node.attributes.color) {
+            const v = String(node.attributes.color)
+            if (allowed.has(v)) color = v
+          }
+          if (color) {
+            node.data = node.data || {}
+            node.data.hName = 'span'
+            const props = (node.data.hProperties = node.data.hProperties || {}) as any
+            props.className = `c-${color}`
+            const val = hex[color] || undefined
+            if (val) {
+              // Apply an inline style to guarantee override inside .prose
+              props.style = (props.style ? String(props.style) + '; ' : '') + `color: ${val}`
+            }
+          }
+        }
+      })
+    }
+  }, [])
+
   return (
     <div ref={containerRef} className="prose prose-neutral dark:prose-invert max-w-none">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, youtubeAutolinkPlugin, directivePlugin, gapPlugin]}
+        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, colorTextDirectivePlugin, youtubeAutolinkPlugin, directivePlugin, gapPlugin]}
         rehypePlugins={[rehypeKatex]}
         components={{
           // Fill-the-gaps renderer for nodes created by gapPlugin

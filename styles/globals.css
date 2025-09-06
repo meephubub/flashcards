@@ -100,3 +100,55 @@ body {
 .dark .katex, .dark .katex * {
   color: #fff !important; /* white for dark mode */
 }
+
+/* Pastel text color utilities for custom color directive (e.g., :rose[Text]) */
+@layer utilities {
+  /* Base color classes */
+  .c-rose { color: #e07a88; }
+  .c-peach { color: #e8a57a; }
+  .c-amber { color: #d6a84b; }
+  .c-mint { color: #4fb9a7; }
+  .c-sky { color: #5aa9e6; }
+  .c-lavender { color: #9b8ae6; }
+  .c-gray { color: #8b8f98; }
+
+  /* Dark mode base */
+  .dark .c-rose { color: #f29aa6; }
+  .dark .c-peach { color: #f1b993; }
+  .dark .c-amber { color: #e8c063; }
+  .dark .c-mint { color: #6fd0c0; }
+  .dark .c-sky { color: #7bbef0; }
+  .dark .c-lavender { color: #b0a2f0; }
+  .dark .c-gray { color: #a0a5ae; }
+
+  /* Ensure colors win inside .prose (Typography plugin sets default colors) */
+  .prose .c-rose { color: #e07a88 !important; }
+  .prose .c-rose * { color: #e07a88 !important; }
+  .prose .c-peach { color: #e8a57a !important; }
+  .prose .c-peach * { color: #e8a57a !important; }
+  .prose .c-amber { color: #d6a84b !important; }
+  .prose .c-amber * { color: #d6a84b !important; }
+  .prose .c-mint { color: #4fb9a7 !important; }
+  .prose .c-mint * { color: #4fb9a7 !important; }
+  .prose .c-sky { color: #5aa9e6 !important; }
+  .prose .c-sky * { color: #5aa9e6 !important; }
+  .prose .c-lavender { color: #9b8ae6 !important; }
+  .prose .c-lavender * { color: #9b8ae6 !important; }
+  .prose .c-gray { color: #8b8f98 !important; }
+  .prose .c-gray * { color: #8b8f98 !important; }
+
+  .dark .prose .c-rose { color: #f29aa6 !important; }
+  .dark .prose .c-rose * { color: #f29aa6 !important; }
+  .dark .prose .c-peach { color: #f1b993 !important; }
+  .dark .prose .c-peach * { color: #f1b993 !important; }
+  .dark .prose .c-amber { color: #e8c063 !important; }
+  .dark .prose .c-amber * { color: #e8c063 !important; }
+  .dark .prose .c-mint { color: #6fd0c0 !important; }
+  .dark .prose .c-mint * { color: #6fd0c0 !important; }
+  .dark .prose .c-sky { color: #7bbef0 !important; }
+  .dark .prose .c-sky * { color: #7bbef0 !important; }
+  .dark .prose .c-lavender { color: #b0a2f0 !important; }
+  .dark .prose .c-lavender * { color: #b0a2f0 !important; }
+  .dark .prose .c-gray { color: #a0a5ae !important; }
+  .dark .prose .c-gray * { color: #a0a5ae !important; }
+}

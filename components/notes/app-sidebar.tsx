@@ -202,9 +202,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       if (!user?.id) return
       const { data, error } = await supabase
         .from('homework')
-        .select('id, subject, due_date, "done ?":done')
+        .select('id, subject, due_date, done')
         .eq('user_id', user.id)
-        .eq('done ?', false)
+        .eq('done', false)
         // include overdue items as well; show soonest first
         .order('due_date', { ascending: true, nullsFirst: false })
         .limit(5)
@@ -288,7 +288,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarContent>
         <SidebarFooter>
           {/* Fixed Agenda panel */}
-          <div className="w-full px-2 pt-2 border-t">
+          <div className="w-full px-2 pt-2 border-t group-data-[collapsible=icon]:hidden">
             <NextLink href="/tasks" className="block">
               <div className="rounded-lg border bg-muted/30 backdrop-blur p-3 hover:bg-muted/40 transition-colors">
               <div className="flex items-start justify-between">

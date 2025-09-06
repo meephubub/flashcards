@@ -723,9 +723,10 @@ export async function makeGroqRequest(
             console.error("Pollinations AI failed, falling back to Groq:", pollinationsError);
             
             // Fallback to Groq
-            const groqApiKey = process.env.GROQ_API_KEY;
+            // Prefer server-secret GROQ_API_KEY; allow NEXT_PUBLIC_GROQ_API_KEY as a fallback for client-side usage
+            const groqApiKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
             if (!groqApiKey) {
-                throw new Error("GROQ_API_KEY is not defined in environment variables");
+                throw new Error("GROQ_API_KEY (or NEXT_PUBLIC_GROQ_API_KEY) is not defined in environment variables");
             }
             
             const groqRequestBody = {

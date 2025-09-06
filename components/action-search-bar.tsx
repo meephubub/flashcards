@@ -491,11 +491,11 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
         if (uErr) throw uErr
         const uid = userRes?.user?.id
         if (!uid) { setTodos([]); setTodosLoading(false); return }
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from('homework')
-          .select('id, created_at, user_id, due_date, subject, priority, "done ?":done')
+          .select('id, created_at, user_id, due_date, subject, priority, done')
           .eq('user_id', uid)
-          .eq('done ?', false)
+          .eq('done', false)
           .order('due_date', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false })
         if (error) throw error
@@ -514,7 +514,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
 
   const toggleTodo = async (id: number, done: boolean) => {
     try {
-      await supabase.from('homework').update({ ['done ?']: done } as any).eq('id', id)
+      await (supabase as any).from('homework').update({ done } as any).eq('id', id)
       if (done) {
         // Remove from the list if marked done (we only show undone tasks)
         setTodos((prev) => prev.filter((t) => t.id !== id))
