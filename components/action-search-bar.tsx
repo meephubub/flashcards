@@ -731,6 +731,8 @@ Formatting rules:
               if (error) throw new Error(error.message)
               // Push refreshed content into the current view immediately
               try { updateCurrentNoteContent?.(cleaned) } catch {}
+              // Broadcast a global event so any listeners can refetch
+              try { window.dispatchEvent(new CustomEvent('note-updated', { detail: { id: currentNoteId } })) } catch {}
               // Done: fast-forward progress and close
               setFixProgress(100)
               clearInterval(timer)
@@ -1435,6 +1437,8 @@ Note content:\n\n${data.content}`
                           if (error) throw new Error(error.message)
                           // Update UI immediately with the saved content
                           try { updateCurrentNoteContent?.(editAiPreview) } catch {}
+                          // Broadcast a global event so any listeners can refetch
+                          try { window.dispatchEvent(new CustomEvent('note-updated', { detail: { id: currentNoteId } })) } catch {}
                           setOpen(false)
                           resetEditAi()
                         } catch (e: any) {

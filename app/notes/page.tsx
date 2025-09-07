@@ -42,6 +42,7 @@ import ExamFromNotesPage from "@/app/exam-from-notes/page"
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment, Bounds, useGLTF } from '@react-three/drei'
 import { STLLoader } from 'three-stdlib'
+import { Loader2, X } from 'lucide-react'
 
 export default function Page() {
   const { user } = useAuth()
@@ -105,6 +106,48 @@ export default function Page() {
   const [uploadModelError, setUploadModelError] = useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const editorRef = React.useRef<HTMLTextAreaElement | null>(null)
+
+  // Dictionary side panel state
+  const [dictOpen, setDictOpen] = useState(false)
+  const [dictWord, setDictWord] = useState<string>("")
+  const [dictLoading, setDictLoading] = useState(false)
+  const [dictError, setDictError] = useState<string | null>(null)
+  const [dictEntries, setDictEntries] = useState<Array<{ pos?: string; definition: string; example?: string }>>([])
+  // UI: slight open animation + resizable width
+  const [dictAnimOpen, setDictAnimOpen] = useState(false)
+  const [dictWidth, setDictWidth] = useState<number>(416) // ~26rem
+  const dictResizeRef = React.useRef<{ startX: number; startW: number } | null>(null)
+
+  // Trigger a subtle slide/fade-in on open
+  useEffect(() => {
+    if (dictOpen) {
+      // allow next paint to apply transitions
+      const id = requestAnimationFrame(() => setDictAnimOpen(true))
+      return () => cancelAnimationFrame(id)
+    } else {
+      setDictAnimOpen(false)
+    }
+  }, [dictOpen])
+
+  // Resize handlers
+  const onDictResizeMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    dictResizeRef.current = { startX: e.clientX, startW: dictWidth }
+    const onMove = (ev: MouseEvent) => {
+      const ref = dictResizeRef.current
+      if (!ref) return
+      const dx = ref.startX - ev.clientX // dragging left increases width
+      const next = Math.min(640, Math.max(320, ref.startW + dx)) // clamp 20rem..40rem
+      setDictWidth(next)
+    }
+    const onUp = () => {
+      dictResizeRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [dictWidth])
 
   // Pastel color style menu state
   const [styleMenuOpen, setStyleMenuOpen] = useState(false)
@@ -184,6 +227,57 @@ export default function Page() {
     // When changing the selected note, leave exam mode
     try { setShowExamInNotes(false) } catch {}
   }, [currentNoteId, setShowExamInNotes])
+
+  // Alt+D: open dictionary for current selection
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.altKey) || (e.key !== 'd' && e.key !== 'D')) return
+      const sel = window.getSelection()?.toString() || ''
+      const match = sel.match(/[A-Za-z][A-Za-z'\-]*/)
+      const word = (match?.[0] || '').toLowerCase()
+      if (!word) return
+      e.preventDefault()
+      void openDictionary(word)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // Open and fetch dictionary definitions
+  const openDictionary = React.useCallback(async (word: string) => {
+    setDictWord(word)
+    setDictOpen(true)
+    setDictLoading(true)
+    setDictError(null)
+    setDictEntries([])
+    try {
+      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`)
+      if (!res.ok) throw new Error('Lookup failed')
+      const data = await res.json()
+      const entries: Array<{ pos?: string; definition: string; example?: string }> = []
+      if (Array.isArray(data)) {
+        for (const entry of data) {
+          const meanings = Array.isArray(entry?.meanings) ? entry.meanings : []
+          for (const m of meanings) {
+            const pos = typeof m?.partOfSpeech === 'string' ? m.partOfSpeech : undefined
+            const defs = Array.isArray(m?.definitions) ? m.definitions : []
+            for (const d of defs) {
+              const def = typeof d?.definition === 'string' ? d.definition : ''
+              if (!def) continue
+              const ex = typeof d?.example === 'string' ? d.example : undefined
+              entries.push({ pos, definition: def, example: ex })
+            }
+          }
+        }
+      }
+      if (entries.length === 0) throw new Error('No definitions found')
+      setDictEntries(entries.slice(0, 12))
+    } catch (err: any) {
+      setDictError(err?.message || 'Failed to fetch definition')
+    } finally {
+      setDictLoading(false)
+    }
+  }, [])
 
   // Minimal select-note dialog state
   const [isSelectOpen, setIsSelectOpen] = useState(false)
@@ -339,6 +433,30 @@ export default function Page() {
     return () => {
       mounted = false
     }
+  }, [currentNoteId, supabase, user?.id])
+
+  // Listen for global 'note-updated' events (broadcast by ActionSearchBar) and refresh if it concerns the current note
+  useEffect(() => {
+    const handler = async (ev: Event) => {
+      const e = ev as CustomEvent<{ id?: string }>
+      const id = (e?.detail && (e.detail as any).id) as string | undefined
+      if (!id || id !== currentNoteId) return
+      if (!user?.id) return
+      const { data, error } = await supabase
+        .from("notes")
+        .select("title, content, category, updated_at, project")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .single()
+      if (error) return
+      setNoteTitle((data?.title as string) || "Untitled")
+      setNoteCategory((data?.category as string) || "")
+      setNoteUpdatedAt((data?.updated_at as string) || "")
+      setNoteContent((data?.content as string) || "")
+      setNoteProject((data?.project as string) || "")
+    }
+    window.addEventListener('note-updated', handler as EventListener)
+    return () => window.removeEventListener('note-updated', handler as EventListener)
   }, [currentNoteId, supabase, user?.id])
 
   // When note changes, reset editing/draft state
@@ -679,7 +797,7 @@ Goals:
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="bg-background min-h-[100vh] flex-1 rounded-xl md:min-h-min p-6 md:p-10">
+          <div className={`bg-background min-h-[100vh] flex-1 rounded-xl md:min-h-min p-6 md:p-10 transition-[padding-right] duration-200 ${dictOpen ? 'pr-[28rem]' : ''}`}>
             {/* Create Note Dialog (for palette "Create note") */}
             <NoteCreateDialog
               open={createOpen}
@@ -927,8 +1045,93 @@ Goals:
             )}
           </div>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      {/* Fixed Dictionary Side Panel */}
+      {dictOpen && (
+        <div className="fixed top-0 right-0 h-full z-40" style={{ width: dictWidth }}>
+          {/* Subtle page backdrop for depth */}
+          <div
+            className={
+              `absolute inset-0 pointer-events-none bg-gradient-to-l from-black/10 to-transparent dark:from-black/30 
+               transition-opacity duration-200 ease-out ${dictAnimOpen ? 'opacity-100' : 'opacity-0'}`
+            }
+          />
+          {/* Panel */}
+          <div
+            className={
+              `absolute right-0 top-0 h-full flex flex-col p-4 md:p-5 
+               backdrop-blur-md bg-white/70 dark:bg-neutral-900/70 
+               border-l border-neutral-200/60 dark:border-neutral-800/60 
+               shadow-xl ring-1 ring-black/5 dark:ring-white/5 rounded-l-2xl 
+               transition-transform transition-opacity duration-200 ease-out 
+               ${dictAnimOpen ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0'}`
+            }
+            style={{ width: dictWidth }}
+          >
+            {/* Resize handle */}
+            <div
+              onMouseDown={onDictResizeMouseDown}
+              title="Resize"
+              className="absolute left-0 top-0 h-full w-1.5 -translate-x-full cursor-ew-resize 
+                         bg-transparent hover:bg-neutral-500/10 active:bg-neutral-500/20"
+            />
+            {/* Header */}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Dictionary</div>
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/70" aria-hidden="true" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setDictOpen(false)}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md 
+                           border border-neutral-200/70 dark:border-neutral-800/70 
+                           hover:bg-neutral-100/60 dark:hover:bg-neutral-800/60 
+                           transition-colors"
+                aria-label="Close dictionary"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Word */}
+            <div className="mb-3 md:mb-4">
+              <div className="text-xl md:text-2xl font-semibold leading-tight tracking-tight">{dictWord || '—'}</div>
+            </div>
+            {/* Content */}
+            <div className="flex-1 overflow-auto pr-1 md:pr-2 space-y-3 md:space-y-3.5 ">
+              {dictLoading && (
+                <div className="text-sm text-neutral-600 dark:text-neutral-400 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Looking up…</div>
+              )}
+              {dictError && (
+                <div className="text-sm text-red-600/90 dark:text-red-400/90">{dictError}</div>
+              )}
+              {!dictLoading && !dictError && dictEntries.length > 0 && (
+                <ol className="list-decimal pl-5 space-y-2.5">
+                  {dictEntries.map((d, idx) => (
+                    <li key={idx} className="text-sm">
+                      <div className="leading-6">
+                        <span className="font-medium">{d.definition}</span>
+                        {d.pos && <span className="ml-2 text-xs text-neutral-500 italic">{d.pos}</span>}
+                      </div>
+                      {d.example && (
+                        <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">“{d.example}”</div>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {!dictLoading && !dictError && dictEntries.length === 0 && dictWord && (
+                <div className="text-sm text-neutral-600 dark:text-neutral-400">No definitions found.</div>
+              )}
+              {!dictLoading && !dictError && !dictEntries.length && !dictWord && (
+                <div className="text-sm text-neutral-600 dark:text-neutral-400">Select a word and press Alt+D.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </SidebarInset>
+  </SidebarProvider>
   )
 }
 
