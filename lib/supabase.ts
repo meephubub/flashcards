@@ -109,11 +109,12 @@ export type ParsedDeckImport = {
   cards: ParsedDeckCardImport[];
 };
 
-export type Note = {
+export interface Note {
   id: string
   title: string
   content: string
   category: string
+  project?: string | null
   created_at: string
   updated_at: string
   user_id: string | null

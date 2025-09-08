@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { DeckProvider } from "@/context/deck-context";
 import { SettingsProvider } from "@/context/settings-context";
 import { AuthProvider } from "@/context/auth-context";
+import { FolderProvider } from "@/context/folder-context";
 import { Toaster } from "@/components/ui/toaster";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
@@ -65,18 +66,23 @@ export default function RootLayout({
           <AuthProvider>
             <SettingsProvider>
               <DeckProvider>
-                {/* Mobile-only palette trigger */}
-                <MobilePaletteButton />
-                {children}
-                {/* Global Action Search - opens with Ctrl+K */}
-                <ActionSearchBar />
-                <Toaster />
+                <FolderProvider>
+                  {/* Mobile-only palette trigger */}
+                  <MobilePaletteButton />
+                  {children}
+                  {/* Global Action Search - opens with Ctrl+K */}
+                  <ActionSearchBar />
+                  <Toaster />
+                  <SpeedInsights />
+                  <Analytics />
+                  <PwaInit />
+                  <EnvBannerClient />
+                </FolderProvider>
               </DeckProvider>
             </SettingsProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
-      <SpeedInsights />
       <Analytics />
     </html>
   );

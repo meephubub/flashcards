@@ -11,8 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { Loader2, Plus, Trash2, Link as LinkIcon } from "lucide-react"
+import { Loader2, Plus, Trash2, Link as LinkIcon, ChevronsUpDown, Check } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 
 // Notes layout components for consistent shell
 import { AppSidebar } from "@/components/notes/app-sidebar"
@@ -35,11 +38,18 @@ interface HomeworkRow {
   subject: string | null
   priority: number | null
   done: boolean | null
+  metadata?: any | null
+}
+
+interface NoteRow {
+  id: string
+  title: string | null
 }
 
 export default function TasksPage() {
   const { user } = useAuth()
   const supabase = React.useMemo(() => createClient(), [])
+  const router = useRouter()
 
   const [loading, setLoading] = React.useState(false)
   const [tasks, setTasks] = React.useState<HomeworkRow[]>([])
@@ -52,6 +62,18 @@ export default function TasksPage() {
   const [createError, setCreateError] = React.useState<string | null>(null)
   const [adding, setAdding] = React.useState(false)
   const [showCreate, setShowCreate] = React.useState(true)
+  // Simple validation
+  const [subjectError, setSubjectError] = React.useState(false)
+  // Link fields stored in metadata jsonb
+  const [linkUrl, setLinkUrl] = React.useState<string>("")
+  const [selectedNoteId, setSelectedNoteId] = React.useState<string>("")
+  const [createNoteFromTask, setCreateNoteFromTask] = React.useState(false)
+  const [noteIdToAttach, setNoteIdToAttach] = React.useState<string>("")
+
+  // Notes for dropdown
+  const [notes, setNotes] = React.useState<NoteRow[]>([])
+  const [loadingNotes, setLoadingNotes] = React.useState(false)
+  const [noteComboOpen, setNoteComboOpen] = React.useState(false)
 
   // Keep calendar selection and due date in sync
   React.useEffect(() => {
@@ -65,7 +87,7 @@ export default function TasksPage() {
     setLoading(true)
     let q = supabase
       .from("homework")
-      .select('id, created_at, user_id, due_date, subject, priority, done')
+      .select('id, created_at, user_id, due_date, subject, priority, done, metadata')
       .eq("user_id", user.id)
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -93,15 +115,38 @@ export default function TasksPage() {
     setLoading(false)
   }, [selectedDate, supabase, user?.id])
 
+  const fetchNotes = React.useCallback(async () => {
+    if (!user?.id) return
+    setLoadingNotes(true)
+    const { data, error } = await supabase
+      .from("notes")
+      .select("id, title")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(200)
+    if (!error) setNotes((data as NoteRow[]) || [])
+    setLoadingNotes(false)
+  }, [supabase, user?.id])
+
   React.useEffect(() => {
     fetchTasks()
   }, [fetchTasks])
+
+  React.useEffect(() => {
+    fetchNotes()
+  }, [fetchNotes])
 
   const addTask = async () => {
     if (!user?.id) return
     try {
       setAdding(true)
       setCreateError(null)
+      // Validate required fields (Due date is optional)
+      if (!subject.trim()) {
+        setSubjectError(true)
+        setAdding(false)
+        return
+      }
       // Normalize due_date to noon UTC to avoid local->UTC day shifting
       const dueIso = dueDate
         ? (() => {
@@ -111,18 +156,47 @@ export default function TasksPage() {
             return new Date(Date.UTC(y, m, d, 12, 0, 0, 0)).toISOString()
           })()
         : null
+
+      // If requested, create a note first and capture its id
+      let noteIdToAttach = selectedNoteId
+      if (createNoteFromTask && subject.trim().length > 0) {
+        const { data: created, error: noteErr } = await supabase
+          .from("notes")
+          .insert([{ title: subject.trim(), category: "", content: "", project: "", user_id: user.id }])
+          .select("id")
+          .single()
+        if (noteErr) throw noteErr
+        noteIdToAttach = created?.id || noteIdToAttach
+      }
+
       const payload: any = {
         user_id: user.id,
         subject: subject || null,
         due_date: dueIso,
         priority: priority,
         // intentionally omit 'done' to avoid column mismatch if schema differs
+        metadata: (linkUrl || noteIdToAttach)
+          ? {
+              ...(linkUrl ? { link_url: linkUrl } : {}),
+              ...(noteIdToAttach ? { note_id: noteIdToAttach } : {}),
+            }
+          : null,
       }
       const { error } = await supabase.from("homework").insert(payload)
       if (error) throw error
+
+      // If we created a note for this task, navigate to it immediately
+      if (createNoteFromTask && noteIdToAttach) {
+        router.push(`/notes?note=${encodeURIComponent(noteIdToAttach)}`)
+        return
+      }
+
       setSubject("")
       setDueDate(undefined)
       setPriority(null)
+      setLinkUrl("")
+      setSelectedNoteId("")
+      setCreateNoteFromTask(false)
       await fetchTasks()
     } catch (e: any) {
       console.error("Add homework failed", e)
@@ -215,24 +289,33 @@ export default function TasksPage() {
 
                     {/* Create */}
                     {showCreate && (
-                      <div className="p-3 grid gap-3 md:grid-cols-5 items-end">
-                        <div className="md:col-span-2">
-                          <Label htmlFor="subject">Subject</Label>
-                          <Input id="subject" placeholder="e.g. Math worksheet" value={subject} onChange={(e) => setSubject(e.target.value)} />
+                      <div className="p-3 md:p-4 grid gap-3 md:gap-4 md:grid-cols-12 items-end bg-muted/30">
+                        <div className="md:col-span-5">
+                          <Label htmlFor="subject">Task</Label>
+                          <Input
+                            id="subject"
+                            placeholder="What do you need to do?"
+                            value={subject}
+                            onChange={(e) => { setSubject(e.target.value); if (subjectError && e.target.value.trim()) setSubjectError(false) }}
+                            aria-invalid={subjectError}
+                            className={cn(subjectError ? "border-destructive focus-visible:ring-destructive animate-pulse" : "")}
+                          />
+                          <div className={cn("mt-1 text-xs h-4", subjectError ? "text-destructive" : "invisible")}>Task name is required.</div>
                         </div>
-                        <div>
+                        <div className="md:col-span-3">
                           <Label>Due date</Label>
                           <Input
                             type="date"
                             value={dueDate ? format(dueDate, "yyyy-MM-dd") : ""}
                             onChange={(e) => setDueDate(e.target.value ? new Date(e.target.value) : undefined)}
                           />
+                          <div className="mt-1 h-4 text-xs invisible">spacer</div>
                         </div>
-                        <div>
+                        <div className="md:col-span-2">
                           <Label>Priority</Label>
                           <Select value={priority?.toString() ?? ""} onValueChange={(v) => setPriority(v ? parseInt(v) : null)}>
                             <SelectTrigger>
-                              <SelectValue placeholder="Set priority" />
+                              <SelectValue placeholder="Priority" />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="1">Low</SelectItem>
@@ -240,9 +323,53 @@ export default function TasksPage() {
                               <SelectItem value="3">High</SelectItem>
                             </SelectContent>
                           </Select>
+                          <div className="mt-1 h-4 text-xs invisible">spacer</div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button onClick={addTask} disabled={adding} className="w-full">
+                        <div className="md:col-span-5">
+                          <Label>Attach note</Label>
+                          <Popover open={noteComboOpen} onOpenChange={setNoteComboOpen}>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" role="combobox" aria-expanded={noteComboOpen} className="w-full justify-between" disabled={createNoteFromTask}>
+                                {selectedNoteId
+                                  ? (notes.find((n) => n.id === selectedNoteId)?.title || "Selected note")
+                                  : (loadingNotes ? "Loading notes…" : "Select a note (optional)")}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[240px]">
+                              <Command>
+                                <CommandInput placeholder="Search notes…" />
+                                <CommandEmpty>No notes found.</CommandEmpty>
+                                <CommandList>
+                                  <CommandGroup>
+                                    <CommandItem value="" onSelect={() => { setSelectedNoteId(""); setNoteComboOpen(false) }}>
+                                      <Check className={cn("mr-2 h-4 w-4", selectedNoteId === "" ? "opacity-100" : "opacity-0")} />
+                                      No note
+                                    </CommandItem>
+                                    {notes.map((n) => (
+                                      <CommandItem key={n.id} value={n.title || "Untitled note"} onSelect={() => { setSelectedNoteId(n.id); setNoteComboOpen(false) }}>
+                                        <Check className={cn("mr-2 h-4 w-4", selectedNoteId === n.id ? "opacity-100" : "opacity-0")} />
+                                        {n.title || "Untitled note"}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                          <div className="mt-1 h-4 text-xs invisible">spacer</div>
+                        </div>
+                        <div className="md:col-span-7">
+                          <Label htmlFor="linkUrl">Link URL</Label>
+                          <Input id="linkUrl" placeholder="https://… or /notes?note=… (optional)" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} disabled={createNoteFromTask} />
+                          <div className="mt-1 h-4 text-xs invisible">spacer</div>
+                        </div>
+                        <div className="md:col-span-12 flex items-center gap-2">
+                          <Checkbox id="createNoteFromTask" checked={createNoteFromTask} onCheckedChange={(v) => setCreateNoteFromTask(!!v)} />
+                          <Label htmlFor="createNoteFromTask" className="text-sm">Create note from task (uses task name)</Label>
+                        </div>
+                        <div className="md:col-span-12 flex justify-end">
+                          <Button onClick={addTask} disabled={adding} className="min-w-24">
                             <Plus className="mr-2 h-4 w-4" /> {adding ? 'Adding…' : 'Add'}
                           </Button>
                         </div>
@@ -264,7 +391,7 @@ export default function TasksPage() {
                         <div className="p-4 text-sm text-muted-foreground">No tasks</div>
                       )}
                       {tasks.map((t) => {
-                        const urlGuess = guessLinkForTask(t)
+                        const urlGuess = taskExplicitOrGuessedLink(t)
                         return (
                           <div key={t.id} className="p-3 flex items-center gap-3">
                             <Checkbox checked={!!t.done} onCheckedChange={(v) => updateDone(t.id, !!v)} />
@@ -301,6 +428,23 @@ export default function TasksPage() {
       </SidebarInset>
     </SidebarProvider>
   )
+}
+
+// Prefer explicit metadata.note_id, then metadata.link_url / metadata.linked_task_id, else fall back to guessing from subject text
+function taskExplicitOrGuessedLink(t: HomeworkRow): string | null {
+  const meta = (t.metadata || {}) as any
+  if (meta && typeof meta === 'object') {
+    if (meta.note_id && typeof meta.note_id === 'string' && meta.note_id.trim().length > 0) {
+      return `/notes?note=${encodeURIComponent(meta.note_id)}`
+    }
+    if (meta.link_url && typeof meta.link_url === 'string' && meta.link_url.trim().length > 0) {
+      return meta.link_url
+    }
+    if (meta.linked_task_id && Number.isFinite(Number(meta.linked_task_id))) {
+      return `/tasks?focus=${meta.linked_task_id}`
+    }
+  }
+  return guessLinkForTask(t)
 }
 
 // Very simple helper: try to infer a link from the subject text like "deck: <id>" or "note: <id>" or "model: <id>"

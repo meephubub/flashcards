@@ -88,6 +88,10 @@ const data = {
           url: "/home",
         },
         {
+          title: "Files",
+          url: "/files",
+        },
+        {
           title: "Decks",
           url: "/",
         },

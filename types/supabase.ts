@@ -136,15 +136,59 @@ export type Database = {
         }
         Relationships: []
       }
+      folders: {
+        Row: {
+          id: string
+          name: string
+          parent_id: string | null
+          user_id: string
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          parent_id?: string | null
+          user_id: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          parent_id?: string | null
+          user_id?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       notes: {
         Row: {
-          category: string
-          content: string
-          created_at: string | null
           id: string
-          title: string
+          title: string | null
+          content: string | null
+          user_id: string
+          created_at: string
           updated_at: string | null
-          user_id: string | null
+          category: string | null
+          project: string | null
+          folder_id: string | null
         }
         Insert: {
           category: string
