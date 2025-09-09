@@ -86,12 +86,12 @@ export default function PwaInit() {
   return (
     <>
       {/* Debug info - remove in production */}
-      {process.env.NODE_ENV === 'development' && (
+      {process.env.NODE_ENV === 'development1' && (
         <div style={{ 
           position: 'fixed', 
           top: 0, 
           right: 0, 
-          background: 'red', 
+          background: 'black', 
           color: 'white', 
           padding: '10px',
           zIndex: 9999,
@@ -100,7 +100,7 @@ export default function PwaInit() {
           PWA: {isInstallable ? 'Installable' : 'Not Ready'}
           {isInstallable && (
             <button onClick={handleInstall} style={{ marginLeft: '10px' }}>
-              Install Now
+              Install Now (only visible in dev mode)
             </button>
           )}
         </div>

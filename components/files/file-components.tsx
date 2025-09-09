@@ -11,7 +11,9 @@ import {
   MoreVertical, 
   FolderInput,
   FolderOpenIcon,
-  FolderIcon
+  FolderIcon,
+  Trash,
+  Pencil
 } from "lucide-react"
 
 // Component to render a folder in grid view
@@ -105,11 +107,13 @@ export function FolderRow({
 export function NoteCard({ 
   note, 
   onClick,
-  onMoveClick
+  onMoveClick,
+  onDeleteClick
 }: { 
   note: any;
   onClick: () => void;
   onMoveClick?: (e: React.MouseEvent) => void;
+  onDeleteClick?: (e: React.MouseEvent) => void;
 }) {
   return (
     <Card className="group cursor-pointer transition-colors hover:bg-accent/50">
@@ -138,6 +142,10 @@ export function NoteCard({
                 <FolderInput className="mr-2 h-4 w-4" />
                 <span>Move to...</span>
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDeleteClick} className="text-red-600 focus:text-red-600">
+                <Trash className="mr-2 h-4 w-4" />
+                <span>Delete</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -163,14 +171,16 @@ export function NoteCard({
 export function NoteRow({ 
   note, 
   onClick,
-  onMoveClick
+  onMoveClick,
+  onDeleteClick
 }: { 
   note: any;
   onClick: () => void;
   onMoveClick?: (e: React.MouseEvent) => void;
+  onDeleteClick?: (e: React.MouseEvent) => void;
 }) {
   return (
-    <div className="flex items-center p-3 rounded-lg border hover:bg-accent/50">
+    <div className="flex items-center p-3 hover:bg-accent/50">
       <FileText className="h-5 w-5 text-blue-500 mr-3" />
       <div className="flex-1 min-w-0" onClick={onClick}>
         <h3 className="font-medium truncate">{note.title || 'Untitled Note'}</h3>
@@ -203,6 +213,10 @@ export function NoteRow({
             <DropdownMenuItem onClick={onMoveClick}>
               <FolderInput className="mr-2 h-4 w-4" />
               <span>Move to...</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onDeleteClick} className="text-red-600 focus:text-red-600">
+              <Trash className="mr-2 h-4 w-4" />
+              <span>Delete</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -293,6 +307,191 @@ export function EmptyState({ onNewNote, onNewFolder }: { onNewNote: () => void, 
           New Folder
         </Button>
       </div>
+    </div>
+  )
+}
+
+// Storage file components (grid and list)
+export function StorageFileCard({ 
+  file, 
+  onGetUrl,
+  onDelete,
+  onPreview,
+  onClick,
+  onHoverStart,
+  fileType,
+  previewUrl,
+  onMoveClick,
+  onRenameClick
+}: {
+  file: { name: string; updated_at?: string | null };
+  onGetUrl: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+  onPreview?: (e: React.MouseEvent) => void;
+  onClick?: () => void;
+  onHoverStart?: () => void;
+  fileType?: string;
+  previewUrl?: string | null;
+  onMoveClick?: (e: React.MouseEvent) => void;
+  onRenameClick?: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <Card className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
+      {/* Hover preview bubble for images */}
+      {previewUrl && (
+        <div className="pointer-events-none absolute left-1/2 -top-2 z-50 hidden -translate-x-1/2 -translate-y-full rounded-md border bg-background p-1 shadow-lg group-hover:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previewUrl} alt={file.name} className="max-h-40 max-w-64 object-contain" />
+        </div>
+      )}
+      <CardContent className="p-4">
+        <div className="flex justify-between items-start">
+          <h3 className="font-medium line-clamp-2 text-ellipsis">
+            {file.name}
+          </h3>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 opacity-0 group-hover:opacity-100 -mt-2 -mr-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreVertical className="h-4 w-4" />
+                <span className="sr-only">More</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onMoveClick && (
+                <DropdownMenuItem onClick={onMoveClick}>
+                  <FolderInput className="mr-2 h-4 w-4" />
+                  <span>Move to...</span>
+                </DropdownMenuItem>
+              )}
+              {onRenameClick && (
+                <DropdownMenuItem onClick={onRenameClick}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  <span>Rename</span>
+                </DropdownMenuItem>
+              )}
+              {onPreview && (
+                <DropdownMenuItem onClick={onPreview}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>Preview</span>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={onGetUrl}>
+                <FileText className="mr-2 h-4 w-4" />
+                <span>Get URL</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDelete} className="text-red-600 focus:text-red-600">
+                <Trash className="mr-2 h-4 w-4" />
+                <span>Delete</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center">
+            {fileType && (
+              <span className="inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium">
+                {fileType}
+              </span>
+            )}
+          </div>
+          {file.updated_at && (
+            <div className="flex items-center">
+              <CalendarClock className="h-3 w-3 mr-1" />
+              <span>{formatRelativeDate(file.updated_at)}</span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function StorageFileRow({ 
+  file, 
+  onGetUrl,
+  onDelete,
+  onPreview,
+  onClick,
+  onHoverStart,
+  fileType,
+  previewUrl,
+  onMoveClick,
+  onRenameClick
+}: {
+  file: { name: string; updated_at?: string | null };
+  onGetUrl: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+  onPreview?: (e: React.MouseEvent) => void;
+  onClick?: () => void;
+  onHoverStart?: () => void;
+  fileType?: string;
+  previewUrl?: string | null;
+  onMoveClick?: (e: React.MouseEvent) => void;
+  onRenameClick?: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div className="group relative flex items-center p-3 hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
+      {previewUrl && (
+        <div className="pointer-events-none absolute left-1/2 -top-2 z-50 hidden -translate-x-1/2 -translate-y-full rounded-md border bg-background p-1 shadow-lg group-hover:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previewUrl} alt={file.name} className="max-h-40 max-w-64 object-contain" />
+        </div>
+      )}
+      <FileText className="h-5 w-5 text-emerald-500 mr-3" />
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium truncate">{file.name}</h3>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {fileType && (
+            <span className="inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium">
+              {fileType}
+            </span>
+          )}
+          {file.updated_at && (
+            <span>{formatRelativeDate(file.updated_at)}</span>
+          )}
+        </div>
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8">
+            <MoreVertical className="h-4 w-4" />
+            <span className="sr-only">More</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {onMoveClick && (
+            <DropdownMenuItem onClick={onMoveClick}>
+              <FolderInput className="mr-2 h-4 w-4" />
+              <span>Move to...</span>
+            </DropdownMenuItem>
+          )}
+          {onRenameClick && (
+            <DropdownMenuItem onClick={onRenameClick}>
+              <Pencil className="mr-2 h-4 w-4" />
+              <span>Rename</span>
+            </DropdownMenuItem>
+          )}
+          {onPreview && (
+            <DropdownMenuItem onClick={onPreview}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span>Preview</span>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={onGetUrl}>
+            <FileText className="mr-2 h-4 w-4" />
+            <span>Get URL</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onDelete} className="text-red-600 focus:text-red-600">
+            <Trash className="mr-2 h-4 w-4" />
+            <span>Delete</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

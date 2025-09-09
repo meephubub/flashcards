@@ -784,7 +784,7 @@ Goals:
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
+                  <BreadcrumbLink href="/notes">
                     {noteProject || "Notes"}
                   </BreadcrumbLink>
                 </BreadcrumbItem>

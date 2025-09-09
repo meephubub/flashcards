@@ -14,8 +14,8 @@ type FolderContextType = {
   currentFolder: string | null
   setCurrentFolder: (id: string | null) => void
   folderPath: { id: string; name: string }[]
-  createFolder: (name: string, parentId?: string | null) => Promise<void>
-  updateFolder: (id: string, updates: { name?: string; parent_id?: string | null }) => Promise<void>
+  createFolder: (name: string, parentId?: string | null, style?: { color?: string; icon?: string } | null) => Promise<void>
+  updateFolder: (id: string, updates: { name?: string; parent_id?: string | null; style?: { color?: string; icon?: string } | null }) => Promise<void>
   deleteFolder: (id: string) => Promise<void>
   moveNoteToFolder: (noteId: string, folderId: string | null) => Promise<void>
   getFolderPath: (folderId: string | null) => Promise<{ id: string; name: string }[]>
@@ -93,11 +93,10 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
         .select('id, name, parent_id')
         .eq('id', currentId)
         .single()
-      
-      if (!data) break
-      
-      path.unshift({ id: data.id, name: data.name })
-      currentId = data.parent_id
+      const row = (data as { id: string; name: string; parent_id: string | null } | null)
+      if (!row) break
+      path.unshift({ id: row.id, name: row.name })
+      currentId = row.parent_id
     }
     
     return path
@@ -114,7 +113,7 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
   }, [currentFolder, getFolderPath])
 
   // Create a new folder
-  const createFolder = useCallback(async (name: string, parentId: string | null = null) => {
+  const createFolder = useCallback(async (name: string, parentId: string | null = null, style: { color?: string; icon?: string } | null = null) => {
     if (!user?.id) throw new Error('Not authenticated')
     
     const { error } = await supabase
@@ -122,7 +121,9 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
       .insert({
         name,
         parent_id: parentId,
-        user_id: user.id
+        user_id: user.id,
+        // style is a jsonb column in db
+        style: style ? style : null,
       })
     
     if (error) throw error
@@ -131,7 +132,7 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id, supabase, refreshFolders])
 
   // Update a folder
-  const updateFolder = useCallback(async (id: string, updates: { name?: string; parent_id?: string | null }) => {
+  const updateFolder = useCallback(async (id: string, updates: { name?: string; parent_id?: string | null; style?: { color?: string; icon?: string } | null }) => {
     const { error } = await supabase
       .from('folders')
       .update(updates)
@@ -142,7 +143,7 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
     await refreshFolders()
   }, [supabase, refreshFolders])
 
-  // Delete a folder (and move contents to parent)
+  // Delete a folder: reparent child folders to this folder's parent, and set notes.folder_id to null
   const deleteFolder = useCallback(async (id: string) => {
     // First get the folder to find its parent
     const { data: folder } = await supabase
@@ -159,10 +160,10 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
       .update({ parent_id: folder.parent_id })
       .eq('parent_id', id)
     
-    // Update all notes in this folder to point to the parent folder
+    // Remove folder association from notes in this folder
     await supabase
       .from('notes')
-      .update({ folder_id: folder.parent_id })
+      .update({ folder_id: null })
       .eq('folder_id', id)
     
     // Now delete the folder
