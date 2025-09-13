@@ -75,11 +75,10 @@ export function FolderRow({
   onMoveClick?: (e: React.MouseEvent) => void;
 }) {
   return (
-    <div className="flex items-center p-3 rounded-lg border hover:bg-accent/50">
+    <div className="flex items-center p-3 rounded-lg border hover:bg-accent/50 cursor-pointer" onClick={onClick}>
       <FolderIcon className="h-5 w-5 text-yellow-500 mr-3" />
       <div 
-        className="flex-1 min-w-0" 
-        onClick={onClick}
+        className="flex-1 min-w-0"
       >
         <h3 className="font-medium truncate">{name}</h3>
       </div>
@@ -116,12 +115,11 @@ export function NoteCard({
   onDeleteClick?: (e: React.MouseEvent) => void;
 }) {
   return (
-    <Card className="group cursor-pointer transition-colors hover:bg-accent/50">
+    <Card className="group cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick}>
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <h3 
             className="font-medium line-clamp-2 text-ellipsis"
-            onClick={onClick}
           >
             {note.title || 'Untitled Note'}
           </h3>
@@ -180,9 +178,9 @@ export function NoteRow({
   onDeleteClick?: (e: React.MouseEvent) => void;
 }) {
   return (
-    <div className="flex items-center p-3 hover:bg-accent/50">
+    <div className="flex items-center p-3 hover:bg-accent/50 cursor-pointer" onClick={onClick}>
       <FileText className="h-5 w-5 text-blue-500 mr-3" />
-      <div className="flex-1 min-w-0" onClick={onClick}>
+      <div className="flex-1 min-w-0">
         <h3 className="font-medium truncate">{note.title || 'Untitled Note'}</h3>
         <div className="flex items-center text-xs text-muted-foreground">
           {note.category && (

@@ -365,6 +365,9 @@ importers:
       three-stdlib:
         specifier: ^2.36.0
         version: 2.36.0(three@0.179.1)
+      transformers:
+        specifier: github:huggingface/transformers
+        version: https://codeload.github.com/huggingface/transformers/tar.gz/d42e96a2a731c4a772e396baa0d915524c873ff0
       uuid:
         specifier: ^11.1.0
         version: 11.1.0
@@ -6165,6 +6168,10 @@ packages:
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
 
+  transformers@https://codeload.github.com/huggingface/transformers/tar.gz/d42e96a2a731c4a772e396baa0d915524c873ff0:
+    resolution: {tarball: https://codeload.github.com/huggingface/transformers/tar.gz/d42e96a2a731c4a772e396baa0d915524c873ff0}
+    version: 0.0.0
+
   trim-lines@3.0.1:
     resolution: {integrity: sha512-kRj8B+YHZCc9kQYdWfJB2/oUl9rA99qbowYYBtr4ui4mZyAQ2JpvVBd/6U2YloATfqBhBTSMhTpgBHtU0Mf3Rg==}
 
@@ -10178,7 +10185,7 @@ snapshots:
       isstream: 0.1.2
       jsonwebtoken: 9.0.2
       mime-types: 2.1.35
-      retry-axios: 2.6.0(axios@1.11.0)
+      retry-axios: 2.6.0(axios@1.11.0(debug@4.4.1))
       tough-cookie: 4.1.4
     transitivePeerDependencies:
       - supports-color
@@ -12172,7 +12179,7 @@ snapshots:
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
-  retry-axios@2.6.0(axios@1.11.0):
+  retry-axios@2.6.0(axios@1.11.0(debug@4.4.1)):
     dependencies:
       axios: 1.11.0(debug@4.4.1)
 
@@ -12629,6 +12636,8 @@ snapshots:
       url-parse: 1.5.10
 
   tr46@0.0.3: {}
+
+  transformers@https://codeload.github.com/huggingface/transformers/tar.gz/d42e96a2a731c4a772e396baa0d915524c873ff0: {}
 
   trim-lines@3.0.1: {}
 

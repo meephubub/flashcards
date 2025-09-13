@@ -16,6 +16,40 @@ const isWebGLAvailable = (() => {
   }
 })();
 
+// Lightweight fallback: hashed bag-of-words embedding (module scope)
+function computeFallbackEmbedding(text: string, dim = 512): Float32Array {
+  const vec = new Float32Array(dim);
+  const tokens = tokenizeText(text);
+  for (const t of tokens) {
+    const h = djb2(t);
+    const idx = Math.abs(h) % dim;
+    vec[idx] += 1;
+  }
+  // L2 normalize
+  let norm = 0;
+  for (let i = 0; i < dim; i++) norm += vec[i] * vec[i];
+  norm = Math.sqrt(norm) || 1;
+  for (let i = 0; i < dim; i++) vec[i] = vec[i] / norm;
+  return vec;
+}
+
+function tokenizeText(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function djb2(str: string): number {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash |= 0; // force 32-bit
+  }
+  return hash;
+}
+
 // Check if running on mobile device (guarded)
 const isMobileDevice = (() => {
   if (typeof window === 'undefined') return false;
@@ -48,24 +82,42 @@ const extractorCache: {
  * Get or initialize the feature extractor pipeline for a specific model.
  * Ensures we only load browser-compatible assets.
  */
+// Internal helper to load a browser-first Transformers implementation
+async function loadTransformers(): Promise<{ pipeline: any; env: any }> {
+  // Use Hugging Face Transformers.js which is designed for browsers
+  const mod: any = await import('@huggingface/transformers');
+  if (!mod?.pipeline || !mod?.env) {
+    throw new Error('[xenova-similarity] Failed to load @huggingface/transformers');
+  }
+  return mod as any;
+}
+
 export async function getFeatureExtractor(modelName?: string) {
   // Dynamically import to keep this strictly client-side
-  const { pipeline, env } = await import('@xenova/transformers');
+  if (typeof window === 'undefined') {
+    throw new Error('[xenova-similarity] Must be called in the browser');
+  }
+  const { pipeline, env } = await loadTransformers();
 
   // Configure environment for browser
   if (!(env as any).configured) {
     env.allowLocalModels = false; // Use remote models for better caching in browser
     env.allowRemoteModels = true;
+    // Prefer using the browser cache for model files
+    (env as any).useBrowserCache = true;
 
-    // Point ONNX wasm assets to our public/wasm path if needed
-    // (We already ship ONNX wasm in public/wasm/ per repo.)
+    // Point ONNX wasm assets to our public/wasm path
     try {
-      // Some versions use nested config objects; guard accesses
-      const wasmPaths: any = (env.backends?.onnx?.wasm as any);
-      if (wasmPaths && typeof wasmPaths === 'object') {
-        // If not already set by the library, set a default base path
-        if (!wasmPaths.wasmPaths) {
-          wasmPaths.wasmPaths = '/wasm/';
+      const onnx = (env as any).backends?.onnx;
+      if (onnx && typeof onnx === 'object') {
+        if (onnx.wasm && typeof onnx.wasm === 'object') {
+          // Ensure .wasm files are fetched from /wasm/
+          (onnx.wasm as any).wasmPaths = '/wasm/';
+          // Proactively set proxy loader if available in our public assets
+          (onnx.wasm as any).proxy = '/wasm/ort-wasm-simd-threaded.mjs';
+          // Optional tuning
+          (onnx.wasm as any).numThreads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4)));
+          (onnx.wasm as any).simd = true;
         }
       }
     } catch (_) {
@@ -76,11 +128,14 @@ export async function getFeatureExtractor(modelName?: string) {
   }
 
   // Configure execution provider based on WebGL availability
-  if (isWebGLAvailable && (env as any).set) {
-    env.set('XENOVA_ONNX_EXECUTION_PROVIDERS', ['webgl']);
-    console.log('[xenova-similarity] WebGL backend enabled for ONNX execution');
-  } else {
-    console.log('[xenova-similarity] WebGL not available, using CPU backend');
+  if ((env as any).set) {
+    if (isWebGLAvailable) {
+      env.set('XENOVA_ONNX_EXECUTION_PROVIDERS', ['webgl']);
+      console.log('[xenova-similarity] WebGL backend enabled for ONNX execution');
+    } else {
+      env.set('XENOVA_ONNX_EXECUTION_PROVIDERS', ['wasm']);
+      console.log('[xenova-similarity] WebGL not available, using WASM CPU backend');
+    }
   }
 
   const selectedModel = modelName || getDefaultModel();
@@ -154,27 +209,31 @@ export async function getSentenceEmbedding(
   if (typeof sentence !== 'string' || !sentence.trim()) {
     throw new Error('[xenova-similarity] Invalid input: sentence must be a non-empty string');
   }
-  const extractor = await getFeatureExtractor(modelName);
-
-  if (!extractor || typeof extractor !== 'function') {
-    throw new Error('[xenova-similarity] Extractor is not initialized or not a function');
+  try {
+    const extractor = await getFeatureExtractor(modelName);
+    if (!extractor || typeof extractor !== 'function') {
+      throw new Error('[xenova-similarity] Extractor is not initialized or not a function');
+    }
+    // Always pass an array of sentences, as per HuggingFace docs
+    const output = await extractor([sentence], {
+      pooling: 'mean',
+      normalize: true,
+    });
+    if (!output || !output.data) {
+      throw new Error('[xenova-similarity] Output or output.data is undefined');
+    }
+    // output.data is a Float32Array of shape [1, 384] for a single sentence
+    // Return the first row only
+    if (output.dims && output.dims.length === 2 && output.dims[0] === 1) {
+      const size = output.dims[1];
+      return (output.data as Float32Array).slice(0, size);
+    }
+    // Fallback: If dims are not present, assume data is the embedding
+    return output.data as Float32Array;
+  } catch (err) {
+    console.warn('[xenova-similarity] Model embedding failed, using lightweight fallback embedding.', err);
+    return computeFallbackEmbedding(sentence);
   }
-  // Always pass an array of sentences, as per HuggingFace docs
-  const output = await extractor([sentence], {
-    pooling: 'mean',
-    normalize: true,
-  });
-  if (!output || !output.data) {
-    throw new Error('[xenova-similarity] Output or output.data is undefined');
-  }
-  // output.data is a Float32Array of shape [1, 384] for a single sentence
-  // Return the first row only
-  if (output.dims && output.dims.length === 2 && output.dims[0] === 1) {
-    const size = output.dims[1];
-    return (output.data as Float32Array).slice(0, size);
-  }
-  // Fallback: If dims are not present, assume data is the embedding
-  return output.data as Float32Array;
 }
 
 /** Spellcheck a string against a reference string. */

@@ -20,7 +20,7 @@ interface DeckEditorProps {
 }
 
 export function DeckEditor({ deckId }: DeckEditorProps) {
-  const { getDeck, updateDeck, deleteCard, addCard, updateCard, loading } = useDecks()
+  const { getDeck, updateDeck, deleteCard, addCard, updateCard, loading, refreshDecks } = useDecks()
   const { toast } = useToast()
   const router = useRouter()
 
@@ -286,6 +286,13 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
 
       // Clear deletion markers after successful save
       setDeletedCardIds(new Set())
+
+      // Refresh decks to ensure state matches DB (names, counts, etc.)
+      try {
+        await refreshDecks()
+      } catch (e) {
+        // Non-fatal; UI will still navigate back
+      }
 
       toast({
         title: "Changes saved",

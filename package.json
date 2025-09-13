@@ -132,6 +132,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.179.1",
     "three-stdlib": "^2.36.0",
+    "transformers": "github:huggingface/transformers",
     "uuid": "^11.1.0",
     "vaul": "^0.9.9",
     "zod": "^3.25.28",

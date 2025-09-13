@@ -1,29 +1,35 @@
 // Import a lightweight spell checker
 import { distance as levenshteinDistance } from 'fastest-levenshtein';
 
-// Check if WebGL is available and configure accordingly
+// Safe checks for browser-only globals at module scope
+const isClient = typeof window !== 'undefined' && typeof document !== 'undefined';
+
+// Check if WebGL is available and configure accordingly (guarded)
 const isWebGLAvailable = (() => {
+  if (!isClient) return false;
   try {
     const canvas = document.createElement('canvas');
-    return !!(window.WebGLRenderingContext && 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hasGL = !!((window as any).WebGLRenderingContext &&
       (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+    return hasGL;
   } catch (e) {
     return false;
   }
 })();
 
-// Check if running on mobile device
+// Check if running on mobile device (guarded)
 const isMobileDevice = (() => {
-  if (typeof window === 'undefined') return false;
-  
-  const userAgent = navigator.userAgent.toLowerCase();
+  if (!isClient) return false;
+  const userAgent = navigator.userAgent?.toLowerCase?.() || '';
   const mobileKeywords = [
-    'android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry', 
+    'android', 'webos', 'iphone', 'ipad', 'ipod', 'blackberry',
     'windows phone', 'mobile', 'tablet'
   ];
-  
-  return mobileKeywords.some(keyword => userAgent.includes(keyword)) ||
-         (window.innerWidth <= 768 && window.innerHeight <= 1024);
+  return (
+    mobileKeywords.some(keyword => userAgent.includes(keyword)) ||
+    ((window.innerWidth || 0) <= 768 && (window.innerHeight || 0) <= 1024)
+  );
 })();
 
 // Model selection based on device type
@@ -45,6 +51,13 @@ const extractorCache: {
  * @param modelName - The name of the model to use (auto-selects based on device if not specified).
  */
 export async function getFeatureExtractor(modelName?: string) {
+  // Do NOT attempt to load models on the server. This helper exists in a server action
+  // only for compatibility with dynamic imports in other actions. Force callers to
+  // handle fallback (e.g., use Groq) when running on the server.
+  if (typeof window === 'undefined') {
+    throw new Error('[xenova-similarity] Browser-only: model loading is not supported on the server');
+  }
+
   const { pipeline, env } = await import("@xenova/transformers");
 
   // Configure environment for better performance (only once)
@@ -55,13 +68,15 @@ export async function getFeatureExtractor(modelName?: string) {
     env.configured = true;
   }
 
-  // Configure execution provider based on WebGL availability
-  if (isWebGLAvailable) {
-    env.set('XENOVA_ONNX_EXECUTION_PROVIDERS', ['webgl']);
-    console.log('[xenova-similarity] WebGL backend enabled for ONNX execution');
-  } else {
-    console.log('[xenova-similarity] WebGL not available, using CPU backend');
-  }
+  // Configure execution provider based on WebGL availability (browser only)
+  try {
+    if (isWebGLAvailable && (env as any).set) {
+      env.set('XENOVA_ONNX_EXECUTION_PROVIDERS', ['webgl']);
+      console.log('[xenova-similarity] WebGL backend enabled for ONNX execution');
+    } else {
+      console.log('[xenova-similarity] WebGL not available, using CPU backend');
+    }
+  } catch {}
 
   const selectedModel = modelName || getDefaultModel();
   if (!extractorCache[selectedModel]) {

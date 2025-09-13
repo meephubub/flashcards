@@ -196,18 +196,20 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     if (!returnedSupabaseDeck || !returnedSupabaseDeck.user_id) {
       throw new Error("Failed to update deck or user_id missing")
     }
+    // Preserve cards from current context state to avoid leaking temporary editor IDs
+    const currentDeck = decks.find((d) => d.id === updatedDeck.id)
     const newAppContextDeck: Deck = {
         ...returnedSupabaseDeck,
         user_id: returnedSupabaseDeck.user_id,
-        cards: updatedDeck.cards,
-        last_studied: returnedSupabaseDeck.last_studied || updatedDeck.last_studied || 'Never',
-        description: returnedSupabaseDeck.description || "",
-        card_count: returnedSupabaseDeck.card_count || updatedDeck.card_count || 0,
-        created_at: returnedSupabaseDeck.created_at ?? updatedDeck.created_at ?? undefined,
+        cards: currentDeck?.cards ?? [],
+        last_studied: returnedSupabaseDeck.last_studied || currentDeck?.last_studied || 'Never',
+        description: returnedSupabaseDeck.description || currentDeck?.description || "",
+        card_count: returnedSupabaseDeck.card_count || currentDeck?.card_count || 0,
+        created_at: returnedSupabaseDeck.created_at ?? currentDeck?.created_at ?? undefined,
         updated_at: returnedSupabaseDeck.updated_at ?? undefined,
     };
-    setDecks(
-      decks.map((deck) => (deck.id === newAppContextDeck.id ? newAppContextDeck : deck)),
+    setDecks((prev) =>
+      prev.map((deck) => (deck.id === newAppContextDeck.id ? newAppContextDeck : deck)),
     )
     return newAppContextDeck
   }

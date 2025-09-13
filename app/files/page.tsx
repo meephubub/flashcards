@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { useAuth } from "@/context/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import type { Note } from "@/lib/supabase"
@@ -39,7 +39,8 @@ import {
   NoteRow,
   FolderTreeItem,
   StorageFileCard,
-  StorageFileRow
+  StorageFileRow,
+  FolderRow
 } from "@/components/files/file-components"
 import { NoteDeleteDialog } from "@/components/note-delete-dialog"
 
@@ -184,6 +185,11 @@ export default function FilesPage() {
   }
 
   useEffect(() => { void refreshStorageFiles() }, [user?.id, currentFolder, supabase])
+
+  // Scroll to top when changing folders
+  useEffect(() => {
+    try { window.scrollTo(0, 0) } catch {}
+  }, [currentFolder])
 
   // Determine file type label and image-ness
   const getFileType = (name: string): { label: string; isImage: boolean } => {
@@ -605,81 +611,6 @@ export default function FilesPage() {
                   placeholder="Search files by title, category, or project..."
                   className="pl-8"
                 />
-
-            {/* Delete Folder Dialog */}
-            <NoteDeleteDialog
-              open={isDeleteFolderOpen}
-              onOpenChange={(o) => setIsDeleteFolderOpen(o)}
-              noteTitle={folderPath[folderPath.length - 1]?.name}
-              onConfirm={confirmDeleteFolder}
-              isDeleting={false}
-              error={null}
-            />
-
-            {/* Preview Dialog */}
-            <Dialog open={isPreviewOpen} onOpenChange={(o) => setIsPreviewOpen(o)}>
-              <DialogContent className="max-w-4xl">
-                <DialogHeader>
-                  <DialogTitle>Preview: {previewName}</DialogTitle>
-                </DialogHeader>
-                <div className="w-full max-h-[70vh] overflow-auto flex items-center justify-center bg-muted/30 rounded-md p-2">
-                  {previewUrl && previewType === 'image' && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={previewUrl} alt={previewName} className="max-w-full max-h-[68vh] object-contain" />
-                  )}
-                  {previewUrl && previewType === 'video' && (
-                    <video src={previewUrl} className="max-w-full max-h-[68vh]" controls />
-                  )}
-                  {previewUrl && previewType === 'audio' && (
-                    <audio src={previewUrl} className="w-full" controls />
-                  )}
-                  {previewUrl && previewType === 'pdf' && (
-                    <iframe src={previewUrl} className="w-full h-[68vh] bg-white" />
-                  )}
-                  {previewUrl && previewType === 'unknown' && (
-                    <div className="text-sm text-muted-foreground">No built-in preview for this file. Use Get URL or Download.</div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button onClick={() => { if (previewUrl) { const a = document.createElement('a'); a.href = previewUrl; a.download = previewName; document.body.appendChild(a); a.click(); a.remove(); }}}>Download</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {/* Delete Storage File Dialog (shared UI) */}
-            <NoteDeleteDialog
-              open={isDeleteStorageOpen}
-              onOpenChange={(o) => {
-                setIsDeleteStorageOpen(o)
-                if (!o) setPendingDeleteStorage(null)
-              }}
-              noteTitle={pendingDeleteStorage?.name}
-              onConfirm={confirmDeleteStorage}
-              isDeleting={deletingStorage}
-              error={deleteStorageError}
-            />
-
-            {/* Rename Storage File Dialog */}
-            <Dialog open={isRenameOpen} onOpenChange={(o) => setIsRenameOpen(o)}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Rename file</DialogTitle>
-                  <DialogDescription>Change the file name within this folder.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-2">
-                  <Input
-                    value={renameNewName}
-                    onChange={(e) => setRenameNewName(e.target.value)}
-                    placeholder="New file name (with extension)"
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (async () => { await onConfirmRename() })() } }}
-                  />
-                </div>
-                <DialogFooter>
-                  <Button variant="ghost" onClick={() => setIsRenameOpen(false)}>Cancel</Button>
-                  <Button onClick={() => void onConfirmRename()} disabled={!renameTarget || !renameNewName.trim()}>Rename</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
               </div>
               <div className="ml-auto flex items-center gap-2">
                 {currentFolder && (
@@ -726,7 +657,42 @@ export default function FilesPage() {
                 </div>
               </div>
             </div>
-          </div>
+
+            {/* Delete Storage File Dialog (shared UI) */}
+            <NoteDeleteDialog
+              open={isDeleteStorageOpen}
+              onOpenChange={(o) => {
+                setIsDeleteStorageOpen(o)
+                if (!o) setPendingDeleteStorage(null)
+              }}
+              noteTitle={pendingDeleteStorage?.name}
+              onConfirm={confirmDeleteStorage}
+              isDeleting={deletingStorage}
+              error={deleteStorageError}
+            />
+
+            {/* Rename Storage File Dialog */}
+            <Dialog open={isRenameOpen} onOpenChange={(o) => setIsRenameOpen(o)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Rename file</DialogTitle>
+                  <DialogDescription>Change the file name within this folder.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <Input
+                    value={renameNewName}
+                    onChange={(e) => setRenameNewName(e.target.value)}
+                    placeholder="New file name (with extension)"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (async () => { await onConfirmRename() })() } }}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setIsRenameOpen(false)}>Cancel</Button>
+                  <Button onClick={() => void onConfirmRename()} disabled={!renameTarget || !renameNewName.trim()}>Rename</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            
 
           {loading && view === "grid" && (
             <Grid>
@@ -818,7 +784,7 @@ export default function FilesPage() {
                 )}
               </div>
             )}
-            {!loading && !error && view === "list" && (filteredNotes.length > 0 || storageFiles.length > 0) && (
+            {!loading && !error && view === "list" && (subfolders.length > 0 || storageFiles.length > 0 || filteredNotes.length > 0) && (
               <div className="overflow-hidden rounded-md border">
                 <div className="hidden grid-cols-12 gap-2 bg-muted/60 px-3 py-2 text-xs text-muted-foreground md:grid">
                   <div className="col-span-6">Name</div>
@@ -826,6 +792,14 @@ export default function FilesPage() {
                   <div className="col-span-3">Last modified</div>
                 </div>
                 <div className="divide-y">
+                  {subfolders.map((f: any) => (
+                    <FolderRow
+                      key={f.id}
+                      name={f.name}
+                      onClick={() => setCurrentFolder(f.id)}
+                      onMoveClick={undefined}
+                    />
+                  ))}
                   {storageFiles.map((f) => (
                     <StorageFileRow
                       key={f.fullPath}
@@ -994,6 +968,7 @@ export default function FilesPage() {
               error={deleteError}
             />
           </div>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )
@@ -1001,7 +976,7 @@ export default function FilesPage() {
 
 function Grid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 content-start items-start">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 content-start items-start justify-start">
       {children}
     </div>
   )
