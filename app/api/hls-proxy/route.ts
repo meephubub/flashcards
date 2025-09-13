@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Usage: /api/hls-proxy?url=<encoded URL>
 // Note: Consider restricting allowed hosts for security in production.
 
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 function corsHeaders(origin: string | null) {
   // In production, you may want to restrict this
@@ -25,6 +25,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const target = searchParams.get('url');
+  const debug = searchParams.get('debug') === '1';
   const refererParam = searchParams.get('referer');
 
   if (!target) {
@@ -49,10 +50,16 @@ export async function GET(req: NextRequest) {
     upstream = await fetch(target, {
       method: 'GET',
       headers: {
-        'User-Agent': ua || 'Mozilla/5.0 (compatible; PPVProxy/1.0)',
+        'User-Agent': ua || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
         'Referer': referer || new URL(target).origin,
         'Origin': upstreamOrigin,
         'Accept': 'application/vnd.apple.mpegurl, application/x-mpegURL, video/*, */*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Site': 'cross-site',
         ...(range ? { Range: range } : {}),
       },
       redirect: 'follow',
@@ -104,15 +111,20 @@ export async function GET(req: NextRequest) {
     // Remove UTF-8 BOM and leading whitespace before validation
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     text = text.replace(/^\s+/, '');
+    if (debug) {
+      console.warn('[hls-proxy] Debug mode enabled, bypassing playlist validation/rewrites for', target);
+      return new NextResponse(text, {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers,
+      });
+    }
     if (!/^#EXTM3U/m.test(text)) {
-      console.error('[hls-proxy] Upstream content is not a valid HLS playlist (missing #EXTM3U). Returning 502 for', target);
-      const dbg = text.slice(0, 200);
-      const errHeaders = new Headers(headers);
-      errHeaders.set('Content-Type', 'text/plain; charset=utf-8');
-      return new NextResponse(`Not a valid HLS playlist (missing #EXTM3U) from upstream. First bytes: \n${dbg}`, {
-        status: 502,
-        statusText: 'Bad Gateway',
-        headers: errHeaders,
+      console.warn('[hls-proxy] Content did not contain #EXTM3U; passing through without rewrite for', target);
+      return new NextResponse(text, {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers,
       });
     }
     const baseUrl = new URL(target);

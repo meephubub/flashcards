@@ -83,6 +83,7 @@ export default function Page() {
   const [playerError, setPlayerError] = React.useState<string | null>(null)
   const [extractedUrl, setExtractedUrl] = React.useState<string | null>(null)
   const videoLogHandlerRef = React.useRef<((evt: Event) => void) | null>(null)
+  const usedProxyRef = React.useRef<boolean>(false)
   const toProxied = React.useCallback((u?: string | null) => {
     if (!u) return u as any
     if (/^https?:\/\//i.test(u)) return `/api/hls-proxy?url=${encodeURIComponent(u)}`
@@ -214,11 +215,14 @@ export default function Page() {
           throw new Error('No HLS URL found')
         }
 
+        // Prefer direct playback first (works if upstream sets CORS). If that fails, fall back to proxy.
+        const directUrl = rawUrl
         const params = new URLSearchParams({ url: rawUrl })
         if (refererHint) params.set('referer', refererHint)
         const proxied = `/api/hls-proxy?${params.toString()}`
         if (aborted) return
-        setExtractedUrl(proxied)
+        setExtractedUrl(directUrl)
+        usedProxyRef.current = false
 
         // Attach to video
         const video = videoRef.current
@@ -243,7 +247,7 @@ export default function Page() {
 
         // Safari can play HLS natively
         if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = proxied
+          video.src = directUrl
           await new Promise((r) => setTimeout(r, 0))
           try { await video.play() } catch {}
           return
@@ -263,15 +267,25 @@ export default function Page() {
           maxBufferLength: 30,
           liveDurationInfinity: true,
         })
-        hls.loadSource(proxied)
+        hls.loadSource(directUrl)
         hls.attachMedia(video)
         hls.on(HlsCtor.Events.MANIFEST_PARSED, async () => {
           try { await video.play() } catch {}
         })
         hls.on(HlsCtor.Events.ERROR, (_evt: any, data: any) => {
           console.error('[stream] hls.js error', data)
-          // Basic recovery attempts on fatal errors
-          if (data?.fatal) {
+          // Decide whether to fallback to proxy
+          const shouldProxyFallback =
+            !usedProxyRef.current && (
+              data?.fatal ||
+              data?.details === 'manifestParsingError' ||
+              data?.details === 'manifestLoadError' ||
+              data?.details === 'levelLoadError' ||
+              data?.type === 'networkError'
+            )
+
+          // Basic recovery attempts first
+          if (data?.fatal && !shouldProxyFallback) {
             try {
               if (data.type === 'networkError' && typeof hls.startLoad === 'function') {
                 console.warn('[stream] hls.js attempting startLoad() after networkError')
@@ -286,6 +300,10 @@ export default function Page() {
             } catch (e) {
               console.error('[stream] hls.js recovery step failed', e)
             }
+          }
+
+          if (shouldProxyFallback) {
+            // Fall back to proxied URL in case of CORS/redirect/network issues
             try { hls?.destroy() } catch {}
             hls = new HlsCtor({
               enableWorker: true,
@@ -296,6 +314,7 @@ export default function Page() {
             })
             hls.loadSource(proxied)
             hls.attachMedia(video)
+            usedProxyRef.current = true
           }
         })
         // Helpful diagnostics for live playback
