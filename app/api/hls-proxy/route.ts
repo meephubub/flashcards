@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Usage: /api/hls-proxy?url=<encoded URL>
 // Note: Consider restricting allowed hosts for security in production.
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 function corsHeaders(origin: string | null) {
   // In production, you may want to restrict this
