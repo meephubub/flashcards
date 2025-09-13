@@ -100,6 +100,10 @@ const data = {
           url: "/notes",
         },
         {
+          title: "Stream",
+          url: "/stream",
+        },
+        {
           title: "Account",
           url: "/account",
         },
