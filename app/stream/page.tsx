@@ -78,6 +78,16 @@ export default function Page() {
   const [onlyLive, setOnlyLive] = React.useState<boolean>(true)
   const [query, setQuery] = React.useState<string>("")
   const [selected, setSelected] = React.useState<StreamItem | null>(null)
+  const videoRef = React.useRef<HTMLVideoElement | null>(null)
+  const [playerLoading, setPlayerLoading] = React.useState<boolean>(false)
+  const [playerError, setPlayerError] = React.useState<string | null>(null)
+  const [extractedUrl, setExtractedUrl] = React.useState<string | null>(null)
+  const videoLogHandlerRef = React.useRef<((evt: Event) => void) | null>(null)
+  const toProxied = React.useCallback((u?: string | null) => {
+    if (!u) return u as any
+    if (/^https?:\/\//i.test(u)) return `/api/hls-proxy?url=${encodeURIComponent(u)}`
+    return u
+  }, [])
 
   // Enhance iframe HTML to allow AirPlay and full-screen where supported.
   const enhanceIframe = React.useCallback((html?: string) => {
@@ -152,6 +162,169 @@ export default function Page() {
     if (src) return src
     return null
   }, [extractIframeSrc])
+
+  // Load hls.js from CDN if not already present
+  const ensureHlsScript = React.useCallback(async () => {
+    if (typeof window === 'undefined') return false
+    if ((window as any).Hls) return true
+    await new Promise<void>((resolve, reject) => {
+      const el = document.createElement('script')
+      el.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js'
+      el.async = true
+      el.onload = () => resolve()
+      el.onerror = () => reject(new Error('Failed to load hls.js'))
+      document.head.appendChild(el)
+    })
+    return !!(window as any).Hls
+  }, [])
+
+  // When a stream is selected, try to extract the HLS manifest from the iframe HTML/URL
+  React.useEffect(() => {
+    let hls: any | null = null
+    let aborted = false
+    ;(async () => {
+      if (!selected?.iframe) {
+        setExtractedUrl(null)
+        setPlayerError(null)
+        return
+      }
+      setPlayerLoading(true)
+      setPlayerError(null)
+      setExtractedUrl(null)
+
+      try {
+        // Get the iframe URL first
+        const iframeSrc = extractIframeSrc(selected.iframe) || (selected.iframe.match(/^(https?:\/\/[^\s]+)$/i)?.[1] ?? null)
+        if (!iframeSrc) {
+          console.error('[stream] No iframe src found in provided iframe HTML')
+          throw new Error('No iframe src found')
+        }
+
+        // Ask server to extract the .m3u8 from the iframe HTML
+        const res = await fetch(`/api/extract-hls?url=${encodeURIComponent(iframeSrc)}`, { cache: 'no-store' })
+        if (!res.ok) {
+          console.error('[stream] /api/extract-hls returned', res.status, res.statusText)
+          throw new Error('Failed to extract stream URL')
+        }
+        const data = await res.json()
+        const rawUrl: string | undefined = data?.url
+        const refererHint: string | undefined = data?.referer
+        if (!rawUrl) {
+          console.error('[stream] Extractor did not return a url field')
+          throw new Error('No HLS URL found')
+        }
+
+        const params = new URLSearchParams({ url: rawUrl })
+        if (refererHint) params.set('referer', refererHint)
+        const proxied = `/api/hls-proxy?${params.toString()}`
+        if (aborted) return
+        setExtractedUrl(proxied)
+
+        // Attach to video
+        const video = videoRef.current
+        if (!video) return
+
+        // Attach detailed logging to the video element
+        const logVideoState = (evt: Event) => {
+          const mediaError = (video.error && (video.error as any).message) || (video.error && (video.error as any).code)
+          console.error('[stream][video]', evt.type, {
+            readyState: video.readyState,
+            networkState: video.networkState,
+            currentTime: video.currentTime,
+            paused: video.paused,
+            ended: video.ended,
+            mediaError,
+            src: video.currentSrc,
+          })
+        }
+        videoLogHandlerRef.current = logVideoState
+        const videoEvents = ['error','stalled','waiting','abort','emptied','loadedmetadata','loadeddata','canplay','canplaythrough','play','playing','pause','ended'] as const
+        videoEvents.forEach((ev) => video.addEventListener(ev, logVideoState))
+
+        // Safari can play HLS natively
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = proxied
+          await new Promise((r) => setTimeout(r, 0))
+          try { await video.play() } catch {}
+          return
+        }
+
+        // Use hls.js for other browsers
+        const ok = await ensureHlsScript()
+        if (!ok || !(window as any).Hls) {
+          console.error('[stream] hls.js failed to load or is not available')
+          throw new Error('hls.js not available')
+        }
+        const HlsCtor = (window as any).Hls
+        hls = new HlsCtor({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 30,
+          maxBufferLength: 30,
+          liveDurationInfinity: true,
+        })
+        hls.loadSource(proxied)
+        hls.attachMedia(video)
+        hls.on(HlsCtor.Events.MANIFEST_PARSED, async () => {
+          try { await video.play() } catch {}
+        })
+        hls.on(HlsCtor.Events.ERROR, (_evt: any, data: any) => {
+          console.error('[stream] hls.js error', data)
+          // Basic recovery attempts on fatal errors
+          if (data?.fatal) {
+            try {
+              if (data.type === 'networkError' && typeof hls.startLoad === 'function') {
+                console.warn('[stream] hls.js attempting startLoad() after networkError')
+                hls.startLoad()
+                return
+              }
+              if (data.type === 'mediaError' && typeof hls.recoverMediaError === 'function') {
+                console.warn('[stream] hls.js attempting recoverMediaError()')
+                hls.recoverMediaError()
+                return
+              }
+            } catch (e) {
+              console.error('[stream] hls.js recovery step failed', e)
+            }
+            try { hls?.destroy() } catch {}
+            hls = new HlsCtor({
+              enableWorker: true,
+              lowLatencyMode: true,
+              backBufferLength: 30,
+              maxBufferLength: 30,
+              liveDurationInfinity: true,
+            })
+            hls.loadSource(proxied)
+            hls.attachMedia(video)
+          }
+        })
+        // Helpful diagnostics for live playback
+        hls.on(HlsCtor.Events.LEVEL_SWITCHED, (_e: any, d: any) => console.log('[stream] level switched', d))
+        hls.on(HlsCtor.Events.FRAG_LOADED, (_e: any, d: any) => console.log('[stream] frag loaded', d?.frag?.sn))
+        hls.on(HlsCtor.Events.BUFFER_APPENDING, (_e: any, d: any) => console.log('[stream] buffer appending', d?.type, d?.data?.length))
+      } catch (e: any) {
+        console.error('[stream] Player init failed:', e)
+        if (aborted) return
+        setPlayerError(e?.message || 'Failed to initialize player')
+      } finally {
+        if (!aborted) setPlayerLoading(false)
+      }
+    })()
+    return () => {
+      aborted = true
+      try {
+        if (hls) {
+          hls.destroy?.()
+        }
+      } catch {}
+      const video = videoRef.current
+      const handler = videoLogHandlerRef.current
+      if (video && handler) {
+        const videoEvents = ['error','stalled','waiting','abort','emptied','loadedmetadata','loadeddata','canplay','canplaythrough','play','playing','pause','ended'] as const
+        videoEvents.forEach((ev) => video.removeEventListener(ev, handler))
+      }
+    }
+  }, [selected, extractIframeSrc, ensureHlsScript])
 
   // Poll every 60s per docs suggestion
   const fetchStreams = React.useCallback(async () => {
@@ -282,7 +455,7 @@ export default function Page() {
                             <div className="relative h-40 w-full bg-muted">
                               {s.poster ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={s.poster} alt={s.name} className="h-full w-full object-cover" />
+                                <img src={toProxied(s.poster) as any} alt={s.name} className="h-full w-full object-cover" />
                               ) : (
                                 <div className="h-full w-full flex items-center justify-center text-muted-foreground">
                                   <Tv className="h-8 w-8" />
@@ -342,7 +515,15 @@ export default function Page() {
       </SidebarInset>
 
       {/* Stream Dialog */}
-      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+      <Dialog open={!!selected} onOpenChange={(o) => {
+        if (!o) {
+          // Pause video when closing
+          try { videoRef.current?.pause?.() } catch {}
+          setSelected(null)
+          setPlayerError(null)
+          setExtractedUrl(null)
+        }
+      }}>
         <DialogContent className="max-w-5xl p-0 overflow-hidden">
           <DialogHeader className="px-6 pt-6 flex items-center justify-between">
             <DialogTitle className="text-base">{selected?.name}</DialogTitle>
@@ -358,14 +539,25 @@ export default function Page() {
               ) : null
             })() : null}
           </DialogHeader>
-          <div className="aspect-video w-full bg-black">
+          <div className="aspect-video w-full bg-black relative">
             {selected?.iframe ? (
-              <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: enhanceIframe(selected.iframe) }} />
+              playerError ? (
+                // Fallback to the original iframe if extraction or playback fails
+                <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: enhanceIframe(selected.iframe) }} />
+              ) : (
+                <video ref={videoRef} controls playsInline className="absolute inset-0 w-full h-full" />
+              )
             ) : (
               <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
                 No embed available yet.
               </div>
             )}
+
+            {playerLoading && !playerError ? (
+              <div className="absolute inset-0 flex items-center justify-center text-xs text-white/80">
+                Initializing player...
+              </div>
+            ) : null}
           </div>
           <div className="px-6 pb-6 text-xs text-muted-foreground">
             Tip: On Safari, use the native player AirPlay control to cast to a smart TV. Respect the provider's terms; embeds may include ads and cannot be altered.

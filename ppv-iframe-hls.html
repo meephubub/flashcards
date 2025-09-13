@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="robots" content="noindex,nofollow,noarchive,notranslate,noimageindex,nosnippet">
+    <meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
+    <link href="https://fonts.bunny.net/css?family=lexend-deca:400" rel="stylesheet">
+    <title>HLS Player</title>
+    <meta name="description" content="HLS Player (hls.js)">
+    <style>
+html{height:100%;}body{font-family:"Lexend deca",sans-serif;height:100%;width:100%;margin:0;overflow:hidden;background-color:black;}*{font-family:"Lexend deca",sans-serif!important;}
+#loading, #resume { top: 0; width: 100%; height: 100%; position: absolute; }
+#loading { display: flex; align-items: center; justify-content: center; z-index: 11; }
+#resume { left: 0; z-index: 12; }
+.loading-ani, .loading-container { position: relative; margin: auto; width: 100px; height: 100px; border-radius: 100%; }
+.loading-ani { border: 2px solid transparent; border-color: transparent #fff transparent #FFF; animation: rotate-loading 1.5s linear 0s infinite normal; transform-origin: 50% 50%; }
+@keyframes rotate-loading { 0% { transform: rotate(0);} 100% { transform: rotate(360deg);} }
+@keyframes loading-text-opacity { 0%, 100%, 20% { opacity: 0; } 50% { opacity: 1; } }
+.loading-container .loading-text { animation: loading-text-opacity 2s linear 0s infinite normal; color: #fff; font-size: 10px; font-weight: 700; margin-top: 45px; opacity: 0; position: absolute; text-align: center; text-transform: uppercase; top: 0; width: 100px; }
+#vwrap { height: 100vh; display: flex; align-items: center; justify-content: center; background:black; }
+video { width: 100%; height: 100%; max-height: 100vh; object-fit: contain; background: black; }
+#notif { display: none; position: fixed; top: 40%; width: 80%; left: 50%; padding: 5px; text-align: center; font-size: large; z-index: 11; color: white; background-color: rgba(0, 0, 0, 0.57); transform: translate(-50%, -50%); }
+    </style>
+  </head>
+  <body>
+    <div id="notif"></div>
+    <div id="vwrap">
+      <video id="video" controls playsinline></video>
+    </div>
+    <div id="loading">
+      <div class="loading-container">
+        <div class="loading-ani"></div>
+        <div class="loading-text">loading</div>
+      </div>
+    </div>
+
+    <!-- hls.js from CDN (no key required) -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+    <script>
+      (function() {
+        const params = new URLSearchParams(window.location.search);
+        const srcParam = params.get('src');
+        const autoplayParam = params.get('autoplay');
+        const mutedParam = params.get('muted');
+
+        const defaultSrc = 'https://gg.poocloud.in/epl_newcastle/index.m3u8';
+        const streamSrc = /^https?:\/\//i.test(srcParam || '') ? srcParam : defaultSrc;
+        const manifestUrl = `https://localhost:3000/api/hls-proxy?url=${encodeURIComponent(streamSrc)}`;
+
+        const video = document.getElementById('video');
+        if (!video) return;
+
+        // Query options
+        if (autoplayParam === '1' || autoplayParam === 'true') {
+          video.setAttribute('autoplay', '');
+        }
+        if (mutedParam === '1' || mutedParam === 'true') {
+          video.muted = true;
+        }
+
+        const removeSpinner = () => {
+          const spinner = document.getElementById('loading');
+          if (spinner) spinner.remove();
+        };
+
+        const showNotif = (msg) => {
+          const el = document.getElementById('notif');
+          if (!el) return;
+          el.textContent = msg;
+          el.style.display = 'block';
+          setTimeout(() => { el.style.display = 'none'; }, 2500);
+        };
+
+        function attachSource(url) {
+          if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Native HLS support (Safari, some Smart TVs)
+            video.src = url;
+            video.addEventListener('loadedmetadata', removeSpinner, { once: true });
+            video.addEventListener('error', () => showNotif('Playback error'), { once: true });
+            return;
+          }
+
+          if (window.Hls) {
+            const hls = new window.Hls({
+              // Low-latency / default tuning can be adjusted here
+              enableWorker: true,
+            });
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(window.Hls.Events.MANIFEST_PARSED, function() {
+              removeSpinner();
+              if (video.autoplay) {
+                const p = video.play();
+                if (p && typeof p.catch === 'function') p.catch(() => {});
+              }
+            });
+            hls.on(window.Hls.Events.ERROR, function(event, data) {
+              console.warn('hls.js error', data);
+              showNotif('Stream error, retrying...');
+              // basic retry on fatal network/media errors
+              if (data && data.fatal) {
+                // try simple reload
+                setTimeout(() => {
+                  try {
+                    hls.stopLoad();
+                    hls.detachMedia();
+                    hls.destroy();
+                  } catch (e) {}
+                  attachSource(url);
+                }, 1000);
+              }
+            });
+          } else {
+            removeSpinner();
+            showNotif('HLS not supported in this browser');
+          }
+        }
+
+        // Always proxy the manifest URL to avoid CORS and handle relative segment rewriting
+        attachSource(manifestUrl);
+      })();
+    </script>
+  </body>
+</html>
