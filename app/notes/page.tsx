@@ -28,6 +28,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle as 
 import { Button } from "@/components/ui/button"
 import ReactMarkdown from "react-markdown"
 import { Textarea } from "@/components/ui/textarea"
+import { WysiwygEditor } from "@/components/notes/wysiwyg-editor"
 
 // react-markdown plugins
 import remarkGfm from "remark-gfm"
@@ -106,6 +107,8 @@ export default function Page() {
   const [uploadModelError, setUploadModelError] = useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const editorRef = React.useRef<HTMLTextAreaElement | null>(null)
+  // Editor mode: Markdown (textarea) vs WYSIWYG (contentEditable)
+  const [useWysiwyg, setUseWysiwyg] = useState(false)
 
   // Dictionary side panel state
   const [dictOpen, setDictOpen] = useState(false)
@@ -970,6 +973,14 @@ Goals:
                         {uploadingModel ? 'Uploading…' : 'Insert 3D model'}
                       </Button>
                       <Button
+                        size="sm"
+                        variant={useWysiwyg ? "default" : "outline"}
+                        onClick={() => setUseWysiwyg(v => !v)}
+                        title={useWysiwyg ? 'Switch to Markdown editor' : 'Switch to WYSIWYG editor'}
+                      >
+                        {useWysiwyg ? 'WYSIWYG: On' : 'WYSIWYG: Off'}
+                      </Button>
+                      <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
@@ -988,42 +999,57 @@ Goals:
                       {styleMenuError && (
                         <div className="text-xs text-red-600 mb-2">{styleMenuError}</div>
                       )}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-[10px] uppercase tracking-wide text-neutral-500">Text</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {pastelColors.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => applyColorToSelection(c.id)}
-                              title={c.label}
-                              className="text-xs px-2.5 py-1 rounded-md border border-transparent shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700"
-                              style={{
-                                backgroundColor: pastelHex[c.id] || '#eee',
-                                color: '#1f2937',
-                              }}
-                            >
-                              {c.label}
-                            </button>
-                          ))}
+                      {!useWysiwyg ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-[10px] uppercase tracking-wide text-neutral-500">Text</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {pastelColors.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => applyColorToSelection(c.id)}
+                                title={c.label}
+                                className="text-xs px-2.5 py-1 rounded-md border border-transparent shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700"
+                                style={{
+                                  backgroundColor: pastelHex[c.id] || '#eee',
+                                  color: '#1f2937',
+                                }}
+                              >
+                                {c.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="h-5 w-px bg-neutral-200 dark:bg-neutral-800" />
+                          <div className="text-[10px] uppercase tracking-wide text-neutral-500">Quick</div>
+                          <div className="flex gap-1.5">
+                            <button type="button" className="text-xs px-2.5 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-transparent" onClick={() => wrapSelection('**')}>Bold</button>
+                            <button type="button" className="text-xs px-2.5 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-transparent" onClick={() => wrapSelection('*')}>Italic</button>
+                          </div>
                         </div>
-                        <div className="h-5 w-px bg-neutral-200 dark:bg-neutral-800" />
-                        <div className="text-[10px] uppercase tracking-wide text-neutral-500">Quick</div>
-                        <div className="flex gap-1.5">
-                          <button type="button" className="text-xs px-2.5 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-transparent" onClick={() => wrapSelection('**')}>Bold</button>
-                          <button type="button" className="text-xs px-2.5 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-transparent" onClick={() => wrapSelection('*')}>Italic</button>
+                      ) : (
+                        <div className="text-[12px] text-neutral-500 px-1">
+                          WYSIWYG mode is on. Use your browser formatting shortcuts (Ctrl+B, Ctrl+I) and insert images/links normally. Color tags and directives render when saved.
                         </div>
-                      </div>
+                      )}
                     </div>
-                    <Textarea
-                      ref={editorRef as any}
-                      value={draftContent}
-                      onChange={(e) => setDraftContent(e.target.value)}
-                      onKeyDown={onEditorKeyDown}
-                      onPaste={onEditorPasteExtended}
-                      placeholder="Write your note in Markdown…"
-                      className="min-h-[220px] w-full resize-y bg-transparent font-mono text-sm"
-                    />
+                    {!useWysiwyg ? (
+                      <Textarea
+                        ref={editorRef as any}
+                        value={draftContent}
+                        onChange={(e) => setDraftContent(e.target.value)}
+                        onKeyDown={onEditorKeyDown}
+                        onPaste={onEditorPasteExtended}
+                        placeholder="Write your note in Markdown…"
+                        className="min-h-[60vh] w-full resize-y bg-transparent font-mono text-sm"
+                      />
+                    ) : (
+                      <WysiwygEditor
+                        value={draftContent}
+                        onChange={setDraftContent}
+                        placeholder="Write with formatting…"
+                        className="min-h-[60vh]"
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="group/reader">
