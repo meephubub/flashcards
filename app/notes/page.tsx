@@ -1040,14 +1040,14 @@ Goals:
                         onKeyDown={onEditorKeyDown}
                         onPaste={onEditorPasteExtended}
                         placeholder="Write your note in Markdown…"
-                        className="min-h-[60vh] w-full resize-y bg-transparent font-mono text-sm"
+                        className="min-h-[55vh] w-full resize-y bg-transparent font-mono text-sm"
                       />
                     ) : (
                       <WysiwygEditor
                         value={draftContent}
                         onChange={setDraftContent}
                         placeholder="Write with formatting…"
-                        className="min-h-[60vh]"
+                        className="min-h-[55vh]"
                       />
                     )}
                   </div>

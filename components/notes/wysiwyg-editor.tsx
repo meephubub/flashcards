@@ -351,7 +351,7 @@ export const WysiwygEditor: React.FC<WysiwygEditorProps> = ({ value, onChange, p
 
   return (
     <div
-      className={"relative border rounded-lg p-2 min-h-[60vh] focus-within:ring-2 focus-within:ring-neutral-300 dark:focus-within:ring-neutral-700 bg-white/70 dark:bg-neutral-950/40 " + (className || "")}
+      className={"relative border rounded-lg p-2 min-h-[55vh] focus-within:ring-2 focus-within:ring-neutral-300 dark:focus-within:ring-neutral-700 bg-white/70 dark:bg-neutral-950/40 " + (className || "")}
     >
       {/* Toolbar */}
       <div className="absolute top-1 right-1 flex gap-1">
