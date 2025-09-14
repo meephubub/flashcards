@@ -153,6 +153,8 @@ function inlineMdToHtml(text: string): string {
   text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   // Italic *text*
   text = text.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
+  // Highlight ==text==
+  text = text.replace(/==([^=]+)==/g, '<mark>$1</mark>')
   // Inline code `code`
   text = text.replace(/`([^`]+)`/g, '<code>$1</code>')
   // Color directive :rose[Text] -> <span class="c-rose">Text</span>
@@ -242,6 +244,7 @@ function inlineHtmlToMd(el: Element): string {
     const tag = e.tagName.toLowerCase()
     if (tag === "strong" || tag === "b") { out += "**" + collectText(e) + "**"; return }
     if (tag === "em" || tag === "i") { out += "*" + collectText(e) + "*"; return }
+    if (tag === "mark") { out += "==" + collectText(e) + "=="; return }
     if (tag === "code") { out += "`" + collectText(e) + "`"; return }
     if (tag === "a") { const href = e.getAttribute("href") || ""; out += `[${collectText(e)}](${href})`; return }
     if (tag === "img") { const alt = e.getAttribute("alt") || ""; const src = e.getAttribute("src") || ""; out += `![${alt}](${src})`; return }
@@ -343,9 +346,38 @@ export const WysiwygEditor: React.FC<WysiwygEditorProps> = ({ value, onChange, p
   }, [onChange])
 
   const onKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Undo
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault()
       undo()
+      return
+    }
+    // Ctrl/Cmd + D => wrap selection in <mark>
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault()
+      try {
+        const sel = window.getSelection()
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
+        const range = sel.getRangeAt(0)
+        // Constrain to our editor root
+        const root = ref.current
+        if (!root) return
+        const container = range.commonAncestorContainer
+        if (!root.contains(container)) return
+        const fragment = range.extractContents()
+        const mark = document.createElement('mark')
+        mark.appendChild(fragment)
+        range.insertNode(mark)
+        // Place caret after the mark
+        sel.removeAllRanges()
+        const after = document.createRange()
+        after.setStartAfter(mark)
+        after.collapse(true)
+        sel.addRange(after)
+        // Emit change so Markdown updates to ==...==
+        emitChange()
+      } catch {}
+      return
     }
   }, [undo])
 

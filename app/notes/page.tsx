@@ -617,6 +617,22 @@ Goals:
       return
     }
 
+    // Ctrl/Cmd + D: wrap selection with == == for permanent highlight
+    const isCtrlD = (e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')
+    if (isCtrlD) {
+      e.preventDefault()
+      wrapSelection('==')
+      return
+    }
+
+    // Ctrl/Cmd + S: save draft
+    const isCtrlS = (e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')
+    if (isCtrlS) {
+      e.preventDefault()
+      void saveDraft()
+      return
+    }
+
     // Alt + C: toggle style menu
     if (e.altKey && (e.key === 'c' || e.key === 'C')) {
       e.preventDefault()
@@ -633,6 +649,12 @@ Goals:
         if (!currentNoteId) return
         if (isEditing) void saveDraft()
         else setIsEditing(true)
+        return
+      }
+      // Global Ctrl/Cmd+S to save while editing
+      if (isEditing && (e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault()
+        void saveDraft()
         return
       }
       // Quick open style menu with Alt+C when editing
@@ -1349,6 +1371,41 @@ function MarkdownContent({ content }: { content: string }) {
 
   const safeContent = React.useMemo(() => normalizeModelDirectives(fixUnclosedMermaidFences(content || '')), [content])
 
+  // Rehype plugin: convert ==text== in plain text nodes to <mark>text</mark>
+  const rehypeHighlightEquals = React.useCallback(function () {
+    const wrapTextWithMarks = (node: any, parent: any, index: number) => {
+      const value: string = node.value || ''
+      const parts: any[] = []
+      let last = 0
+      const re = /==([^=]+)==/g
+      let m: RegExpExecArray | null
+      while ((m = re.exec(value)) !== null) {
+        const start = m.index
+        const end = re.lastIndex
+        if (start > last) parts.push({ type: 'text', value: value.slice(last, start) })
+        parts.push({ type: 'element', tagName: 'mark', properties: {}, children: [{ type: 'text', value: m[1] }] })
+        last = end
+      }
+      if (last < value.length) parts.push({ type: 'text', value: value.slice(last) })
+      if (parts.length > 0) {
+        parent.children.splice(index, 1, ...parts)
+      }
+    }
+
+    const walk = (node: any, parent: any) => {
+      if (!node || typeof node !== 'object') return
+      const type = node.type
+      if (type === 'text' && parent && Array.isArray(parent.children)) {
+        wrapTextWithMarks(node, parent, parent.children.indexOf(node))
+        return
+      }
+      const children = Array.isArray((node as any).children) ? (node as any).children : []
+      for (const child of [...children]) walk(child, node)
+    }
+
+    return (tree: any) => walk(tree, null)
+  }, [])
+
   // Custom remark plugin to handle directives like :::center and info boxes :::info/:::warning/etc
   const directivePlugin = React.useCallback(function () {
     return (tree: any) => {
@@ -1674,7 +1731,7 @@ function MarkdownContent({ content }: { content: string }) {
     <div ref={containerRef} className="prose prose-neutral dark:prose-invert max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, colorTextDirectivePlugin, youtubeAutolinkPlugin, directivePlugin, gapPlugin]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[rehypeKatex, rehypeHighlightEquals]}
         components={{
           // Fill-the-gaps renderer for nodes created by gapPlugin
           gap: (props: any) => {
