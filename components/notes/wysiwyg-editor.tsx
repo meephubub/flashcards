@@ -419,6 +419,8 @@ export const WysiwygEditor: React.FC<WysiwygEditorProps> = ({ value, onChange, p
         .wysi .ibox-warning { --ibox-bg: #fff7ed; --ibox-border: #fcd9bd; }
         .wysi .ibox-tip { --ibox-bg: #ecfdf5; --ibox-border: #bbf7d0; }
         .wysi .ibox-note { --ibox-bg: #f5f3ff; --ibox-border: #ddd6fe; }
+        /* Match DOM green highlight */
+        .wysi mark { background-color: rgba(34,197,94,0.35); border-radius: 4px; padding: 0 0.1em; }
       `}</style>
     </div>
   )

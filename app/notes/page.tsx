@@ -2436,6 +2436,10 @@ function MarkdownContent({ content }: { content: string }) {
       >
         {safeContent}
       </ReactMarkdown>
+      <style jsx global>{`
+        /* Match DOM green highlight for persisted ==text== */
+        .prose mark { background-color: rgba(34,197,94,0.35); border-radius: 4px; padding: 0 0.1em; }
+      `}</style>
     </div>
   )
 }
