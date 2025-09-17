@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { RefreshCw, Tv, Play, Clock, LayoutGrid } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Streamed API types
 interface APIMatch {
@@ -69,6 +70,7 @@ export default function Page() {
   const [selectedSource, setSelectedSource] = React.useState<APIMatch['sources'][number] | null>(null)
   const [playerLoading, setPlayerLoading] = React.useState<boolean>(false)
   const [playerError, setPlayerError] = React.useState<string | null>(null)
+  const [compatMode, setCompatMode] = React.useState<boolean>(false)
 
   // Safe iframe builder to block top-level redirects
   const buildSafeIframeHTML = React.useCallback((src: string) => {
@@ -78,7 +80,18 @@ export default function Page() {
       allowfullscreen
       x-webkit-airplay="allow"
       referrerpolicy="no-referrer"
-      sandbox="allow-scripts allow-same-origin allow-presentation"
+      sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-pointer-lock allow-popups allow-modals allow-downloads"
+      style="border:0; width:100%; height:100%;"></iframe>`
+  }, [])
+
+  // Compatibility mode: no sandbox (may allow redirects/popups). Use with caution.
+  const buildCompatIframeHTML = React.useCallback((src: string) => {
+    const escaped = src.replace(/"/g, '&quot;')
+    return `<iframe src="${escaped}"
+      allow="autoplay; encrypted-media; picture-in-picture; web-share; airplay; fullscreen"
+      allowfullscreen
+      x-webkit-airplay="allow"
+      referrerpolicy="no-referrer"
       style="border:0; width:100%; height:100%;"></iframe>`
   }, [])
 
@@ -89,7 +102,7 @@ export default function Page() {
 
   // Load sports and matches
   const loadSports = React.useCallback(async () => {
-    const res = await safeFetch('https://streamed.pk/api/sports')
+    const res = await safeFetch('/api/streamed/api/sports')
     if (!res.ok) throw new Error(`Failed to load sports (${res.status})`)
     const json: APISport[] = await res.json()
     setSports(json)
@@ -98,8 +111,8 @@ export default function Page() {
   const loadMatches = React.useCallback(async () => {
     setError(null)
     const base = selectedSport
-      ? `https://streamed.pk/api/matches/${encodeURIComponent(selectedSport)}`
-      : (onlyLive ? 'https://streamed.pk/api/matches/live' : 'https://streamed.pk/api/matches/all')
+      ? `/api/streamed/api/matches/${encodeURIComponent(selectedSport)}`
+      : (onlyLive ? '/api/streamed/api/matches/live' : '/api/streamed/api/matches/all')
     const res = await safeFetch(base)
     if (!res.ok) throw new Error(`Failed to load matches (${res.status})`)
     const json: APIMatch[] = await res.json()
@@ -113,7 +126,7 @@ export default function Page() {
       const chosen = src || match.sources?.[0]
       if (!chosen) throw new Error('No sources available for this match')
       const { source, id } = chosen
-      const res = await safeFetch(`https://streamed.pk/api/stream/${encodeURIComponent(source)}/${encodeURIComponent(id)}`)
+      const res = await safeFetch(`/api/streamed/api/stream/${encodeURIComponent(source)}/${encodeURIComponent(id)}`)
       if (!res.ok) throw new Error(`Failed to load streams (${res.status})`)
       const json: APIStream[] = await res.json()
       setStreams(json)
@@ -201,16 +214,17 @@ export default function Page() {
                   onChange={(e) => setQuery(e.target.value)}
                   className="w-72"
                 />
-                <select
-                  className="h-9 rounded-md border bg-background px-2 text-sm"
-                  value={selectedSport}
-                  onChange={(e) => setSelectedSport(e.target.value)}
-                >
-                  <option value="">All {onlyLive ? '(Live)' : '(All)'}</option>
-                  {sports.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                <Select value={selectedSport || '__all__'} onValueChange={(v) => setSelectedSport(v === '__all__' ? '' : v)}>
+                  <SelectTrigger className="w-56 h-9">
+                    <SelectValue placeholder={`All ${onlyLive ? '(Live)' : '(All)'}`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem key="__all__" value="__all__">{`All ${onlyLive ? '(Live)' : '(All)'}`}</SelectItem>
+                    {sports.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button variant={onlyLive ? "default" : "outline"} onClick={() => setOnlyLive((v) => !v)}>
                   {onlyLive ? "Showing Live" : "All"}
                 </Button>
@@ -244,9 +258,9 @@ export default function Page() {
                 {filteredMatches.map((m) => {
                   const dateStr = new Date(m.date).toLocaleString()
                   const live = onlyLive || (Date.now() >= m.date)
-                  const poster = m.poster ? `https://streamed.pk${m.poster}.webp` : null
-                  const homeBadge = m.teams?.home?.badge ? `https://streamed.pk/api/images/badge/${m.teams.home.badge}.webp` : null
-                  const awayBadge = m.teams?.away?.badge ? `https://streamed.pk/api/images/badge/${m.teams.away.badge}.webp` : null
+                  const poster = m.poster ? `/api/streamed${m.poster}.webp` : null
+                  const homeBadge = m.teams?.home?.badge ? `/api/streamed/api/images/badge/${m.teams.home.badge}.webp` : null
+                  const awayBadge = m.teams?.away?.badge ? `/api/streamed/api/images/badge/${m.teams.away.badge}.webp` : null
                   return (
                     <Card key={m.id} className="overflow-hidden group hover:shadow-lg transition-shadow">
                       <div className="relative h-40 w-full bg-muted">
@@ -319,6 +333,9 @@ export default function Page() {
                 <a href={selectedStream.embedUrl} target="_blank" rel="noreferrer noopener">Open Player</a>
               </Button>
             ) : null}
+            <Button size="sm" variant={compatMode ? 'default' : 'outline'} onClick={() => setCompatMode((v) => !v)} title="Compatibility mode (disables sandbox)">
+              {compatMode ? 'Compat: On' : 'Compat: Off'}
+            </Button>
           </div>
         </DialogHeader>
         {/* Source selector */}
@@ -346,7 +363,7 @@ export default function Page() {
               <Button size="sm" onClick={() => selectedMatch && loadStreamsForMatch(selectedMatch)}>Retry</Button>
             </div>
           ) : selectedStream?.embedUrl ? (
-            <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: buildSafeIframeHTML(selectedStream.embedUrl) }} />
+            <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: (compatMode ? buildCompatIframeHTML : buildSafeIframeHTML)(selectedStream.embedUrl) }} />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
               {playerLoading ? 'Loading streams...' : 'No stream selected.'}
