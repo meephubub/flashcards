@@ -23,375 +23,146 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { RefreshCw, Tv, Play, Clock, LayoutGrid } from "lucide-react"
 
-// Types based on the API docs
-interface StreamItem {
-  id: number
-  name: string
-  tag?: string
-  poster?: string
-  uri_name: string
-  starts_at?: number
-  ends_at?: number
-  always_live?: number
-  category_name?: string
-  iframe?: string
-  allowpaststreams?: number
-}
-
-interface StreamCategory {
+// Streamed API types
+interface APIMatch {
+  id: string
+  title: string
   category: string
-  id: number
-  always_live: number
-  streams: StreamItem[]
-}
-
-interface StreamsResponse {
-  success: boolean
-  timestamp: number
-  READ_ME?: string
-  performance?: number
-  streams: StreamCategory[]
-}
-
-function formatUnixToLocal(ts?: number) {
-  if (!ts) return "Unknown"
-  try {
-    const d = new Date(ts * 1000)
-    return d.toLocaleString()
-  } catch {
-    return "Unknown"
+  date: number // ms epoch
+  poster?: string
+  popular: boolean
+  teams?: {
+    home?: { name: string; badge: string }
+    away?: { name: string; badge: string }
   }
+  sources: { source: string; id: string }[]
 }
 
-function isLive(stream: StreamItem, nowSec: number) {
-  if (stream.always_live === 1) return true
-  if (typeof stream.starts_at === "number" && typeof stream.ends_at === "number") {
-    return nowSec >= stream.starts_at && nowSec <= stream.ends_at
-  }
-  return false
+ 
+
+interface APIStream {
+  id: string
+  streamNo: number
+  language: string
+  hd: boolean
+  embedUrl: string
+  source: string
+}
+
+interface APISport {
+  id: string
+  name: string
 }
 
 export default function Page() {
-  const [data, setData] = React.useState<StreamsResponse | null>(null)
   const [loading, setLoading] = React.useState<boolean>(true)
   const [error, setError] = React.useState<string | null>(null)
   const [onlyLive, setOnlyLive] = React.useState<boolean>(true)
   const [query, setQuery] = React.useState<string>("")
-  const [selected, setSelected] = React.useState<StreamItem | null>(null)
-  const videoRef = React.useRef<HTMLVideoElement | null>(null)
+  // New Streamed API states
+  const [sports, setSports] = React.useState<APISport[]>([])
+  const [selectedSport, setSelectedSport] = React.useState<string>("")
+  const [matches, setMatches] = React.useState<APIMatch[]>([])
+  const [selectedMatch, setSelectedMatch] = React.useState<APIMatch | null>(null)
+  const [streams, setStreams] = React.useState<APIStream[]>([])
+  const [selectedStream, setSelectedStream] = React.useState<APIStream | null>(null)
+  const [selectedSource, setSelectedSource] = React.useState<APIMatch['sources'][number] | null>(null)
   const [playerLoading, setPlayerLoading] = React.useState<boolean>(false)
   const [playerError, setPlayerError] = React.useState<string | null>(null)
-  const [extractedUrl, setExtractedUrl] = React.useState<string | null>(null)
-  const videoLogHandlerRef = React.useRef<((evt: Event) => void) | null>(null)
-  const usedProxyRef = React.useRef<boolean>(false)
-  const toProxied = React.useCallback((u?: string | null) => {
-    if (!u) return u as any
-    if (/^https?:\/\//i.test(u)) return `/api/hls-proxy?url=${encodeURIComponent(u)}`
-    return u
+
+  // Safe iframe builder to block top-level redirects
+  const buildSafeIframeHTML = React.useCallback((src: string) => {
+    const escaped = src.replace(/"/g, '&quot;')
+    return `<iframe src="${escaped}"
+      allow="autoplay; encrypted-media; picture-in-picture; web-share; airplay; fullscreen"
+      allowfullscreen
+      x-webkit-airplay="allow"
+      referrerpolicy="no-referrer"
+      sandbox="allow-scripts allow-same-origin allow-presentation"
+      style="border:0; width:100%; height:100%;"></iframe>`
   }, [])
 
-  // Enhance iframe HTML to allow AirPlay and full-screen where supported.
-  const enhanceIframe = React.useCallback((html?: string) => {
-    if (!html) return ""
-    try {
-      // If the provider returns a plain URL, wrap it in an iframe ourselves.
-      const urlLike = /^(https?:\/\/[^\s]+)$/i
-      if (urlLike.test(html.trim())) {
-        const src = html.trim()
-        // Use sandbox without top-navigation to limit redirect ability outside the frame.
-        return `<iframe src="${src}"
-          allow="autoplay; encrypted-media; picture-in-picture; web-share; airplay; fullscreen"
-          allowfullscreen
-          x-webkit-airplay="allow"
-          playsinline
-          referrerpolicy="no-referrer-when-downgrade"
-          sandbox="allow-scripts allow-same-origin allow-presentation"
-          style="border:0; width:100%; height:100%;"></iframe>`
-      }
-      // Normalize spacing to make simple replacements safer
-      const hasAllow = /allow="[^"]*"/i.test(html)
-      let next = html
-      // Inject allow attribute
-      const allowVal = 'autoplay; encrypted-media; picture-in-picture; web-share; airplay; fullscreen'
-      if (/<iframe/i.test(next)) {
-        if (hasAllow) {
-          next = next.replace(/allow="([^"]*)"/i, (_m, g1) => {
-            const merged = new Set((g1 || '').split(';').map((s: string) => s.trim()).filter(Boolean))
-            for (const t of allowVal.split(';')) merged.add(t.trim())
-            return `allow="${Array.from(merged).join('; ')}"`
-          })
-        } else {
-          next = next.replace(/<iframe/i, `<iframe allow="${allowVal}"`)
-        }
-        // Ensure allowfullscreen / fullscreen permissions
-        if (!/allowfullscreen/i.test(next)) {
-          next = next.replace(/<iframe([^>]*)>/i, '<iframe$1 allowfullscreen>')
-        }
-        // Ensure AirPlay attribute for Safari
-        if (!/x-webkit-airplay=/i.test(next)) {
-          next = next.replace(/<iframe/i, '<iframe x-webkit-airplay="allow"')
-        }
-        if (!/playsinline/i.test(next)) {
-          next = next.replace(/<iframe/i, '<iframe playsinline')
-        }
-        // Add referrerpolicy and sandbox loosened minimally if missing
-        if (!/referrerpolicy=/i.test(next)) {
-          next = next.replace(/<iframe/i, '<iframe referrerpolicy="no-referrer-when-downgrade"')
-        }
-        if (!/sandbox=/i.test(next)) {
-          // Avoid top-navigation so redirects can't escape the frame
-          next = next.replace(/<iframe/i, '<iframe sandbox="allow-scripts allow-same-origin allow-presentation"')
-        }
-      }
-      return next
-    } catch {
-      return html
-    }
+  // Fetch helper that blocks redirects
+  const safeFetch = React.useCallback((input: RequestInfo | URL, init?: RequestInit) => {
+    return fetch(input as any, { ...init, redirect: 'error', referrerPolicy: 'no-referrer', cache: 'no-store' })
   }, [])
 
-  const extractIframeSrc = React.useCallback((html?: string) => {
-    if (!html) return null
-    const m = html.match(/src\s*=\s*"([^"]+)"/i) || html.match(/src\s*=\s*'([^']+)'/i)
-    return m ? m[1] : null
-  }, [])
+  // Load sports and matches
+  const loadSports = React.useCallback(async () => {
+    const res = await safeFetch('https://streamed.pk/api/sports')
+    if (!res.ok) throw new Error(`Failed to load sports (${res.status})`)
+    const json: APISport[] = await res.json()
+    setSports(json)
+  }, [safeFetch])
 
-  const embedUrlFrom = React.useCallback((s?: StreamItem | null) => {
-    if (!s) return null
-    // Allow only what the API explicitly provides for embeds
-    if (s.iframe && /^(https?:\/\/[^\s]+)$/i.test(s.iframe.trim())) return s.iframe.trim()
-    const src = extractIframeSrc(s.iframe)
-    if (src) return src
-    return null
-  }, [extractIframeSrc])
-
-  // Load hls.js from CDN if not already present
-  const ensureHlsScript = React.useCallback(async () => {
-    if (typeof window === 'undefined') return false
-    if ((window as any).Hls) return true
-    await new Promise<void>((resolve, reject) => {
-      const el = document.createElement('script')
-      el.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js'
-      el.async = true
-      el.onload = () => resolve()
-      el.onerror = () => reject(new Error('Failed to load hls.js'))
-      document.head.appendChild(el)
-    })
-    return !!(window as any).Hls
-  }, [])
-
-  // When a stream is selected, try to extract the HLS manifest from the iframe HTML/URL
-  React.useEffect(() => {
-    let hls: any | null = null
-    let aborted = false
-    ;(async () => {
-      if (!selected?.iframe) {
-        setExtractedUrl(null)
-        setPlayerError(null)
-        return
-      }
-      setPlayerLoading(true)
-      setPlayerError(null)
-      setExtractedUrl(null)
-
-      try {
-        // Get the iframe URL first
-        const iframeSrc = extractIframeSrc(selected.iframe) || (selected.iframe.match(/^(https?:\/\/[^\s]+)$/i)?.[1] ?? null)
-        if (!iframeSrc) {
-          console.error('[stream] No iframe src found in provided iframe HTML')
-          throw new Error('No iframe src found')
-        }
-
-        // Ask server to extract the .m3u8 from the iframe HTML
-        const res = await fetch(`/api/extract-hls?url=${encodeURIComponent(iframeSrc)}`, { cache: 'no-store' })
-        if (!res.ok) {
-          console.error('[stream] /api/extract-hls returned', res.status, res.statusText)
-          throw new Error('Failed to extract stream URL')
-        }
-        const data = await res.json()
-        const rawUrl: string | undefined = data?.url
-        const refererHint: string | undefined = data?.referer
-        if (!rawUrl) {
-          console.error('[stream] Extractor did not return a url field')
-          throw new Error('No HLS URL found')
-        }
-
-        // Prefer direct playback first (works if upstream sets CORS). If that fails, fall back to proxy.
-        const directUrl = rawUrl
-        const params = new URLSearchParams({ url: rawUrl })
-        if (refererHint) params.set('referer', refererHint)
-        const proxied = `/api/hls-proxy?${params.toString()}`
-        if (aborted) return
-        setExtractedUrl(directUrl)
-        usedProxyRef.current = false
-
-        // Attach to video
-        const video = videoRef.current
-        if (!video) return
-
-        // Attach detailed logging to the video element
-        const logVideoState = (evt: Event) => {
-          const mediaError = (video.error && (video.error as any).message) || (video.error && (video.error as any).code)
-          console.error('[stream][video]', evt.type, {
-            readyState: video.readyState,
-            networkState: video.networkState,
-            currentTime: video.currentTime,
-            paused: video.paused,
-            ended: video.ended,
-            mediaError,
-            src: video.currentSrc,
-          })
-        }
-        videoLogHandlerRef.current = logVideoState
-        const videoEvents = ['error','stalled','waiting','abort','emptied','loadedmetadata','loadeddata','canplay','canplaythrough','play','playing','pause','ended'] as const
-        videoEvents.forEach((ev) => video.addEventListener(ev, logVideoState))
-
-        // Safari can play HLS natively
-        if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = directUrl
-          await new Promise((r) => setTimeout(r, 0))
-          try { await video.play() } catch {}
-          return
-        }
-
-        // Use hls.js for other browsers
-        const ok = await ensureHlsScript()
-        if (!ok || !(window as any).Hls) {
-          console.error('[stream] hls.js failed to load or is not available')
-          throw new Error('hls.js not available')
-        }
-        const HlsCtor = (window as any).Hls
-        hls = new HlsCtor({
-          enableWorker: true,
-          lowLatencyMode: true,
-          backBufferLength: 30,
-          maxBufferLength: 30,
-          liveDurationInfinity: true,
-        })
-        hls.loadSource(directUrl)
-        hls.attachMedia(video)
-        hls.on(HlsCtor.Events.MANIFEST_PARSED, async () => {
-          try { await video.play() } catch {}
-        })
-        hls.on(HlsCtor.Events.ERROR, (_evt: any, data: any) => {
-          console.error('[stream] hls.js error', data)
-          // Decide whether to fallback to proxy
-          const shouldProxyFallback =
-            !usedProxyRef.current && (
-              data?.fatal ||
-              data?.details === 'manifestParsingError' ||
-              data?.details === 'manifestLoadError' ||
-              data?.details === 'levelLoadError' ||
-              data?.type === 'networkError'
-            )
-
-          // Basic recovery attempts first
-          if (data?.fatal && !shouldProxyFallback) {
-            try {
-              if (data.type === 'networkError' && typeof hls.startLoad === 'function') {
-                console.warn('[stream] hls.js attempting startLoad() after networkError')
-                hls.startLoad()
-                return
-              }
-              if (data.type === 'mediaError' && typeof hls.recoverMediaError === 'function') {
-                console.warn('[stream] hls.js attempting recoverMediaError()')
-                hls.recoverMediaError()
-                return
-              }
-            } catch (e) {
-              console.error('[stream] hls.js recovery step failed', e)
-            }
-          }
-
-          if (shouldProxyFallback) {
-            // Fall back to proxied URL in case of CORS/redirect/network issues
-            try { hls?.destroy() } catch {}
-            hls = new HlsCtor({
-              enableWorker: true,
-              lowLatencyMode: true,
-              backBufferLength: 30,
-              maxBufferLength: 30,
-              liveDurationInfinity: true,
-            })
-            hls.loadSource(proxied)
-            hls.attachMedia(video)
-            usedProxyRef.current = true
-          }
-        })
-        // Helpful diagnostics for live playback
-        hls.on(HlsCtor.Events.LEVEL_SWITCHED, (_e: any, d: any) => console.log('[stream] level switched', d))
-        hls.on(HlsCtor.Events.FRAG_LOADED, (_e: any, d: any) => console.log('[stream] frag loaded', d?.frag?.sn))
-        hls.on(HlsCtor.Events.BUFFER_APPENDING, (_e: any, d: any) => console.log('[stream] buffer appending', d?.type, d?.data?.length))
-      } catch (e: any) {
-        console.error('[stream] Player init failed:', e)
-        if (aborted) return
-        setPlayerError(e?.message || 'Failed to initialize player')
-      } finally {
-        if (!aborted) setPlayerLoading(false)
-      }
-    })()
-    return () => {
-      aborted = true
-      try {
-        if (hls) {
-          hls.destroy?.()
-        }
-      } catch {}
-      const video = videoRef.current
-      const handler = videoLogHandlerRef.current
-      if (video && handler) {
-        const videoEvents = ['error','stalled','waiting','abort','emptied','loadedmetadata','loadeddata','canplay','canplaythrough','play','playing','pause','ended'] as const
-        videoEvents.forEach((ev) => video.removeEventListener(ev, handler))
-      }
-    }
-  }, [selected, extractIframeSrc, ensureHlsScript])
-
-  // Poll every 60s per docs suggestion
-  const fetchStreams = React.useCallback(async () => {
+  const loadMatches = React.useCallback(async () => {
     setError(null)
-    try {
-      const res = await fetch("https://ppv.to/api/streams", { cache: "no-store" })
-      if (!res.ok) throw new Error(`Failed (${res.status})`)
-      const json: StreamsResponse = await res.json()
-      setData(json)
-    } catch (e: any) {
-      setError(e?.message || "Failed to load streams")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    const base = selectedSport
+      ? `https://streamed.pk/api/matches/${encodeURIComponent(selectedSport)}`
+      : (onlyLive ? 'https://streamed.pk/api/matches/live' : 'https://streamed.pk/api/matches/all')
+    const res = await safeFetch(base)
+    if (!res.ok) throw new Error(`Failed to load matches (${res.status})`)
+    const json: APIMatch[] = await res.json()
+    setMatches(json)
+  }, [safeFetch, selectedSport, onlyLive])
 
+  const loadStreamsForMatch = React.useCallback(async (match: APIMatch, src?: APIMatch['sources'][number]) => {
+    setPlayerError(null)
+    setPlayerLoading(true)
+    try {
+      const chosen = src || match.sources?.[0]
+      if (!chosen) throw new Error('No sources available for this match')
+      const { source, id } = chosen
+      const res = await safeFetch(`https://streamed.pk/api/stream/${encodeURIComponent(source)}/${encodeURIComponent(id)}`)
+      if (!res.ok) throw new Error(`Failed to load streams (${res.status})`)
+      const json: APIStream[] = await res.json()
+      setStreams(json)
+      setSelectedStream(json[0] || null)
+    } catch (e: any) {
+      setStreams([])
+      setSelectedStream(null)
+      setPlayerError(e?.message || 'Failed to load streams')
+    } finally {
+      setPlayerLoading(false)
+    }
+  }, [safeFetch])
+
+  // Initial load and polling
   React.useEffect(() => {
     let mounted = true
     ;(async () => {
-      await fetchStreams()
+      try { await loadSports() } catch {}
+      try { await loadMatches() } catch (e: any) { setError(e?.message || 'Failed to load matches') }
+      if (mounted) setLoading(false)
     })()
-    const id = setInterval(() => {
-      if (mounted) void fetchStreams()
-    }, 60_000)
-    return () => {
-      mounted = false
-      clearInterval(id)
-    }
-  }, [fetchStreams])
+    const id = setInterval(() => { if (mounted) void loadMatches() }, 60_000)
+    return () => { mounted = false; clearInterval(id) }
+  }, [loadMatches, loadSports])
 
-  const nowSec = Math.floor(Date.now() / 1000)
+  // Deprecated: old streams loader removed
 
-  const filteredCategories = React.useMemo(() => {
-    if (!data?.streams) return [] as StreamCategory[]
+  // Reload matches when sport or live toggle changes
+  React.useEffect(() => {
+    ;(async () => {
+      setLoading(true)
+      try { await loadMatches() } catch (e: any) { setError(e?.message || 'Failed to load matches') }
+      setLoading(false)
+    })()
+  }, [selectedSport, onlyLive, loadMatches])
+
+  const filteredMatches = React.useMemo(() => {
     const q = query.trim().toLowerCase()
-    return data.streams
-      .map((cat) => {
-        let streams = cat.streams || []
-        if (onlyLive) streams = streams.filter((s) => isLive(s, nowSec))
-        if (q) streams = streams.filter((s) =>
-          (s.name || "").toLowerCase().includes(q) ||
-          (s.tag || "").toLowerCase().includes(q) ||
-          (s.category_name || cat.category || "").toLowerCase().includes(q)
-        )
-        return { ...cat, streams }
-      })
-      .filter((c) => c.streams.length > 0)
-  }, [data, onlyLive, query, nowSec])
+    let list = matches
+    if (q) {
+      list = list.filter((m) =>
+        m.title.toLowerCase().includes(q) ||
+        m.category.toLowerCase().includes(q) ||
+        (m.teams?.home?.name?.toLowerCase().includes(q) ?? false) ||
+        (m.teams?.away?.name?.toLowerCase().includes(q) ?? false)
+      )
+    }
+    return list
+  }, [matches, query])
 
   return (
     <SidebarProvider>
@@ -430,10 +201,20 @@ export default function Page() {
                   onChange={(e) => setQuery(e.target.value)}
                   className="w-72"
                 />
+                <select
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                  value={selectedSport}
+                  onChange={(e) => setSelectedSport(e.target.value)}
+                >
+                  <option value="">All {onlyLive ? '(Live)' : '(All)'}</option>
+                  {sports.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
                 <Button variant={onlyLive ? "default" : "outline"} onClick={() => setOnlyLive((v) => !v)}>
                   {onlyLive ? "Showing Live" : "All"}
                 </Button>
-                <Button variant="ghost" onClick={() => { setLoading(true); void fetchStreams() }} title="Refresh">
+                <Button variant="ghost" onClick={() => { setLoading(true); void loadMatches() }} title="Refresh">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
@@ -456,133 +237,127 @@ export default function Page() {
               <div className="rounded-lg border p-6 text-sm text-red-600 dark:text-red-400">
                 {error}
               </div>
-            ) : filteredCategories.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No streams found.</div>
+            ) : filteredMatches.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No matches found.</div>
             ) : (
-              <div className="space-y-10">
-                {filteredCategories.map((cat) => (
-                  <section key={cat.id}>
-                    <div className="flex items-baseline justify-between mb-3">
-                      <h2 className="text-lg font-semibold tracking-tight">{cat.category}</h2>
-                      <div className="text-xs text-muted-foreground">{cat.streams.length} item(s)</div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {cat.streams.map((s) => {
-                        const live = isLive(s, nowSec)
-                        return (
-                          <Card key={s.id} className="overflow-hidden group hover:shadow-lg transition-shadow">
-                            <div className="relative h-40 w-full bg-muted">
-                              {s.poster ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={toProxied(s.poster) as any} alt={s.name} className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                                  <Tv className="h-8 w-8" />
-                                </div>
-                              )}
-                              <div className="absolute left-2 top-2 flex items-center gap-2">
-                                {live ? (
-                                  <Badge variant="default" className="bg-red-600">LIVE</Badge>
-                                ) : (
-                                  <Badge variant="secondary" className="bg-black/60 text-white dark:bg-white/20 dark:text-white">
-                                    <Clock className="h-3.5 w-3.5 mr-1" />
-                                    {s.starts_at ? new Date(s.starts_at * 1000).toLocaleTimeString() : "Scheduled"}
-                                  </Badge>
-                                )}
-                                {s.tag ? (
-                                  <Badge variant="outline" className="backdrop-blur bg-white/80 dark:bg-black/30 border-white/50 dark:border-white/20">
-                                    {s.tag}
-                                  </Badge>
-                                ) : null}
-                              </div>
-                            </div>
-                            <CardContent className="p-4">
-                              <div className="text-base font-medium leading-snug line-clamp-2">{s.name}</div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <span>{s.category_name || cat.category}</span>
-                                {s.starts_at ? <span>• Starts {formatUnixToLocal(s.starts_at)}</span> : null}
-                              </div>
-                              <div className="mt-3 flex items-center gap-2">
-                                {s.iframe ? (
-                                  <Button size="sm" onClick={() => setSelected(s)}>
-                                    <Play className="h-4 w-4 mr-1" /> Watch
-                                  </Button>
-                                ) : (
-                                  <Button size="sm" variant="secondary" asChild>
-                                    <a href={`https://example.com/${encodeURIComponent(s.uri_name)}`} target="_blank" rel="noreferrer">
-                                      Details
-                                    </a>
-                                  </Button>
-                                )}
-                                <Button size="sm" variant="ghost" asChild>
-                                  <a href={`?s=${encodeURIComponent(s.uri_name)}`}>
-                                    Copy Link
-                                  </a>
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-                    </div>
-                  </section>
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredMatches.map((m) => {
+                  const dateStr = new Date(m.date).toLocaleString()
+                  const live = onlyLive || (Date.now() >= m.date)
+                  const poster = m.poster ? `https://streamed.pk${m.poster}.webp` : null
+                  const homeBadge = m.teams?.home?.badge ? `https://streamed.pk/api/images/badge/${m.teams.home.badge}.webp` : null
+                  const awayBadge = m.teams?.away?.badge ? `https://streamed.pk/api/images/badge/${m.teams.away.badge}.webp` : null
+                  return (
+                    <Card key={m.id} className="overflow-hidden group hover:shadow-lg transition-shadow">
+                      <div className="relative h-40 w-full bg-muted">
+                        {poster ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={poster} alt={m.title} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                            <Tv className="h-8 w-8" />
+                          </div>
+                        )}
+                        <div className="absolute left-2 top-2 flex items-center gap-2">
+                          {live ? (
+                            <Badge variant="default" className="bg-red-600">LIVE</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="bg-black/60 text-white dark:bg-white/20 dark:text-white">
+                              <Clock className="h-3.5 w-3.5 mr-1" />
+                              {dateStr}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <CardContent className="p-4">
+                        <div className="text-base font-medium leading-snug line-clamp-2">{m.title}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>{m.category}</span>
+                          <span>• {dateStr}</span>
+                          <span className="inline-flex items-center gap-2">
+                            {homeBadge ? <img src={homeBadge} alt={m.teams?.home?.name || 'Home'} width={18} height={18} /> : null}
+                            {awayBadge ? <img src={awayBadge} alt={m.teams?.away?.name || 'Away'} width={18} height={18} /> : null}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex items-center gap-2">
+                          <Button size="sm" onClick={async () => {
+                            setSelectedMatch(m)
+                            const first = m.sources?.[0] || null
+                            setSelectedSource(first)
+                            await loadStreamsForMatch(m, first || undefined)
+                          }}>
+                            <Play className="h-4 w-4 mr-1" /> Watch
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
             )}
           </div>
         </div>
       </SidebarInset>
 
-      {/* Stream Dialog */}
-      <Dialog open={!!selected} onOpenChange={(o) => {
-        if (!o) {
-          // Pause video when closing
-          try { videoRef.current?.pause?.() } catch {}
-          setSelected(null)
-          setPlayerError(null)
-          setExtractedUrl(null)
-        }
-      }}>
-        <DialogContent className="max-w-5xl p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 flex items-center justify-between">
-            <DialogTitle className="text-base">{selected?.name}</DialogTitle>
-            {selected?.iframe ? (() => {
-              const src = extractIframeSrc(selected.iframe)
-              return src ? (
-                <div className="flex items-center gap-2 pr-2">
-                  {/* Open the player directly to expose native AirPlay controls on Safari/Apple TV */}
-                  <Button size="sm" variant="outline" asChild>
-                    <a href={src} target="_blank" rel="noreferrer noopener">Open Player</a>
-                  </Button>
-                </div>
-              ) : null
-            })() : null}
-          </DialogHeader>
-          <div className="aspect-video w-full bg-black relative">
-            {selected?.iframe ? (
-              playerError ? (
-                // Fallback to the original iframe if extraction or playback fails
-                <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: enhanceIframe(selected.iframe) }} />
-              ) : (
-                <video ref={videoRef} controls playsInline className="absolute inset-0 w-full h-full" />
-              )
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
-                No embed available yet.
-              </div>
-            )}
-
-            {playerLoading && !playerError ? (
-              <div className="absolute inset-0 flex items-center justify-center text-xs text-white/80">
-                Initializing player...
-              </div>
+    {/* Stream Dialog */}
+    <Dialog open={!!selectedMatch} onOpenChange={(o) => {
+      if (!o) {
+        setSelectedMatch(null)
+        setStreams([])
+        setSelectedStream(null)
+        setSelectedSource(null)
+        setPlayerError(null)
+      }
+    }}>
+      <DialogContent className="max-w-5xl p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 flex items-center justify-between">
+          <DialogTitle className="text-base">{selectedMatch?.title}</DialogTitle>
+          <div className="flex items-center gap-2 pr-2">
+            {/* Optional: open in new tab, will be subject to browser policies */}
+            {selectedStream?.embedUrl ? (
+              <Button size="sm" variant="outline" asChild>
+                <a href={selectedStream.embedUrl} target="_blank" rel="noreferrer noopener">Open Player</a>
+              </Button>
             ) : null}
           </div>
-          <div className="px-6 pb-6 text-xs text-muted-foreground">
-            Tip: On Safari, use the native player AirPlay control to cast to a smart TV. Respect the provider's terms; embeds may include ads and cannot be altered.
+        </DialogHeader>
+        {/* Source selector */}
+        {selectedMatch?.sources?.length ? (
+          <div className="px-6 pb-3 flex flex-wrap gap-2">
+            {selectedMatch.sources.map((s) => (
+              <Button
+                key={`${s.source}:${s.id}`}
+                size="sm"
+                variant={selectedSource && selectedSource.source === s.source && selectedSource.id === s.id ? 'default' : 'outline'}
+                onClick={async () => {
+                  setSelectedSource(s)
+                  await loadStreamsForMatch(selectedMatch, s)
+                }}
+              >
+                {s.source}
+              </Button>
+            ))}
           </div>
-        </DialogContent>
-      </Dialog>
+        ) : null}
+        <div className="aspect-video w-full bg-black relative">
+          {playerError ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/80 text-sm">
+              <div>{playerError}</div>
+              <Button size="sm" onClick={() => selectedMatch && loadStreamsForMatch(selectedMatch)}>Retry</Button>
+            </div>
+          ) : selectedStream?.embedUrl ? (
+            <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: buildSafeIframeHTML(selectedStream.embedUrl) }} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
+              {playerLoading ? 'Loading streams...' : 'No stream selected.'}
+            </div>
+          )}
+        </div>
+        <div className="px-6 pb-6 text-xs text-muted-foreground">
+          Streams are embedded in a sandboxed iframe to prevent redirects or top-level navigation.
+        </div>
+      </DialogContent>
+    </Dialog>
     </SidebarProvider>
   )
 }
