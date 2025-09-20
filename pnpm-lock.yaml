@@ -353,6 +353,9 @@ importers:
       sonner:
         specifier: ^1.7.4
         version: 1.7.4(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      statsig-js:
+        specifier: ^5.1.0
+        version: 5.1.0
       tailwind-merge:
         specifier: ^2.6.0
         version: 2.6.0
@@ -4445,6 +4448,9 @@ packages:
   jose@5.10.0:
     resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
 
+  js-sha256@0.11.1:
+    resolution: {integrity: sha512-o6WSo/LUvY2uC4j7mO50a2ms7E/EAdbP0swigLV+nzHKTTaYnaLIWJ02VdXrsJX0vGedDESQnLsOekr94ryfjg==}
+
   js-tiktoken@1.0.20:
     resolution: {integrity: sha512-Xlaqhhs8VfCd6Sh7a1cFkZHQbYTLCwVJJWiHVxBYzLPxW0XsoxBy1hitmjkdIjD3Aon5BXLHFwU5O8WUx6HH+A==}
 
@@ -5976,6 +5982,10 @@ packages:
 
   stats.js@0.17.0:
     resolution: {integrity: sha512-hNKz8phvYLPEcRkeG1rsGmV5ChMjKDAWU7/OJJdDErPBNChQXxCo3WZurGpnWc6gZhAzEPFad1aVgyOANH1sMw==}
+
+  statsig-js@5.1.0:
+    resolution: {integrity: sha512-LTJUkJktM5/wf7CpBbifwKaV4Yq4rqFwi4DnVm8pMI7x8pTENyER8wp5feg+nZFyTv/0w4QPWmYUatFIMtvjFw==}
+    deprecated: Support for this package ends Jan 31 '25. Upgrade to the faster and smaller @statsig/js-client - see docs.statsig.com/js-migration
 
   statsig-node-lite@0.4.4:
     resolution: {integrity: sha512-2jpkawGAEf2OS5mjay0x4JxdVqrhu7FbHx8dcjvo20aA2uaKyqsCyUn4TvFRgUmNpXmZ+OaNptda7ehs4vdZFg==}
@@ -10298,6 +10308,8 @@ snapshots:
 
   jose@5.10.0: {}
 
+  js-sha256@0.11.1: {}
+
   js-tiktoken@1.0.20:
     dependencies:
       base64-js: 1.5.1
@@ -12387,6 +12399,11 @@ snapshots:
       three: 0.179.1
 
   stats.js@0.17.0: {}
+
+  statsig-js@5.1.0:
+    dependencies:
+      js-sha256: 0.11.1
+      uuid: 9.0.1
 
   statsig-node-lite@0.4.4:
     dependencies:

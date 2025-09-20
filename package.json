@@ -128,6 +128,7 @@
     "remark-math": "^6.0.0",
     "sharp": "^0.34.3",
     "sonner": "^1.7.4",
+    "statsig-js": "^5.1.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.179.1",

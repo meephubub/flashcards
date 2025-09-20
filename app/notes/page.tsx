@@ -38,7 +38,7 @@ import remarkBreaks from 'remark-breaks'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { Skeleton } from "@/components/ui/skeleton"
-import { makeGroqRequest } from "@/lib/groq"
+import { makeGroqRequest, generateExamMarkdownFromNote, gradeAnswerWithGroq } from "@/lib/groq"
 import ExamFromNotesPage from "@/app/exam-from-notes/page"
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment, Bounds, useGLTF } from '@react-three/drei'
@@ -120,6 +120,25 @@ export default function Page() {
   const [dictAnimOpen, setDictAnimOpen] = useState(false)
   const [dictWidth, setDictWidth] = useState<number>(416) // ~26rem
   const dictResizeRef = React.useRef<{ startX: number; startW: number } | null>(null)
+
+  // Exam side tab state
+  const [examOpen, setExamOpen] = useState(false)
+  const [examLoading, setExamLoading] = useState(false)
+  const [examError, setExamError] = useState<string | null>(null)
+  const [examMarkdown, setExamMarkdown] = useState<string>("")
+  const [examVersion, setExamVersion] = useState(0)
+  // Cache exam markdown per note id to avoid unnecessary regeneration
+  const [examCache, setExamCache] = useState<Record<string, string>>({})
+  // Compute a lightweight hash of the note content to avoid stale cache
+  const contentHash = React.useMemo(() => {
+    const src = (noteContent || draftContent || '').slice(0, 100000) // cap to keep it fast
+    let h = 0
+    for (let i = 0; i < src.length; i++) {
+      h = (h * 31 + src.charCodeAt(i)) >>> 0
+    }
+    return h.toString(16)
+  }, [noteContent, draftContent])
+  const cacheKey = React.useMemo(() => currentNoteId ? `${currentNoteId}:${contentHash}` : '', [currentNoteId, contentHash])
 
   // Trigger a subtle slide/fade-in on open
   useEffect(() => {
@@ -230,6 +249,39 @@ export default function Page() {
     // When changing the selected note, leave exam mode
     try { setShowExamInNotes(false) } catch {}
   }, [currentNoteId, setShowExamInNotes])
+
+  // Generate exam from current note using Alt+T
+  const generateExam = React.useCallback(async (force: boolean = false) => {
+    if (!currentNoteId) return
+    const content = noteContent || draftContent || ""
+    if (!content.trim()) return
+    setExamOpen(true)
+    if (force) {
+      // Clear any previous cache entry to avoid reuse after closing/reopening
+      setExamCache(prev => {
+        const next = { ...prev }
+        if (cacheKey) delete next[cacheKey]
+        return next
+      })
+    }
+    // Serve from cache when available unless force regeneration requested
+    if (!force && cacheKey && examCache[cacheKey]) {
+      setExamMarkdown(examCache[cacheKey])
+      return
+    }
+    setExamLoading(true)
+    setExamError(null)
+    try {
+      const md = await generateExamMarkdownFromNote(content, noteTitle || "Untitled")
+      setExamMarkdown(md)
+      setExamVersion(v => v + 1)
+      if (cacheKey) setExamCache(prev => ({ ...prev, [cacheKey]: md }))
+    } catch (err: any) {
+      setExamError(err?.message || 'Failed to generate exam')
+    } finally {
+      setExamLoading(false)
+    }
+  }, [currentNoteId, noteContent, draftContent, noteTitle, examCache, cacheKey])
 
   // Alt+D: open dictionary for current selection
   useEffect(() => {
@@ -662,10 +714,15 @@ Goals:
         e.preventDefault()
         setStyleMenuOpen((v) => !v)
       }
+      // Alt+T: generate test from current note, open right tab
+      if (e.altKey && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault()
+        void generateExam(true)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [isEditing, saveDraft, currentNoteId])
+  }, [isEditing, saveDraft, currentNoteId, generateExam])
 
   // Upload a 3D model to Supabase Storage and insert a Markdown directive at the caret
   const onPickModel = React.useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -938,7 +995,7 @@ Goals:
                 </div>
               </div>
             )}
-            {currentNoteId && (
+            {currentNoteId && !examOpen && (
               <article className="mx-auto max-w-3xl">
                 <header className="mb-8">
                   <h1 className="text-3xl font-bold tracking-tight mb-2">{noteTitle}</h1>
@@ -1090,6 +1147,70 @@ Goals:
                   </div>
                 )}
               </article>
+            )}
+            {currentNoteId && examOpen && (
+              <div className="flex flex-row gap-4">
+                {/* Left: Note pane */}
+                <div className={`w-1/2`}>
+                  <article className="mx-auto max-w-3xl">
+                    <header className="mb-4 flex items-center justify-between">
+                      <div>
+                        <h1 className="text-2xl font-bold tracking-tight">{noteTitle}</h1>
+                        {(noteCategory || noteUpdatedAt) && (
+                          <p className="text-xs text-muted-foreground">
+                            {noteCategory && <span>Category: {noteCategory}</span>}
+                            {noteCategory && noteUpdatedAt && <span> • </span>}
+                            {noteUpdatedAt && (
+                              <span>
+                                Updated {new Date(noteUpdatedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </header>
+                    {loadingNote ? (
+                      <InlineNoteSkeleton />
+                    ) : (
+                      <div className="group/reader">
+                        <MarkdownContent content={noteContent} />
+                      </div>
+                    )}
+                  </article>
+                </div>
+
+                {/* Vertical divider */}
+                <div className="w-px self-stretch bg-neutral-200 dark:bg-neutral-800" />
+                {/* Right: Exam tab */}
+                <div className="w-1/2">
+                  <div className="mx-auto max-w-3xl">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Exam</span>
+                        <span className="text-xs text-neutral-500">(Alt+T to regenerate)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => void generateExam(true)} disabled={examLoading}>
+                          {examLoading ? 'Generating…' : 'Regenerate'}
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => setExamOpen(false)}>
+                          Close
+                        </Button>
+                      </div>
+                    </div>
+                    {examError && (
+                      <div className="mb-3 text-sm text-red-600">{examError}</div>
+                    )}
+                    <div className="group/reader">
+                      {examLoading ? (
+                        <InlineNoteSkeleton />
+                      ) : (
+                        <MarkdownContent key={examVersion} content={examMarkdown} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -1369,7 +1490,49 @@ function MarkdownContent({ content }: { content: string }) {
     })
   }
 
-  const safeContent = React.useMemo(() => normalizeModelDirectives(fixUnclosedMermaidFences(content || '')), [content])
+  // Normalize stray single-line container written directives to leaf form
+  function normalizeWrittenDirectives(src: string): string {
+    if (!src) return src
+    // Convert lines that start with :::written{...} (no closing :::) to :written{...}
+    return src.replace(/^:::written\s*\{([^}]*)\}\s*$/gm, (_m, attrs) => `:written{${attrs}}`)
+  }
+
+  // Convert HTML-like <written ... /> into leaf directive :written{...}
+  function normalizeWrittenHtmlToLeaf(src: string): string {
+    if (!src) return src
+    return src.replace(/<written\s+([^>]*?)\s*\/?>/g, (_m, attrs) => {
+      // Convert to container directive so remark-directive parses it reliably
+      return `:::written{${attrs}}\n:::`
+    })
+  }
+
+  // Convert leaf :written{...} lines into container form :::written{...}\n:::
+  function normalizeWrittenLeafToContainer(src: string): string {
+    if (!src) return src
+    return src.replace(/^\s*:written\s*\{([^}]*)\}\s*$/gm, (_m, attrs) => `:::written{${attrs}}\n:::`)
+  }
+
+  // Remove any stray lines that are just attribute blobs from directives, e.g.
+  // {question="..." expected="..."}
+  function stripWrittenAttributeOnlyLines(src: string): string {
+    if (!src) return src
+    return src.replace(/^\s*\{[^}]*\b(question|expected)\b[^}]*\}\s*$/gm, '')
+  }
+
+  const safeContent = React.useMemo(
+    () => stripWrittenAttributeOnlyLines(
+      normalizeWrittenDirectives(
+        normalizeWrittenLeafToContainer(
+          normalizeWrittenHtmlToLeaf(
+            normalizeModelDirectives(
+              fixUnclosedMermaidFences(content || '')
+            )
+          )
+        )
+      )
+    ),
+    [content]
+  )
 
   // Rehype plugin: convert ==text== in plain text nodes to <mark>text</mark>
   const rehypeHighlightEquals = React.useCallback(function () {
@@ -1410,7 +1573,7 @@ function MarkdownContent({ content }: { content: string }) {
   const directivePlugin = React.useCallback(function () {
     return (tree: any) => {
       visit(tree, (node: any) => {
-        if (node && (node.type === 'containerDirective' || node.type === 'leafDirective')) {
+        if (node && (node.type === 'containerDirective' || node.type === 'leafDirective' || node.type === 'textDirective')) {
           const name = node.name
           if (!name) return
           const data = node.data || (node.data = {})
@@ -1583,16 +1746,38 @@ function MarkdownContent({ content }: { content: string }) {
             }
             return
           }
+
+          // Written question directive: supports both container/leaf and text (leaf like :written{...})
+          if (name === 'written') {
+            data.hName = 'written'
+            if (node.attributes) Object.assign(hast, node.attributes)
+            // Back-compat: allow first child paragraph to hold attributes in key="value" pairs
+            if ((!Object.keys(hast).length) && Array.isArray((node as any).children)) {
+              const first = (node as any).children[0]
+              const txt = typeof first?.value === 'string' ? first.value : ''
+              if (txt) {
+                const attrs: Record<string, string> = {}
+                const re = /(question|expected)="([^"]*)"/g
+                let m: RegExpExecArray | null
+                while ((m = re.exec(txt)) !== null) attrs[m[1]] = m[2]
+                Object.assign(hast, attrs)
+              }
+            }
+            // Ensure no literal directive text is rendered
+            try { if (Array.isArray((node as any).children)) (node as any).children = [] } catch {}
+            return
+          }
         }
       })
     }
   }, [])
 
   // Gap syntax plugin: transform (gap:answer) into <gap answer="..." /> hast nodes
+  // Tolerant parsing: optional colon and any whitespace/newlines between tokens, e.g., (gap\nanswer)
   const gapPlugin = React.useCallback(function () {
-    // Allow optional whitespace around colon and tolerate soft line breaks inside
-    // Examples matched: (gap:Paris), (gap: Paris), (gap:\nParis)
-    const GAP_RE = /\(gap\s*:\s*([\s\S]*?)\)/g
+    // Allow optional colon and whitespace/newlines between (gap and answer) up to the next ')'
+    // Examples matched: (gap:Paris), (gap: Paris), (gap\nParis), (gap   Paris)
+    const GAP_RE = /\(gap\s*:?[\s]*([^)]*?)\)/g
     return (tree: any) => {
       const toPlain = (n: any): string => {
         if (!n) return ''
@@ -2118,6 +2303,88 @@ function MarkdownContent({ content }: { content: string }) {
               </div>
             )
           },
+          // Written question renderer with AI grading
+          written: (props: any) => {
+            const q: string = (props as any)?.question || ''
+            const expected: string = (props as any)?.expected || ''
+            const [answer, setAnswer] = React.useState('')
+            const [grading, setGrading] = React.useState(false)
+            const [result, setResult] = React.useState<null | { score: number; feedback: string; isCorrect: boolean; explanation?: string }>(null)
+            const [error, setError] = React.useState<string | null>(null)
+            const [showExpected, setShowExpected] = React.useState(false)
+
+            const onGrade = async () => {
+              if (!q) return
+              setGrading(true)
+              setError(null)
+              try {
+                const r = await gradeAnswerWithGroq('written', q, expected || '(no model answer provided)', answer, { adaptiveScoring: true })
+                setResult({ score: r.score, feedback: r.feedback, isCorrect: r.isCorrect, explanation: r.explanation })
+              } catch (e: any) {
+                setError(e?.message || 'Failed to grade answer')
+              } finally {
+                setGrading(false)
+              }
+            }
+
+            return (
+              <div className="my-4 rounded-xl border bg-white/60 dark:bg-neutral-950/40 backdrop-blur p-4 shadow-sm">
+                {/* Header */}
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="mb-1 inline-flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-neutral-600 dark:text-neutral-300 bg-white/70 dark:bg-neutral-900/40">
+                        Written question
+                      </span>
+                    </div>
+                    {q && (
+                      <h3 className="m-0 text-[17px] leading-snug font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 break-words">
+                        {q}
+                      </h3>
+                    )}
+                  </div>
+                </div>
+                <div className="mb-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowExpected(v => !v)}
+                    className="inline-flex items-center rounded-md border px-3 py-1.5 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                  >
+                    {showExpected ? 'Hide model answer' : 'Show model answer'}
+                  </button>
+                </div>
+                {showExpected && expected && (
+                  <div className="mb-3 text-xs text-neutral-700 dark:text-neutral-300 border rounded-md p-2 bg-white/70 dark:bg-neutral-900/40">
+                    {expected}
+                  </div>
+                )}
+                <textarea
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  placeholder="Write your answer..."
+                  className="w-full min-h-[120px] rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700"
+                />
+                <div className="mt-2 flex items-center gap-2">
+                  <button type="button" onClick={onGrade} disabled={grading || !answer.trim()} className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900">
+                    {grading ? 'Grading…' : 'Grade'}
+                  </button>
+                  {result && (
+                    <span className={`text-sm ${result.isCorrect ? 'text-emerald-600' : 'text-amber-600'}`}>Score: {result.score}</span>
+                  )}
+                </div>
+                {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
+                {result && (
+                  <div className="mt-2 text-sm">
+                    <div className="font-medium mb-1">Feedback</div>
+                    <div className="whitespace-pre-wrap text-neutral-700 dark:text-neutral-300">{result.feedback}</div>
+                    {result.explanation && (
+                      <div className="mt-2 text-neutral-600 dark:text-neutral-400">{result.explanation}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          },
           // YouTube video renderer component
           youtube: (props: any) => {
             // Accept either a full URL or a videoId prop
@@ -2313,6 +2580,14 @@ function MarkdownContent({ content }: { content: string }) {
                     onChange={(e) => {
                       const v = e.target.value
                       setValue(v)
+                      // Shortcut: typing '???' reveals the answer immediately
+                      if (v.trim() === '???') {
+                        setValue(answer)
+                        setRevealed(true)
+                        setJustFilled(true)
+                        window.setTimeout(() => setJustFilled(false), 220)
+                        return
+                      }
                       if (!autoCompleteIfClose(v)) {
                         if (revealed && norm(v) !== ansNorm) setRevealed(false)
                       }

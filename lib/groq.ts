@@ -1,5 +1,56 @@
 import { generateImage } from "./image-generation";
 
+// Feature flag cache for provider default (Statsig)
+let __groqDefaultFlag: boolean | null = null;
+async function shouldDefaultToGroq(): Promise<boolean> {
+    if (__groqDefaultFlag !== null) return __groqDefaultFlag;
+    try {
+        // 1) Env override wins
+        const envOverride = (process.env.NEXT_PUBLIC_USE_GROQ_DEFAULT || '').toLowerCase();
+        if (envOverride === 'true' || envOverride === '1') {
+            __groqDefaultFlag = true;
+            console.log('[AI Provider] Env override NEXT_PUBLIC_USE_GROQ_DEFAULT=true -> groqFirst=true');
+            return true;
+        }
+        if (envOverride === 'false' || envOverride === '0') {
+            __groqDefaultFlag = false;
+            console.log('[AI Provider] Env override NEXT_PUBLIC_USE_GROQ_DEFAULT=false -> groqFirst=false');
+            return false;
+        }
+
+        if (typeof window === 'undefined') {
+            __groqDefaultFlag = false;
+            try { console.log('[AI Provider] SSR detected; defaulting groqFirst=false'); } catch {}
+            return false;
+        }
+        const key = process.env.NEXT_PUBLIC_STATSIG_CLIENT_KEY;
+        if (!key) {
+            __groqDefaultFlag = false;
+            try { console.log('[AI Provider] NEXT_PUBLIC_STATSIG_CLIENT_KEY not set; groqFirst=false (no gate)'); } catch {}
+            return false;
+        }
+        // 2) Statsig gate (client-side only)
+        // @ts-ignore - optional dependency, types may be missing
+        const mod: any = await import('statsig-js').catch(() => null);
+        const Statsig = mod?.Statsig;
+        if (!Statsig) { __groqDefaultFlag = false; return false; }
+        try {
+            await Statsig.initialize(key, { userID: 'anonymous' });
+        } catch {
+            __groqDefaultFlag = false;
+            return false;
+        }
+        const enabled = !!Statsig.checkGate('use_groq_default');
+        try { console.log(`[AI Provider] Statsig gate use_groq_default=${enabled}`); } catch {}
+        __groqDefaultFlag = enabled;
+        return enabled;
+    } catch {
+        __groqDefaultFlag = false;
+        try { console.log('[AI Provider] Statsig evaluation failed; groqFirst=false'); } catch {}
+        return false;
+    }
+}
+
 export interface GeneratedCard {
     question: string;
     answer: string;
@@ -654,98 +705,22 @@ export async function makeGroqRequest(
     forceJson: boolean = false
 ): Promise<string> {
     try {
-        // Try Pollinations AI first
-        try {
-            console.log("Attempting to use Pollinations AI OpenAI-compatible endpoint");
-            
-            // Prepare the request body for the POST endpoint
-            const requestBody: any = {
-                model: "openai",
-                messages: [
-                    {
-                        role: "system",
-                        content: systemMessage,
-                    },
-                    {
-                        role: "user",
-                        content: prompt,
-                    },
-                ],
-                temperature: 0.6,
-                stream: false,
-                private: false,
-            };
-            
-            // Add JSON mode if required
-            if (requireJson || forceJson) {
-                requestBody.response_format = { type: "json_object" };
-            }
-            
-            console.log("Pollinations AI request body:", JSON.stringify(requestBody, null, 2));
-            
-            const response = await fetch("https://text.pollinations.ai/openai", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text().catch(() => "Unknown error");
-                console.error("Pollinations AI error response:", {
-                    status: response.status,
-                    statusText: response.statusText,
-                    errorText,
-                });
-                throw new Error(
-                    `Pollinations AI error: ${response.statusText} - ${errorText}`
-                );
-            }
-
-            const data = await response.json();
-            console.log("Pollinations AI response:", data);
-            
-            // Extract the content from the response
-            let content = "";
-            if (data.choices && data.choices[0] && data.choices[0].message) {
-                content = data.choices[0].message.content;
-            } else if (data.text) {
-                content = data.text;
-            } else if (data.content) {
-                content = data.content;
-            } else {
-                content = JSON.stringify(data);
-            }
-            
-            return content;
-        } catch (pollinationsError) {
-            console.error("Pollinations AI failed, falling back to Groq:", pollinationsError);
-            
-            // Fallback to Groq
-            // Prefer server-secret GROQ_API_KEY; allow NEXT_PUBLIC_GROQ_API_KEY as a fallback for client-side usage
+        // Local helper to call Groq directly
+        const tryGroq = async (): Promise<string> => {
             const groqApiKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
             if (!groqApiKey) {
                 throw new Error("GROQ_API_KEY (or NEXT_PUBLIC_GROQ_API_KEY) is not defined in environment variables");
             }
-            
             const groqRequestBody = {
                 messages: [
-                    {
-                        role: "system",
-                        content: systemMessage,
-                    },
-                    {
-                        role: "user",
-                        content: prompt,
-                    },
+                    { role: "system", content: systemMessage },
+                    { role: "user", content: prompt },
                 ],
-                model: "llama-3.3-70b-versatile",
+                model: "openai/gpt-oss-120b",
                 temperature: 0.6,
-                max_tokens: 3000,
+                max_tokens: 10000,
             };
             console.log("Groq request body:", JSON.stringify(groqRequestBody, null, 2));
-            
             const groqResponse = await fetch(
                 "https://api.groq.com/openai/v1/chat/completions",
                 {
@@ -771,9 +746,102 @@ export async function makeGroqRequest(
                     }`
                 );
             }
-
             const data = await groqResponse.json();
             return data.choices[0].message.content;
+        };
+
+        // Decide ordering via Statsig gate
+        const groqFirst = await shouldDefaultToGroq();
+
+        // Try preferred provider first, then fallback to the other
+        if (groqFirst) {
+            try {
+                return await tryGroq();
+            } catch (firstErr) {
+                console.warn("Groq failed, attempting Pollinations fallback:", firstErr);
+                // Continue to Pollinations path below
+            }
+        }
+
+        // Try Pollinations AI first (unless Groq already attempted and failed)
+        try {
+            console.log("Attempting to use Pollinations AI OpenAI-compatible endpoint");
+            
+            // Prepare the request body for the POST endpoint
+            const requestBody: any = {
+                model: "openai",
+                messages: [
+                    {
+                        role: "system",
+                        content: systemMessage,
+                    },
+                    {
+                        role: "user",
+                        content: prompt,
+                    },
+                ],
+                stream: false,
+                private: true,
+            };
+            
+            // Add JSON mode if required
+            if (requireJson || forceJson) {
+                requestBody.response_format = { type: "json_object" };
+            }
+            
+            console.log("Pollinations AI request body:", JSON.stringify(requestBody, null, 2));
+            
+            // Add a timeout so we don't hang and fail to fallback
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            let response: Response;
+            try {
+                response = await fetch("https://text.pollinations.ai/openai", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(requestBody),
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timeoutId);
+            }
+
+            // Treat any non-2xx, including 429, as a controlled failure to trigger fallback
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => "Unknown error");
+                console.error("Pollinations AI error response:", {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorText,
+                });
+                throw new Error(
+                    `Pollinations AI error: ${response.statusText} - ${errorText}`
+                );
+            }
+
+            let data: any = null;
+            try {
+                data = await response.json();
+            } catch (e: any) {
+                // If JSON parsing fails, force fallback
+                throw new Error("Pollinations AI returned invalid JSON");
+            }
+            console.log("Pollinations AI response:", data);
+            
+            // If the payload includes an explicit error, or has no usable message, force fallback
+            const hasChoices = !!(data && data.choices && data.choices[0] && data.choices[0].message && typeof data.choices[0].message.content === 'string');
+            const textLike = typeof data?.text === 'string' ? data.text : (typeof data?.content === 'string' ? data.content : null);
+            if (data?.error || (!hasChoices && !textLike)) {
+                throw new Error(`Pollinations AI unusable payload${data?.error ? ': ' + JSON.stringify(data.error) : ''}`);
+            }
+            const content = hasChoices ? data.choices[0].message.content : (textLike as string);
+            return content;
+        } catch (pollinationsError) {
+            console.error("Pollinations AI failed, falling back to Groq:", pollinationsError);
+            // Fallback to Groq (or, if Groq was tried first and failed too, rethrow)
+            return await tryGroq();
         }
     } catch (err) {
         console.error("Full error details:", err);
@@ -784,6 +852,69 @@ export async function makeGroqRequest(
         }
         throw err;
     }
+}
+
+/**
+ * Generate an exam (as Markdown) from an existing note. The output is pure Markdown
+ * using the app's supported interactive directives so it can be rendered by MarkdownContent:
+ * - Multiple choice: :::mcq{question="..."} with a task list where [x] marks correct options
+ * - Matching: :::matching{title="..."} with list items formatted as "Term :: Definition"
+ * - Fill-the-gap: inline gaps using (gap:answer)
+ */
+export async function generateExamMarkdownFromNote(
+  noteContent: string,
+  noteTitle?: string,
+  numberOfQuestions: number = 8,
+): Promise<string> {
+  const systemMessage = "You are an expert exam composer. Output ONLY Markdown that our renderer understands. No JSON, no explanations. Write on a gcse exam level";
+  const prompt = `Create a concise study test from the following note. Use ONLY these formats so the UI can render interactives:
+
+Sections and formats to include:
+1) A small set of MCQs (mix single- and multi-correct). For each MCQ use:
+:::mcq{question="Your clear question"}
+- [ ] Option A
+- [x] Option B
+- [ ] Option C
+:::
+
+2) A short matching exercise:
+:::matching{title="Match terms" shuffle="true"}
+- Term 1 :: Definition 1
+- Term 2 :: Definition 2
+:::
+
+3) A few fill-the-gap prompts embedded in short sentences using the inline syntax (gap:answer), for example:
+Photosynthesis occurs in the (gap:chloroplasts).
+
+4) Two or three longer written questions in the style of GCSE papers that assess analysis/explanation. For each written question, use a LEAF directive (single colon) on a single line so the app can grade with AI without revealing the answer (no closing block required) place each new question on a new line:
+:written{question="Write a developed response explaining ...", expected="A model answer or key points here"}
+
+:written{question="question 2 ...", expected="add the expected answer here"}
+Keep the total to about ${numberOfQuestions} questions/prompts across sections. All content must be derived ONLY from the note. Do not invent unrelated facts.
+
+Strict rules:
+- Do NOT use HTML tags like <written .../>. Always use the :written{...} leaf directive.
+- Do NOT wrap the output in triple backticks.
+
+Note Title: ${noteTitle || 'Untitled'}
+Note Content:
+"""
+${noteContent}
+"""
+
+Output: ONLY Markdown with the directives above. No extra prose before or after.`;
+
+  let md = await makeGroqRequest(prompt, false, systemMessage, false);
+  const out = typeof md === 'string' ? md : String(md);
+  // Post-process: strip surrounding code fences and normalize any accidental HTML tags into directives
+  const stripped = out.replace(/^```[a-zA-Z0-9]*\n([\s\S]*?)\n```\s*$/m, '$1');
+  // Unescape common sequences (\n, \", \\) so directives parse attributes correctly
+  const unescaped = stripped
+    .replace(/\\n/g, '\n')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
+  const normalized = unescaped.replace(/<written\s+([^>]*?)\s*\/?>/g, (_m, attrs) => `:written{${attrs}}`);
+  return normalized;
 }
 
 // Helper function to process a valid JSON response
