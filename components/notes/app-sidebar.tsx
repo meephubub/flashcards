@@ -59,29 +59,10 @@ const data = {
   ],
   navMain: [
     {
-      title: "Notes",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
       title: "Links",
       url: "#",
       icon: Earth,
+      isActive: true,
       items: [
         {
           title: "Home",
@@ -106,6 +87,25 @@ const data = {
         {
           title: "Account",
           url: "/account",
+        },
+      ],
+    },
+    {
+      title: "Notes",
+      url: "#",
+      icon: SquareTerminal,
+      items: [
+        {
+          title: "History",
+          url: "#",
+        },
+        {
+          title: "Starred",
+          url: "#",
+        },
+        {
+          title: "Settings",
+          url: "#",
         },
       ],
     },

@@ -38,6 +38,12 @@ const Navbar04Page = () => {
             >
               Verify
             </Link>
+            <Link
+              href="/notes"
+              className="text-gray-700 hover:text-black dark:text-gray-300 dark:hover:text-white transition-colors rounded-full px-3 py-1 text-sm"
+            >
+              Notes
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">

@@ -49,7 +49,7 @@ export async function GET() {
         },
         body: {
           messages: "array of message objects",
-          model: "gpt-4o-mini (primary) | llama-3.3-70b-versatile (fallback)",
+          model: "gpt-4o-mini (primary) | openai/gpt-oss-120b (fallback)",
           temperature: "number (0.0-3.0)",
           max_tokens: "number",
           top_p: "number (0.0-1.0)",
@@ -109,7 +109,7 @@ export async function GET() {
         },
         body: {
           messages: "array of message objects",
-          model: "llama-3.3-70b-versatile",
+          model: "openai/gpt-oss-120b",
           temperature: "number",
           max_tokens: "number"
         }

@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input"
 import { useAuth } from "@/context/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import { AppSidebar } from "@/components/notes/app-sidebar"
+import { Link } from "lucide-react"
 
 export default function AccountPage() {
   const { user, isLoading, error, signOut } = useAuth()
@@ -289,7 +290,6 @@ export default function AccountPage() {
                       variant="outline"
                       onClick={() => void signOut()}
                       className="border-neutral-300 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-900"
-                      href="/home"
                     >
                       Sign out
                     </Button>

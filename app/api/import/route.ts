@@ -13,8 +13,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
+    // Validate format
+    const allowedFormats = new Set(["markdown", "tab", "csv"])
+    if (!allowedFormats.has(format)) {
+      return NextResponse.json({ error: "Invalid format. Must be markdown, tab or csv." }, { status: 400 })
+    }
+
+    // Validate file size (e.g., <= 2MB)
+    const maxBytes = 2 * 1024 * 1024
+    if (file.size > maxBytes) {
+      return NextResponse.json({ error: "File too large. Max 2MB." }, { status: 413 })
+    }
+
     // Read the file content
     const fileContent = await file.text()
+    if (!fileContent || !fileContent.trim()) {
+      return NextResponse.json({ error: "File is empty" }, { status: 400 })
+    }
 
     // Parse the content based on format
     let parsedDeck
@@ -33,16 +48,19 @@ export async function POST(request: Request) {
     const supabase = await createClient()
 
     // Import the cards to Supabase
-    const newDeck = await importCardsFromMarkdown(supabase, parsedDeck)
+    const result = await importCardsFromMarkdown(supabase, parsedDeck)
 
-    if (!newDeck) {
-      return NextResponse.json({ error: "Failed to import flashcards" }, { status: 500 })
+    if (!result) {
+      return NextResponse.json({ error: "No valid cards found to import" }, { status: 400 })
     }
 
+    const { deck, cardsAdded, cardsSkipped } = result
     return NextResponse.json({
       success: true,
-      deck: newDeck,
-      message: `Successfully imported ${parsedDeck.cards.length} cards into "${parsedDeck.name}"`,
+      deck,
+      cardsAdded,
+      cardsSkipped,
+      message: `Imported ${cardsAdded} card(s)${cardsSkipped ? `, skipped ${cardsSkipped}` : ""} into "${deck.name}"`,
     })
   } catch (error) {
     console.error("Import error:", error)

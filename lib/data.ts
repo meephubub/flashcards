@@ -1004,8 +1004,11 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
   }
 }
 
-// Import cards from markdown - this now directly adds to the database
-export async function importCardsFromMarkdown(supabase: SupabaseClient, parsedDeck: ParsedDeckImport): Promise<Deck | undefined> {
+// Import cards from parsed content into a new deck with robust handling
+export async function importCardsFromMarkdown(
+  supabase: SupabaseClient,
+  parsedDeck: ParsedDeckImport
+): Promise<{ deck: Deck; cardsAdded: number; cardsSkipped: number } | undefined> {
   try {
     const {
       data: { user },
@@ -1018,28 +1021,29 @@ export async function importCardsFromMarkdown(supabase: SupabaseClient, parsedDe
     }
 
     // Create a new deck
-    const deckName = parsedDeck.name;
-    // Ensure deckName is a non-empty string
+    let deckName = parsedDeck?.name;
+    const deckDescription = (parsedDeck?.description ?? null) as string | null;
+    // Fallback if missing/empty
     if (typeof deckName !== 'string' || !deckName.trim()) {
-      console.error("Deck name is missing, null, undefined, or empty in parsedDeck. Cannot import.");
-      throw new Error("Deck import failed: Deck name is required and must be a non-empty string.");
+      const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      deckName = `Imported Deck ${ts}`;
     }
-    
-    const deckDescription = parsedDeck.description ?? null;
 
-    // Create a new deck
     const newDeck = await createDeck(supabase, deckName.trim(), deckDescription);
     if (!newDeck) {
       throw new Error("Failed to create deck")
     }
 
-    // Add cards to the deck
-    for (const card of parsedDeck.cards) {
+    // Add cards to the deck with validation and counters
+    let cardsAdded = 0;
+    let cardsSkipped = 0;
+    for (const card of parsedDeck.cards || []) {
       const frontContent = typeof card.front === 'string' ? card.front.trim() : '';
       const backContent = typeof card.back === 'string' ? card.back.trim() : '';
 
       if (!frontContent || !backContent) {
         console.warn(`Skipping card due to empty front or back content: {front: "${String(card.front || '').substring(0,20)}...", back: "${String(card.back || '').substring(0,20)}..."} for deck ${newDeck.id}`);
+        cardsSkipped++;
         continue; // Skip this card if front or back is empty
       }
 
@@ -1053,14 +1057,24 @@ export async function importCardsFromMarkdown(supabase: SupabaseClient, parsedDe
         (card as any).back_img_url ?? null,
       );
       if (!addedCard) {
-        // Potentially log an error or collect failures if some cards couldn't be added
         console.warn(`Failed to add card: {front: "${frontContent.substring(0,20)}..."} to deck ${newDeck.id}`);
-        // Depending on desired behavior, you might want to throw an error here or continue
+        cardsSkipped++;
+      } else {
+        cardsAdded++;
       }
     }
 
-    // Return the updated deck
-    return getDeck(supabase, newDeck.id, user.id)
+    // If nothing was added, clean up the empty deck and report failure
+    if (cardsAdded === 0) {
+      await supabase.from('decks').delete().eq('id', newDeck.id);
+      console.warn(`Deleted empty imported deck ${newDeck.id} because no valid cards were added`);
+      return undefined;
+    }
+
+    // Fetch latest deck and return with counts
+    const updatedDeck = await getDeck(supabase, newDeck.id, user.id);
+    if (!updatedDeck) return undefined;
+    return { deck: updatedDeck, cardsAdded, cardsSkipped };
   } catch (error) {
     console.error("Error importing cards from markdown:", error)
     return undefined

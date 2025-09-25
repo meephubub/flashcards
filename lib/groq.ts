@@ -887,6 +887,8 @@ Sections and formats to include:
 Photosynthesis occurs in the (gap:chloroplasts).
 
 4) Two or three longer written questions in the style of GCSE papers that assess analysis/explanation. For each written question, use a LEAF directive (single colon) on a single line so the app can grade with AI without revealing the answer (no closing block required) place each new question on a new line:
+e.g
+
 :written{question="Write a developed response explaining ...", expected="A model answer or key points here"}
 
 :written{question="question 2 ...", expected="add the expected answer here"}
@@ -895,7 +897,7 @@ Keep the total to about ${numberOfQuestions} questions/prompts across sections. 
 Strict rules:
 - Do NOT use HTML tags like <written .../>. Always use the :written{...} leaf directive.
 - Do NOT wrap the output in triple backticks.
-
+- Make sure to generate enough questions to cover all topics of the note - its fine to go over the recommended number of questions
 Note Title: ${noteTitle || 'Untitled'}
 Note Content:
 """
@@ -905,6 +907,7 @@ ${noteContent}
 Output: ONLY Markdown with the directives above. No extra prose before or after.`;
 
   let md = await makeGroqRequest(prompt, false, systemMessage, false);
+  console.log("Groq response:", md);
   const out = typeof md === 'string' ? md : String(md);
   // Post-process: strip surrounding code fences and normalize any accidental HTML tags into directives
   const stripped = out.replace(/^```[a-zA-Z0-9]*\n([\s\S]*?)\n```\s*$/m, '$1');
@@ -913,7 +916,12 @@ Output: ONLY Markdown with the directives above. No extra prose before or after.
     .replace(/\\n/g, '\n')
     .replace(/\\"/g, '"')
     .replace(/\\\\/g, '\\');
-  const normalized = unescaped.replace(/<written\s+([^>]*?)\s*\/?>/g, (_m, attrs) => `:written{${attrs}}`);
+  // Normalize any accidental HTML self-closing tags and container directives to a single-line leaf :written{...}
+  const normalized = unescaped
+    // <written .../> -> :written{...}
+    .replace(/<written\s+([^>]*?)\s*\/?>/g, (_m, attrs) => `:written{${attrs}}`)
+    // :::written{...} ... ::: -> :written{...}
+    .replace(/:::written\{([^}]*)\}[\s\S]*?:::/g, (_m, attrs) => `:written{${attrs}}`);
   return normalized;
 }
 

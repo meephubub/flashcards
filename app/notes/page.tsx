@@ -121,6 +121,36 @@ export default function Page() {
   const [dictWidth, setDictWidth] = useState<number>(416) // ~26rem
   const dictResizeRef = React.useRef<{ startX: number; startW: number } | null>(null)
 
+  // Q&A side panel state
+  const [qaOpen, setQaOpen] = useState(false)
+  const [qaAnimOpen, setQaAnimOpen] = useState(false)
+  const [qaWidth, setQaWidth] = useState<number>(416)
+  const qaResizeRef = React.useRef<{ startX: number; startW: number } | null>(null)
+  const [qaQuestion, setQaQuestion] = useState<string>("")
+  const [qaLoading, setQaLoading] = useState(false)
+  const [qaError, setQaError] = useState<string | null>(null)
+  const [qaAnswerMd, setQaAnswerMd] = useState<string>("")
+  const [qaSnippet, setQaSnippet] = useState<string>("")
+  type QaItem = { id: string; q: string; a?: string; snippet?: string; ts: number }
+  const [qaHistory, setQaHistory] = useState<QaItem[]>([])
+
+  // Load/save Q&A history per note
+  useEffect(() => {
+    const id = currentNoteId || 'none'
+    try {
+      const raw = localStorage.getItem(`qa_history_${id}`)
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) setQaHistory(arr)
+        else setQaHistory([])
+      } else setQaHistory([])
+    } catch { setQaHistory([]) }
+  }, [currentNoteId])
+  useEffect(() => {
+    const id = currentNoteId || 'none'
+    try { localStorage.setItem(`qa_history_${id}`, JSON.stringify(qaHistory)) } catch {}
+  }, [qaHistory, currentNoteId])
+
   // Exam side tab state
   const [examOpen, setExamOpen] = useState(false)
   const [examLoading, setExamLoading] = useState(false)
@@ -151,6 +181,15 @@ export default function Page() {
     }
   }, [dictOpen])
 
+  useEffect(() => {
+    if (qaOpen) {
+      const id = requestAnimationFrame(() => setQaAnimOpen(true))
+      return () => cancelAnimationFrame(id)
+    } else {
+      setQaAnimOpen(false)
+    }
+  }, [qaOpen])
+
   // Resize handlers
   const onDictResizeMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -170,6 +209,25 @@ export default function Page() {
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }, [dictWidth])
+
+  const onQaResizeMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    qaResizeRef.current = { startX: e.clientX, startW: qaWidth }
+    const onMove = (ev: MouseEvent) => {
+      const ref = qaResizeRef.current
+      if (!ref) return
+      const dx = ref.startX - ev.clientX
+      const next = Math.min(640, Math.max(320, ref.startW + dx))
+      setQaWidth(next)
+    }
+    const onUp = () => {
+      qaResizeRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [qaWidth])
 
   // Pastel color style menu state
   const [styleMenuOpen, setStyleMenuOpen] = useState(false)
@@ -719,6 +777,21 @@ Goals:
         e.preventDefault()
         void generateExam(true)
       }
+      // Ctrl+Q: toggle Q&A sidebar
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'q' || e.key === 'Q')) {
+        e.preventDefault()
+        const sel = window.getSelection()?.toString() || ''
+        setQaOpen((v) => {
+          const next = !v
+          if (next) {
+            const snippet = (sel || '').trim()
+            if (snippet) setQaQuestion(snippet)
+          }
+          return next
+        })
+        // Close dictionary if Q&A opens to avoid overlap
+        setDictOpen(false)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -879,7 +952,7 @@ Goals:
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className={`bg-background min-h-[100vh] flex-1 rounded-xl md:min-h-min p-6 md:p-10 transition-[padding-right] duration-200 ${dictOpen ? 'pr-[28rem]' : ''}`}>
+          <div className={`bg-background min-h-[100vh] flex-1 rounded-xl md:min-h-min p-6 md:p-10 transition-[padding-right] duration-200 ${(dictOpen || qaOpen) ? 'pr-[28rem]' : ''}`}>
             {/* Create Note Dialog (for palette "Create note") */}
             <NoteCreateDialog
               open={createOpen}
@@ -1299,6 +1372,135 @@ Goals:
           </div>
         </div>
       )}
+
+      {/* Fixed Q&A Side Panel */}
+      {qaOpen && (
+        <div className="fixed top-0 right-0 h-full z-40" style={{ width: qaWidth }}>
+          <div
+            className={
+              `absolute inset-0 pointer-events-none bg-gradient-to-l from-black/10 to-transparent dark:from-black/30 
+               transition-opacity duration-200 ease-out ${qaAnimOpen ? 'opacity-100' : 'opacity-0'}`
+            }
+          />
+          <div
+            className={
+              `absolute right-0 top-0 h-full flex flex-col p-4 md:p-5 
+               backdrop-blur-md bg-white/70 dark:bg-neutral-900/70 
+               border-l border-neutral-200/60 dark:border-neutral-800/60 
+               shadow-xl ring-1 ring-black/5 dark:ring-white/5 rounded-l-2xl 
+               transition-transform transition-opacity duration-200 ease-out 
+               ${qaAnimOpen ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0'}`
+            }
+            style={{ width: qaWidth }}
+          >
+            <div
+              onMouseDown={onQaResizeMouseDown}
+              title="Resize"
+              className="absolute left-0 top-0 h-full w-1.5 -translate-x-full cursor-ew-resize 
+                         bg-transparent hover:bg-neutral-500/10 active:bg-neutral-500/20"
+            />
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Ask Note</div>
+                <div className="h-1.5 w-1.5 rounded-full bg-sky-500/70" aria-hidden="true" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setQaOpen(false)}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md 
+                           border border-neutral-200/70 dark:border-neutral-800/70 
+                           hover:bg-neutral-100/60 dark:hover:bg-neutral-800/60 
+                           transition-colors"
+                aria-label="Close Q&A"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* History area */}
+            <div className="flex-1 overflow-auto pr-1 md:pr-2 space-y-3">
+              {qaHistory.length === 0 && (
+                <div className="text-sm text-neutral-600 dark:text-neutral-400">Ask something about this note. We’ll answer concisely and jump to the relevant section.</div>
+              )}
+              {qaHistory.map((item) => (
+                <div key={item.id} className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="mt-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900 text-[10px]">Q</div>
+                    <div className="flex-1 rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/60 px-3 py-2 text-sm shadow-sm">
+                      {item.q}
+                    </div>
+                  </div>
+                  {item.a ? (
+                    <div className="ml-7 rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-900/50 px-3 py-2 shadow-sm">
+                      <div className="prose prose-neutral dark:prose-invert max-w-none text-sm">
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkBreaks, remarkDirective]} rehypePlugins={[rehypeKatex]}>
+                          {item.a}
+                        </ReactMarkdown>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        {item.snippet && (
+                          <Button size="sm" variant="outline" onClick={() => { try { window.dispatchEvent(new CustomEvent('qa-scroll-to', { detail: { snippet: item.snippet } })) } catch {} }}>Jump to context</Button>
+                        )}
+                        <span className="text-[10px] text-neutral-500">{new Date(item.ts).toLocaleTimeString()}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="ml-7 text-sm text-neutral-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Answering…</div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Input at bottom */}
+            <div className="pt-3 mt-2 border-t border-neutral-200/70 dark:border-neutral-800/70">
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={qaQuestion}
+                  onChange={(e) => setQaQuestion(e.target.value)}
+                  placeholder="Ask a question about this note… (Ctrl+Q to toggle)"
+                  className="flex-1 max-h-40 min-h-[56px] rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700 resize-y"
+                />
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    const question = qaQuestion.trim()
+                    if (!question) return
+                    setQaQuestion('')
+                    setQaError(null)
+                    // Append pending item to history
+                    const pending: QaItem = { id: Math.random().toString(36).slice(2), q: question, ts: Date.now() }
+                    setQaHistory(prev => [...prev, pending])
+                    setQaLoading(true)
+                    try {
+                      const system = "You are a helpful study assistant. Given a note and a user question, answer concisely and return JSON with an 'answer' (Markdown) and 'snippet' (exact quote from the note to scroll to)."
+                      const prompt = `NOTE TITLE: ${noteTitle || 'Untitled'}\n\nNOTE CONTENT:\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n${noteContent}\n\n---\nQUESTION: ${question}\n\nRespond ONLY in JSON with keys: answer (string, markdown allowed), snippet (string, exact text copied from the note that best anchors the answer).`
+                      const raw = await makeGroqRequest(prompt, true, system)
+                      let parsed: any = null
+                      try { parsed = JSON.parse(raw) } catch { const m = raw.match(/\{[\s\S]*\}/); if (m) { try { parsed = JSON.parse(m[0]) } catch {} } }
+                      const answer = (parsed && typeof parsed.answer === 'string') ? parsed.answer : String(raw || '').trim()
+                      const snippet = (parsed && typeof parsed.snippet === 'string') ? parsed.snippet : ''
+                      setQaAnswerMd(answer)
+                      setQaSnippet(snippet)
+                      setQaHistory(prev => prev.map(it => it.id === pending.id ? { ...it, a: answer, snippet } : it))
+                      if (snippet) { try { window.dispatchEvent(new CustomEvent('qa-scroll-to', { detail: { snippet } })) } catch {} }
+                    } catch (err: any) {
+                      setQaError(err?.message || 'Failed to get answer')
+                      // Mark as error in history
+                      setQaHistory(prev => prev.map(it => it.id === pending.id ? { ...it, a: `Sorry, an error occurred: ${err?.message || 'Unknown error'}` } : it))
+                    } finally {
+                      setQaLoading(false)
+                    }
+                  }}
+                  disabled={qaLoading}
+                >
+                  {qaLoading ? 'Sending…' : 'Ask'}
+                </Button>
+              </div>
+              {qaError && <div className="mt-2 text-xs text-red-600">{qaError}</div>}
+            </div>
+          </div>
+        </div>
+      )}
     </SidebarInset>
   </SidebarProvider>
   )
@@ -1320,6 +1522,92 @@ function MarkdownContent({ content }: { content: string }) {
 
   // DOM-only Ctrl+D highlighter (temporary, not persisted)
   const containerRef = React.useRef<HTMLDivElement | null>(null)
+
+  // Q&A: scroll and highlight a snippet within the rendered markdown
+  React.useEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+
+    // Utility: escape regex special chars
+    const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+    // Helper to find first text node occurrence of "needle" within root
+    const findTextOccurrence = (needle: string): { node: Text; start: number; end: number } | null => {
+      if (!needle) return null
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null)
+      let n: Node | null
+      const lowerNeedle = needle.toLowerCase()
+      while ((n = walker.nextNode())) {
+        const t = (n as Text).data || ''
+        const idx = t.toLowerCase().indexOf(lowerNeedle)
+        if (idx !== -1) return { node: n as Text, start: idx, end: idx + needle.length }
+      }
+      return null
+    }
+
+    // Create a transient highlight span for a given range
+    const highlightRange = (range: Range) => {
+      try {
+        const span = document.createElement('span')
+        span.className = 'qa-highlight'
+        span.style.backgroundColor = 'rgba(59,130,246,0.35)' // sky-500 @ ~35%
+        span.style.borderRadius = '4px'
+        range.surroundContents(span)
+        // Scroll into view
+        span.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Remove after delay, unwrap to preserve layout
+        window.setTimeout(() => {
+          try {
+            const parent = span.parentNode
+            if (!parent) return
+            const frag = document.createDocumentFragment()
+            while (span.firstChild) frag.appendChild(span.firstChild)
+            parent.replaceChild(frag, span)
+          } catch {}
+        }, 1800)
+      } catch {
+        // In case of invalid range (spans multiple nodes), fallback: just scroll the startContainer into view
+        try { (range.startContainer as Element)?.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch {}
+      }
+    }
+
+    const onScrollTo = (ev: Event) => {
+      const e = ev as CustomEvent<{ snippet?: string }>
+      const snippet = (e?.detail?.snippet || '').trim()
+      if (!snippet) return
+
+      // 1) Try exact match
+      let found = findTextOccurrence(snippet)
+      // 2) If not found, try a relaxed match: longest 64-char window from snippet that exists
+      if (!found && snippet.length > 24) {
+        const segLen = Math.min(64, snippet.length)
+        for (let len = segLen; len >= 24 && !found; len -= 8) {
+          for (let i = 0; i + len <= snippet.length; i += 8) {
+            const seg = snippet.slice(i, i + len)
+            const f = findTextOccurrence(seg)
+            if (f) { found = f; break }
+          }
+        }
+      }
+      // 3) As a last resort, try matching any line from the snippet
+      if (!found) {
+        const lines = snippet.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+        for (const line of lines) {
+          const f = findTextOccurrence(line)
+          if (f) { found = f; break }
+        }
+      }
+      if (!found) return
+
+      const range = document.createRange()
+      range.setStart(found.node, Math.max(0, found.start))
+      range.setEnd(found.node, Math.min(found.node.data.length, found.end))
+      highlightRange(range)
+    }
+
+    window.addEventListener('qa-scroll-to', onScrollTo as EventListener)
+    return () => window.removeEventListener('qa-scroll-to', onScrollTo as EventListener)
+  }, [])
 
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1493,44 +1781,27 @@ function MarkdownContent({ content }: { content: string }) {
   // Normalize stray single-line container written directives to leaf form
   function normalizeWrittenDirectives(src: string): string {
     if (!src) return src
+    let out = src
     // Convert lines that start with :::written{...} (no closing :::) to :written{...}
-    return src.replace(/^:::written\s*\{([^}]*)\}\s*$/gm, (_m, attrs) => `:written{${attrs}}`)
-  }
-
-  // Convert HTML-like <written ... /> into leaf directive :written{...}
-  function normalizeWrittenHtmlToLeaf(src: string): string {
-    if (!src) return src
-    return src.replace(/<written\s+([^>]*?)\s*\/?>/g, (_m, attrs) => {
-      // Convert to container directive so remark-directive parses it reliably
-      return `:::written{${attrs}}\n:::`
-    })
-  }
-
-  // Convert leaf :written{...} lines into container form :::written{...}\n:::
-  function normalizeWrittenLeafToContainer(src: string): string {
-    if (!src) return src
-    return src.replace(/^\s*:written\s*\{([^}]*)\}\s*$/gm, (_m, attrs) => `:::written{${attrs}}\n:::`)
-  }
-
-  // Remove any stray lines that are just attribute blobs from directives, e.g.
-  // {question="..." expected="..."}
-  function stripWrittenAttributeOnlyLines(src: string): string {
-    if (!src) return src
-    return src.replace(/^\s*\{[^}]*\b(question|expected)\b[^}]*\}\s*$/gm, '')
+    out = out.replace(/^:::written\s*\{([^}]*)\}\s*$/gm, (_m, attrs) => `:written{${attrs}}`)
+    // Ensure leaf directives are properly formatted with newlines for better parsing
+    out = out.replace(/(:written\{[^}]*\})/g, '\n$1\n')
+    return out.trim()
   }
 
   const safeContent = React.useMemo(
-    () => stripWrittenAttributeOnlyLines(
-      normalizeWrittenDirectives(
-        normalizeWrittenLeafToContainer(
-          normalizeWrittenHtmlToLeaf(
-            normalizeModelDirectives(
-              fixUnclosedMermaidFences(content || '')
-            )
-          )
-        )
-      )
-    ),
+    () => {
+      // Handle the case where written directives might not be parsed correctly
+      let processed = content || ''
+      
+      // Check if the content contains written directives that aren't being processed
+      if (processed.includes(':written{') && !processed.includes('<written')) {
+        // If we have leaf directives but they're not being processed, try to normalize them
+        processed = normalizeWrittenDirectives(processed)
+      }
+      
+      return processed
+    },
     [content]
   )
 
@@ -1747,24 +2018,21 @@ function MarkdownContent({ content }: { content: string }) {
             return
           }
 
-          // Written question directive: supports both container/leaf and text (leaf like :written{...})
+          // Written question directive: pass raw attributes string to the component
           if (name === 'written') {
             data.hName = 'written'
-            if (node.attributes) Object.assign(hast, node.attributes)
-            // Back-compat: allow first child paragraph to hold attributes in key="value" pairs
-            if ((!Object.keys(hast).length) && Array.isArray((node as any).children)) {
+            // remark-directive puts the content between { and } in the first child text node
+            if (Array.isArray((node as any).children) && (node as any).children.length > 0) {
               const first = (node as any).children[0]
-              const txt = typeof first?.value === 'string' ? first.value : ''
-              if (txt) {
-                const attrs: Record<string, string> = {}
-                const re = /(question|expected)="([^"]*)"/g
-                let m: RegExpExecArray | null
-                while ((m = re.exec(txt)) !== null) attrs[m[1]] = m[2]
-                Object.assign(hast, attrs)
+              const rawAttrs = typeof first?.value === 'string' ? first.value : ''
+              if (rawAttrs) {
+                hast.attrs = rawAttrs
               }
             }
-            // Ensure no literal directive text is rendered
-            try { if (Array.isArray((node as any).children)) (node as any).children = [] } catch {}
+            // Clear children to prevent rendering the raw attribute string
+            if (Array.isArray((node as any).children)) {
+              ;(node as any).children = []
+            }
             return
           }
         }
@@ -1873,38 +2141,81 @@ function MarkdownContent({ content }: { content: string }) {
     }
   }, [])
 
-  // Color text directive plugin: turns :rose[Text] or :c[Text]{color="rose"} into <span class="c-rose">Text</span>
-  const colorTextDirectivePlugin = React.useCallback(function () {
-    const allowed = new Set(['rose','peach','amber','mint','sky','lavender','gray'])
-    const hex: Record<string, string> = {
-      rose: '#e07a88',
-      peach: '#e8a57a',
-      amber: '#d6a84b',
-      mint: '#4fb9a7',
-      sky: '#5aa9e6',
-      lavender: '#9b8ae6',
-      gray: '#8b8f98',
-    }
+  // Plugin to handle written directives that might not be processed by remark-directive
+  const writtenDirectiveFallbackPlugin = React.useCallback(function () {
+    const WRITTEN_RE = /:written\{([^}]*)\}/g
     return (tree: any) => {
-      visit(tree, (node: any) => {
-        if (!node || typeof node !== 'object') return
-        if (node.type === 'textDirective') {
-          let color: string | null = null
-          if (typeof node.name === 'string' && allowed.has(node.name)) {
-            color = node.name
-          } else if (node.name === 'c' && node.attributes && node.attributes.color) {
-            const v = String(node.attributes.color)
-            if (allowed.has(v)) color = v
-          }
-          if (color) {
-            node.data = node.data || {}
-            node.data.hName = 'span'
-            const props = (node.data.hProperties = node.data.hProperties || {}) as any
-            props.className = `c-${color}`
-            const val = hex[color] || undefined
-            if (val) {
-              // Apply an inline style to guarantee override inside .prose
-              props.style = (props.style ? String(props.style) + '; ' : '') + `color: ${val}`
+      const toPlain = (n: any): string => {
+        if (!n) return ''
+        if (n.type === 'text' && typeof n.value === 'string') return n.value
+        if (n.type === 'break') return '\n'
+        const kids = Array.isArray(n.children) ? n.children : []
+        let out = ''
+        for (const k of kids) out += toPlain(k)
+        return out
+      }
+
+      visitWithParent(tree, (node, parent, index) => {
+        if (!parent || typeof node?.type !== 'string') return
+
+        // Check if this is a paragraph containing a written directive
+        if (node.type === 'paragraph' && Array.isArray(node.children)) {
+          const text = toPlain(node)
+          if (WRITTEN_RE.test(text)) {
+            WRITTEN_RE.lastIndex = 0
+
+            const parts: any[] = []
+            let lastIndex = 0
+            let m: RegExpExecArray | null
+            while ((m = WRITTEN_RE.exec(text)) !== null) {
+              const start = m.index
+              const end = WRITTEN_RE.lastIndex
+              const before = text.slice(lastIndex, start)
+              if (before) parts.push({ type: 'text', value: before })
+
+              // Parse attributes from the directive
+              const attrsText = m[1]
+              const attrs: Record<string, string> = {}
+              // More robust parsing for complex attribute values
+              try {
+                // Find question attribute
+                const questionStart = attrsText.indexOf('question="')
+                if (questionStart !== -1) {
+                  const questionEnd = attrsText.indexOf('"', questionStart + 10) // Start after 'question="'
+                  if (questionEnd !== -1) {
+                    attrs.question = attrsText.slice(questionStart + 10, questionEnd)
+                  }
+                }
+
+                // Find expected attribute
+                const expectedStart = attrsText.indexOf('expected="')
+                if (expectedStart !== -1) {
+                  const expectedEnd = attrsText.indexOf('"', expectedStart + 10) // Start after 'expected="'
+                  if (expectedEnd !== -1) {
+                    attrs.expected = attrsText.slice(expectedStart + 10, expectedEnd)
+                  }
+                }
+
+                console.log('Fallback plugin parsing:', { attrsText, attrs })
+              } catch (error) {
+                console.error('Error parsing written directive attributes in fallback:', error)
+              }
+
+              parts.push({
+                type: 'written',
+                data: {
+                  hName: 'written',
+                  hProperties: attrs
+                }
+              })
+              lastIndex = end
+            }
+            const after = text.slice(lastIndex)
+            if (after) parts.push({ type: 'text', value: after })
+
+            // Replace the node's children with the processed parts
+            if (parts.length > 0) {
+              node.children = parts
             }
           }
         }
@@ -1915,7 +2226,7 @@ function MarkdownContent({ content }: { content: string }) {
   return (
     <div ref={containerRef} className="prose prose-neutral dark:prose-invert max-w-none">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, colorTextDirectivePlugin, youtubeAutolinkPlugin, directivePlugin, gapPlugin]}
+        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, youtubeAutolinkPlugin, writtenDirectiveFallbackPlugin, directivePlugin, gapPlugin]}
         rehypePlugins={[rehypeKatex, rehypeHighlightEquals]}
         components={{
           // Fill-the-gaps renderer for nodes created by gapPlugin
@@ -2305,13 +2616,36 @@ function MarkdownContent({ content }: { content: string }) {
           },
           // Written question renderer with AI grading
           written: (props: any) => {
-            const q: string = (props as any)?.question || ''
-            const expected: string = (props as any)?.expected || ''
+            const rawAttrs: string = (props as any)?.attrs || ''
+            let q = ''
+            let expected = ''
+
+            // Parse attributes from the raw string passed by the plugin
+            if (rawAttrs) {
+              try {
+                const questionMatch = rawAttrs.match(/question="([\s\S]*?)"(?=\s+expected=|$)/)
+                const expectedMatch = rawAttrs.match(/expected="([\s\S]*?)"/)
+                if (questionMatch) q = questionMatch[1]
+                if (expectedMatch) expected = expectedMatch[1]
+              } catch (e) {
+                console.error('Error parsing written attributes in component:', e)
+              }
+            }
+
+            console.log('Written component parsed:', { rawAttrs, q, expected })
+
             const [answer, setAnswer] = React.useState('')
             const [grading, setGrading] = React.useState(false)
             const [result, setResult] = React.useState<null | { score: number; feedback: string; isCorrect: boolean; explanation?: string }>(null)
             const [error, setError] = React.useState<string | null>(null)
             const [showExpected, setShowExpected] = React.useState(false)
+            const textRef = React.useRef<HTMLTextAreaElement | null>(null)
+
+            const wordCount = React.useMemo(() => {
+              const s = answer.trim()
+              if (!s) return 0
+              return s.split(/\s+/).filter(Boolean).length
+            }, [answer])
 
             const onGrade = async () => {
               if (!q) return
@@ -2324,6 +2658,14 @@ function MarkdownContent({ content }: { content: string }) {
                 setError(e?.message || 'Failed to grade answer')
               } finally {
                 setGrading(false)
+              }
+            }
+
+            const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+              // Ctrl/Cmd+Enter to grade
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault()
+                if (answer.trim()) void onGrade()
               }
             }
 
@@ -2362,12 +2704,15 @@ function MarkdownContent({ content }: { content: string }) {
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
                   placeholder="Write your answer..."
+                  onKeyDown={onKeyDown}
+                  ref={textRef}
                   className="w-full min-h-[120px] rounded-md border border-neutral-200 dark:border-neutral-800 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700"
                 />
                 <div className="mt-2 flex items-center gap-2">
                   <button type="button" onClick={onGrade} disabled={grading || !answer.trim()} className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900">
                     {grading ? 'Grading…' : 'Grade'}
                   </button>
+                  <span className="text-xs text-neutral-500">{wordCount} words</span>
                   {result && (
                     <span className={`text-sm ${result.isCorrect ? 'text-emerald-600' : 'text-amber-600'}`}>Score: {result.score}</span>
                   )}

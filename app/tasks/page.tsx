@@ -415,11 +415,6 @@ export default function TasksPage() {
                       })}
                     </div>
                   </div>
-
-                  {/* Linking guidance */}
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    To fully link tasks to notes, decks, and models, consider adding nullable columns to the <code>homework</code> table: <code>note_id uuid</code>, <code>deck_id uuid</code>, <code>model_id uuid</code>, and/or a generic <code>link_url text</code>. I can wire these in once added.
-                  </div>
                 </div>
               </div>
             </div>
