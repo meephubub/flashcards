@@ -134,6 +134,10 @@ export default function Page() {
   type QaItem = { id: string; q: string; a?: string; snippet?: string; ts: number }
   const [qaHistory, setQaHistory] = useState<QaItem[]>([])
 
+  // Fill-the-Gap mode (Alt+G)
+  const [fillGapsMode, setFillGapsMode] = useState(false)
+  const [fillGapsDensity, setFillGapsDensity] = useState<number>(0.35) // 0..1
+
   // Load/save Q&A history per note
   useEffect(() => {
     const id = currentNoteId || 'none'
@@ -777,6 +781,11 @@ Goals:
         e.preventDefault()
         void generateExam(true)
       }
+      // Alt+G: toggle Fill-the-Gap mode on rendered note
+      if (e.altKey && (e.key === 'g' || e.key === 'G')) {
+        e.preventDefault()
+        setFillGapsMode(v => !v)
+      }
       // Ctrl+Q: toggle Q&A sidebar
       if ((e.ctrlKey || e.metaKey) && (e.key === 'q' || e.key === 'Q')) {
         e.preventDefault()
@@ -1072,6 +1081,60 @@ Goals:
               <article className="mx-auto max-w-3xl">
                 <header className="mb-8">
                   <h1 className="text-3xl font-bold tracking-tight mb-2">{noteTitle}</h1>
+                  {fillGapsMode && (
+                    <div className="text-xs flex flex-col sm:flex-row sm:items-center gap-2 text-emerald-700 dark:text-emerald-300 mb-1">
+                      <span className="rounded-md border border-emerald-300/60 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-900/20 px-2 py-0.5">Fill-the-Gap mode ON (Alt+G)</span>
+                      <div className="inline-flex items-center gap-2 text-[11px] text-neutral-600 dark:text-neutral-400">
+                        <span>Density</span>
+                        <div className="inline-flex overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-800">
+                          {([0.025, 0.05, 0.1, 0.25, 0.4] as number[]).map((v, idx, arr) => {
+                            const active = Math.abs(fillGapsDensity - v) < 0.02
+                            const base = "px-2 py-1 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-600"
+                            return (
+                              <button
+                                key={v}
+                                type="button"
+                                className={`${base} text-[11px] ${active ? 'bg-emerald-600 text-white dark:bg-emerald-500' : 'bg-white dark:bg-neutral-950 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900'} ${idx < arr.length - 1 ? 'border-r border-neutral-200 dark:border-neutral-800' : ''}`}
+                                onClick={() => setFillGapsDensity(v)}
+                                title={`${Math.round(v * 100)}%`}
+                                aria-pressed={active}
+                              >
+                                {Math.round(v * 100)}%
+                              </button>
+                            )
+                          })}
+                          {(() => {
+                            const presets = [0.025, 0.05, 0.1, 0.25, 0.4]
+                            const isPreset = presets.some(v => Math.abs(fillGapsDensity - v) < 0.02)
+                            const otherActive = !isPreset
+                            const base = "px-2 py-1 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-neutral-600"
+                            return (
+                              <button
+                                type="button"
+                                className={`${base} text-[11px] ${otherActive ? 'bg-emerald-600 text-white dark:bg-emerald-500' : 'bg-white dark:bg-neutral-950 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900'} border-l border-neutral-200 dark:border-neutral-800`}
+                                onClick={() => {
+                                  try {
+                                    const current = Math.round(fillGapsDensity * 100)
+                                    const input = window.prompt('Custom density (0–100%)', String(current))
+                                    if (input == null) return
+                                    const n = Number(input)
+                                    if (!Number.isFinite(n)) return
+                                    const clamped = Math.max(0, Math.min(100, n))
+                                    setFillGapsDensity(clamped / 100)
+                                  } catch {}
+                                }}
+                                title="Custom density"
+                                aria-pressed={otherActive}
+                              >
+                                Other
+                              </button>
+                            )
+                          })()}
+                        </div>
+                        <span className="tabular-nums w-10 text-right">{Math.round(fillGapsDensity * 100)}%</span>
+                      </div>
+                    </div>
+                  )}
                   {(noteCategory || noteUpdatedAt) && (
                     <p className="text-sm text-muted-foreground">
                       {noteCategory && <span>Category: {noteCategory}</span>}
@@ -1215,7 +1278,7 @@ Goals:
                         <ExamFromNotesPage />
                       </div>
                     ) : (
-                      <MarkdownContent content={noteContent} />
+                      <MarkdownContent content={noteContent} fillGaps={fillGapsMode} density={fillGapsDensity} seed={cacheKey} />
                     )}
                   </div>
                 )}
@@ -1246,7 +1309,7 @@ Goals:
                       <InlineNoteSkeleton />
                     ) : (
                       <div className="group/reader">
-                        <MarkdownContent content={noteContent} />
+                        <MarkdownContent content={noteContent} fillGaps={fillGapsMode} density={fillGapsDensity} seed={cacheKey} />
                       </div>
                     )}
                   </article>
@@ -1278,7 +1341,7 @@ Goals:
                       {examLoading ? (
                         <InlineNoteSkeleton />
                       ) : (
-                        <MarkdownContent key={examVersion} content={examMarkdown} />
+                        <MarkdownContent key={examVersion} content={examMarkdown} fillGaps={false} seed={cacheKey} />
                       )}
                     </div>
                   </div>
@@ -1506,7 +1569,7 @@ Goals:
   )
 }
 
-function MarkdownContent({ content }: { content: string }) {
+function MarkdownContent({ content, fillGaps, density, seed }: { content: string; fillGaps?: boolean; density?: number; seed?: string }) {
   // Utilities to modify mdast with parent tracking
   function visitWithParent(tree: any, visitor: (node: any, parent: any, index: number) => void) {
     function walk(node: any, parent: any) {
@@ -1804,6 +1867,82 @@ function MarkdownContent({ content }: { content: string }) {
     },
     [content]
   )
+
+  // Seeded PRNG (xorshift32)
+  const makeRng = React.useCallback((seedStr: string | undefined) => {
+    let h = 2166136261 >>> 0
+    const s = String(seedStr || '')
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i)
+      h = Math.imul(h, 16777619)
+    }
+    if (h === 0) h = 0x9e3779b9
+    let x = h >>> 0
+    return () => {
+      // xorshift32
+      x ^= x << 13; x >>>= 0
+      x ^= x >> 17; x >>>= 0
+      x ^= x << 5;  x >>>= 0
+      return (x >>> 0) / 4294967296
+    }
+  }, [])
+
+  // Remark plugin: randomly replace words with <gap answer="word" /> nodes
+  const randomGapperPlugin = React.useCallback(function () {
+    // 35% replacement by default, skip very short words
+    const rng = makeRng(seed || (typeof safeContent === 'string' ? safeContent.slice(0, 2048) : ''))
+    const p = Math.max(0, Math.min(1, typeof density === 'number' ? density : 0.35))
+    const shouldGap = () => rng() < p
+    const WORD_RE = /([A-Za-z][A-Za-z'\-]*)/g
+    return (tree: any) => {
+      visitWithParent(tree, (node, parent, index) => {
+        if (!parent || typeof node?.type !== 'string') return
+        // Skip headings, code blocks, inline code, links, images, tables
+        const skipTypes = new Set(['code','inlineCode','link','image','table','thematicBreak'])
+        // We'll still strip == == inside headings, but never create gaps there
+        if (skipTypes.has(node.type) || skipTypes.has(parent.type)) return
+        if (node.type !== 'text' || typeof node.value !== 'string') return
+        const text: string = node.value
+        if (!text.trim()) return
+        // Split into highlight and normal segments by ==...== boundaries (non-nested heuristic)
+        const segments = text.split(/(==[^=]+==)/g)
+        const outParts: any[] = []
+        for (const seg of segments) {
+          if (!seg) continue
+          const isHL = /^==[^=]+==$/.test(seg)
+          const inner = isHL ? seg.slice(2, -2) : seg
+          // Tokenize words within this segment
+          let last = 0
+          let m: RegExpExecArray | null
+          WORD_RE.lastIndex = 0
+          while ((m = WORD_RE.exec(inner)) !== null) {
+            const start = m.index
+            const end = WORD_RE.lastIndex
+            if (start > last) outParts.push({ type: 'text', value: inner.slice(last, start) })
+            const w = m[1]
+            const clean = w.replace(/^["'\-]+|["'\-]+$/g, '')
+            const eligible = clean.length >= 4 && /[A-Za-z]/.test(clean)
+            if (eligible) {
+              // Bias selection toward highlighted segments
+              const prob = isHL ? Math.min(0.95, p * 2) : p
+              const pick = rng() < prob
+              if (pick && parent.type !== 'heading') {
+                outParts.push({ type: 'gap', data: { hName: 'gap', hProperties: { answer: w } } })
+              } else {
+                outParts.push({ type: 'text', value: w })
+              }
+            } else {
+              outParts.push({ type: 'text', value: w })
+            }
+            last = end
+          }
+          if (last < inner.length) outParts.push({ type: 'text', value: inner.slice(last) })
+          // Note: we intentionally do NOT re-add == wrappers to strip highlight formatting in this mode
+        }
+        if (outParts.length > 0) parent.children.splice(index, 1, ...outParts)
+      })
+    }
+  }, [makeRng, seed, safeContent, density])
 
   // Rehype plugin: convert ==text== in plain text nodes to <mark>text</mark>
   const rehypeHighlightEquals = React.useCallback(function () {
@@ -2226,7 +2365,18 @@ function MarkdownContent({ content }: { content: string }) {
   return (
     <div ref={containerRef} className="prose prose-neutral dark:prose-invert max-w-none">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, remarkDirective, youtubeAutolinkPlugin, writtenDirectiveFallbackPlugin, directivePlugin, gapPlugin]}
+        remarkPlugins={[
+          remarkGfm,
+          remarkBreaks,
+          remarkMath,
+          remarkDirective,
+          youtubeAutolinkPlugin,
+          writtenDirectiveFallbackPlugin,
+          // When fillGaps is enabled, run the random gapper before directive and gap parsing
+          ...(fillGaps ? [randomGapperPlugin] as any[] : []),
+          directivePlugin,
+          gapPlugin,
+        ]}
         rehypePlugins={[rehypeKatex, rehypeHighlightEquals]}
         components={{
           // Fill-the-gaps renderer for nodes created by gapPlugin
