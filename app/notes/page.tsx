@@ -44,10 +44,12 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment, Bounds, useGLTF } from '@react-three/drei'
 import { STLLoader } from 'three-stdlib'
 import { Loader2, X } from 'lucide-react'
+import { useSearchParams } from "next/navigation"
 
 export default function Page() {
   const { user } = useAuth()
   const supabase = useMemo(() => createClient(), [])
+  const searchParams = useSearchParams()
 
   const [teamOptions, setTeamOptions] = useState<string[]>([])
   const [loadingTeams, setLoadingTeams] = useState<boolean>(false)
@@ -73,6 +75,19 @@ export default function Page() {
   const [noteProject, setNoteProject] = useState<string>("")
   const [loadingNote, setLoadingNote] = useState(false)
   const [noteError, setNoteError] = useState<string | null>(null)
+
+  // Sync ?noteId (or ?id) query param to selected note
+  useEffect(() => {
+    try {
+      const qId = searchParams?.get('noteId') ?? searchParams?.get('id')
+      if (qId && qId !== currentNoteId) {
+        setCurrentNoteId(qId)
+      } else if (!qId && currentNoteId) {
+        // If param removed, clear selection to show empty state
+        setCurrentNoteId(null)
+      }
+    } catch {}
+  }, [searchParams, setCurrentNoteId, currentNoteId])
 
   // Expose current note data to ActionSearchBar for exam generation
   useEffect(() => {

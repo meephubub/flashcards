@@ -382,7 +382,7 @@ export default function FilesPage() {
 
   const onOpenNote = (id: string) => {
     setCurrentNoteId(id)
-    router.push("/notes")
+    router.push(`/notes?noteId=${encodeURIComponent(id)}`)
   }
 
   // Upload to storage bucket userFiles under user-root/currentFolder
