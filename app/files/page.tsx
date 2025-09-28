@@ -103,6 +103,8 @@ export default function FilesPage() {
   const [previewName, setPreviewName] = useState<string>("")
   // Hover preview cache: fullPath -> signed URL
   const [storagePreviewUrls, setStoragePreviewUrls] = useState<Record<string, string>>({})
+  // Note content hover preview cache: noteId -> snippet
+  const [notePreviews, setNotePreviews] = useState<Record<string, string>>({})
   // Storage rename dialog
   const [isRenameOpen, setIsRenameOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ fullPath: string; name: string } | null>(null)
@@ -383,6 +385,37 @@ export default function FilesPage() {
   const onOpenNote = (id: string) => {
     setCurrentNoteId(id)
     router.push(`/notes?noteId=${encodeURIComponent(id)}`)
+  }
+
+  // Build a small, readable snippet from markdown content
+  const makeSnippet = (content: string): string => {
+    const text = (content || "")
+      // strip fenced code blocks quickly
+      .replace(/```[\s\S]*?```/g, "")
+      // strip inline code
+      .replace(/`([^`]*)`/g, "$1")
+      // markdown links [text](url) -> text
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+      // images ![alt](url) -> alt or [image]
+      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt) => alt ? `**${alt}**` : "[image]")
+    return text.trim().slice(0, 800)
+  }
+
+  // Fetch note content on first hover
+  const onHoverNote = async (id: string) => {
+    if (!user?.id) return
+    if (notePreviews[id] !== undefined) return
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .select('content')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single()
+      if (error) return
+      const snippet = makeSnippet((data as any)?.content || '')
+      setNotePreviews(prev => ({ ...prev, [id]: snippet }))
+    } catch {}
   }
 
   // Upload to storage bucket userFiles under user-root/currentFolder
@@ -766,6 +799,8 @@ export default function FilesPage() {
                         key={n.id} 
                         note={n} 
                         onClick={() => onOpenNote(n.id)}
+                        previewSnippet={notePreviews[n.id]}
+                        onHoverStart={() => void onHoverNote(n.id)}
                         onMoveClick={(e) => {
                           e.stopPropagation()
                           setMoveNoteId(n.id)
@@ -818,6 +853,8 @@ export default function FilesPage() {
                       key={n.id} 
                       note={n} 
                       onClick={() => onOpenNote(n.id)}
+                      previewSnippet={notePreviews[n.id]}
+                      onHoverStart={() => void onHoverNote(n.id)}
                       onMoveClick={(e) => {
                         e.stopPropagation()
                         setMoveNoteId(n.id)

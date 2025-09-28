@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
+import ReactMarkdown from "react-markdown"
 import { useRouter } from "next/navigation"
 import { useNoteContextStore } from "@/hooks/use-note-context"
 import { Button } from "@/components/ui/button"
@@ -107,15 +108,67 @@ export function NoteCard({
   note, 
   onClick,
   onMoveClick,
-  onDeleteClick
+  onDeleteClick,
+  previewSnippet,
+  onHoverStart,
 }: { 
   note: any;
   onClick: () => void;
   onMoveClick?: (e: React.MouseEvent) => void;
   onDeleteClick?: (e: React.MouseEvent) => void;
+  previewSnippet?: string;
+  onHoverStart?: () => void;
 }) {
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [showBelow, setShowBelow] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const hideTimerRef = useRef<number | null>(null)
+  const showTimerRef = useRef<number | null>(null)
+  const clearHideTimer = () => { if (hideTimerRef.current) { window.clearTimeout(hideTimerRef.current); hideTimerRef.current = null } }
+  const clearShowTimer = () => { if (showTimerRef.current) { window.clearTimeout(showTimerRef.current); showTimerRef.current = null } }
+  const scheduleHide = () => { clearHideTimer(); hideTimerRef.current = window.setTimeout(() => setShowPreview(false), 300) }
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    try {
+      const rect = rootRef.current?.getBoundingClientRect()
+      // If the top of the card is close to the top of the viewport, show preview below
+      setShowBelow((rect?.top ?? 0) < 140)
+    } catch {}
+    onHoverStart?.()
+    clearHideTimer()
+    clearShowTimer()
+    showTimerRef.current = window.setTimeout(() => setShowPreview(true), 200)
+  }
+  const handleMouseLeave = () => { scheduleHide(); clearShowTimer() }
   return (
-    <Card className="group cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick}>
+    <Card ref={rootRef} className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      {/* Hover preview bubble for note content */}
+      {previewSnippet && !showBelow && showPreview && (
+        <div
+          className="pointer-events-auto absolute left-1/2 -top-2 z-50 -translate-x-1/2 -translate-y-full rounded-md border bg-background p-2 shadow-lg w-72 max-w-[75vw] max-h-80 overflow-auto no-scroll"
+          onMouseEnter={clearHideTimer}
+          onMouseLeave={scheduleHide}
+        >
+          <div className="prose prose-sm dark:prose-invert">
+            <ReactMarkdown>{previewSnippet}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+      {previewSnippet && showBelow && showPreview && (
+        <div
+          className="pointer-events-auto absolute left-1/2 top-full z-50 -translate-x-1/2 mt-2 rounded-md border bg-background p-2 shadow-lg w-72 max-w-[75vw] max-h-80 overflow-auto no-scroll"
+          onMouseEnter={clearHideTimer}
+          onMouseLeave={scheduleHide}
+        >
+          <div className="prose prose-sm dark:prose-invert">
+            <ReactMarkdown>{previewSnippet}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+      {/* Scoped styles to hide scrollbars while keeping scroll functionality */}
+      <style jsx>{`
+        .no-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .no-scroll::-webkit-scrollbar { display: none; }
+      `}</style>
       <CardContent className="p-4">
         <div className="flex justify-between items-start">
           <h3 
@@ -170,15 +223,65 @@ export function NoteRow({
   note, 
   onClick,
   onMoveClick,
-  onDeleteClick
+  onDeleteClick,
+  previewSnippet,
+  onHoverStart
 }: { 
   note: any;
   onClick: () => void;
   onMoveClick?: (e: React.MouseEvent) => void;
   onDeleteClick?: (e: React.MouseEvent) => void;
+  previewSnippet?: string;
+  onHoverStart?: () => void;
 }) {
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [showBelow, setShowBelow] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const hideTimerRef = useRef<number | null>(null)
+  const showTimerRef = useRef<number | null>(null)
+  const clearHideTimer = () => { if (hideTimerRef.current) { window.clearTimeout(hideTimerRef.current); hideTimerRef.current = null } }
+  const clearShowTimer = () => { if (showTimerRef.current) { window.clearTimeout(showTimerRef.current); showTimerRef.current = null } }
+  const scheduleHide = () => { clearHideTimer(); hideTimerRef.current = window.setTimeout(() => setShowPreview(false), 300) }
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    try {
+      const rect = rootRef.current?.getBoundingClientRect()
+      setShowBelow((rect?.top ?? 0) < 140)
+    } catch {}
+    onHoverStart?.()
+    clearHideTimer()
+    clearShowTimer()
+    showTimerRef.current = window.setTimeout(() => setShowPreview(true), 200)
+  }
+  const handleMouseLeave = () => { scheduleHide(); clearShowTimer() }
   return (
-    <div className="flex items-center p-3 hover:bg-accent/50 cursor-pointer" onClick={onClick}>
+    <div ref={rootRef} className="group relative flex items-center p-3 hover:bg-accent/50 cursor-pointer" onClick={onClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      {previewSnippet && !showBelow && showPreview && (
+        <div
+          className="pointer-events-auto absolute left-1/2 -top-2 z-50 -translate-x-1/2 -translate-y-full rounded-md border bg-background p-2 shadow-lg w-[32rem] max-w-[85vw] max-h-80 overflow-auto no-scroll"
+          onMouseEnter={clearHideTimer}
+          onMouseLeave={scheduleHide}
+        >
+          <div className="prose prose-sm dark:prose-invert">
+            <ReactMarkdown>{previewSnippet}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+      {previewSnippet && showBelow && showPreview && (
+        <div
+          className="pointer-events-auto absolute left-1/2 top-full z-50 -translate-x-1/2 mt-2 rounded-md border bg-background p-2 shadow-lg w-[32rem] max-w-[85vw] max-h-80 overflow-auto no-scroll"
+          onMouseEnter={clearHideTimer}
+          onMouseLeave={scheduleHide}
+        >
+          <div className="prose prose-sm dark:prose-invert">
+            <ReactMarkdown>{previewSnippet}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+      {/* Scoped styles to hide scrollbars while keeping scroll functionality */}
+      <style jsx>{`
+        .no-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .no-scroll::-webkit-scrollbar { display: none; }
+      `}</style>
       <FileText className="h-5 w-5 text-blue-500 mr-3" />
       <div className="flex-1 min-w-0">
         <h3 className="font-medium truncate">{note.title || 'Untitled Note'}</h3>
