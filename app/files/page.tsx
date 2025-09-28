@@ -719,13 +719,11 @@ export default function FilesPage() {
               <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
             )}
 
-            {!loading && !error && subfolders.length === 0 && filteredNotes.length === 0 && (
+            {!loading && !error && subfolders.length === 0 && filteredNotes.length === 0 && storageFiles.length === 0 && (
               <div className="flex flex-col items-center justify-center h-64 rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 text-center">
                 <FileText className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-medium text-muted-foreground mb-1">No items found</h3>
-                <p className="text-sm text-muted-foreground">
-                  Get started by creating a new note.
-                </p>
+                <p className="text-sm text-muted-foreground">Create a new note, folder, or upload files to get started.</p>
               </div>
             )}
 
