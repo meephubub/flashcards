@@ -70,7 +70,7 @@ export default function Page() {
   const [selectedSource, setSelectedSource] = React.useState<APIMatch['sources'][number] | null>(null)
   const [playerLoading, setPlayerLoading] = React.useState<boolean>(false)
   const [playerError, setPlayerError] = React.useState<string | null>(null)
-  const [compatMode, setCompatMode] = React.useState<boolean>(false)
+  const [compatMode, setCompatMode] = React.useState<boolean>(true)
 
   // Safe iframe builder to block top-level redirects
   const buildSafeIframeHTML = React.useCallback((src: string) => {
@@ -371,7 +371,7 @@ export default function Page() {
           )}
         </div>
         <div className="px-6 pb-6 text-xs text-muted-foreground">
-          Streams are embedded in a sandboxed iframe to prevent redirects or top-level navigation.
+          Compatibility mode disables the iframe sandbox to improve player compatibility. Toggle above to re-enable sandboxing if needed.
         </div>
       </DialogContent>
     </Dialog>
