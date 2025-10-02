@@ -72,7 +72,7 @@ export default function Page() {
   const [playerError, setPlayerError] = React.useState<string | null>(null)
   const [compatMode, setCompatMode] = React.useState<boolean>(true)
 
-  // Safe iframe builder to block top-level redirects
+  // Safe iframe builder to block top-level redirects (direct sandbox on player)
   const buildSafeIframeHTML = React.useCallback((src: string) => {
     const escaped = src.replace(/"/g, '&quot;')
     return `<iframe src="${escaped}"
@@ -80,11 +80,29 @@ export default function Page() {
       allowfullscreen
       x-webkit-airplay="allow"
       referrerpolicy="no-referrer"
-      sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-pointer-lock allow-popups allow-modals allow-downloads"
+      sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-pointer-lock allow-downloads"
       style="border:0; width:100%; height:100%;"></iframe>`
   }, [])
 
-  // Compatibility mode: no sandbox (may allow redirects/popups). Use with caution.
+  // Wrapped protection: sandbox the outer iframe and place the player in an inner iframe via srcdoc.
+  // This can block popups at the container level while keeping the player iframe itself unsandboxed.
+  const buildWrappedIframeHTML = React.useCallback((src: string) => {
+    const escaped = src.replace(/"/g, '&quot;')
+    const inner = `<!doctype html><html><head><meta charset=\"utf-8\"></head><body style=\"margin:0;background:#000\">\n`
+      + `<iframe src=\"${escaped}\"`
+      + ` allow=\"autoplay; encrypted-media; picture-in-picture; web-share; airplay; fullscreen\"`
+      + ` allowfullscreen x-webkit-airplay=\"allow\" referrerpolicy=\"no-referrer\"`
+      + ` style=\"border:0; width:100%; height:100%;\"></iframe>\n`
+      + `<script>try{window.open=function(){return null}}catch(e){}</script>`
+      + `</body></html>`
+    const srcdoc = inner.replace(/"/g, '&quot;')
+    return `<iframe srcdoc="${srcdoc}"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-presentation allow-downloads"
+      referrerpolicy="no-referrer"
+      style="border:0; width:100%; height:100%; background:#000;"></iframe>`
+  }, [])
+
+  // Compatibility mode: no sandbox at all (may allow redirects/popups). Use with caution.
   const buildCompatIframeHTML = React.useCallback((src: string) => {
     const escaped = src.replace(/"/g, '&quot;')
     return `<iframe src="${escaped}"
@@ -333,8 +351,8 @@ export default function Page() {
                 <a href={selectedStream.embedUrl} target="_blank" rel="noreferrer noopener">Open Player</a>
               </Button>
             ) : null}
-            <Button size="sm" variant={compatMode ? 'default' : 'outline'} onClick={() => setCompatMode((v) => !v)} title="Compatibility mode (disables sandbox)">
-              {compatMode ? 'Compat: On' : 'Compat: Off'}
+            <Button size="sm" variant={compatMode ? 'default' : 'outline'} onClick={() => setCompatMode((v) => !v)} title="Protection mode (outer sandbox container)">
+              {compatMode ? 'Protection: On' : 'Protection: Off'}
             </Button>
           </div>
         </DialogHeader>
@@ -363,7 +381,7 @@ export default function Page() {
               <Button size="sm" onClick={() => selectedMatch && loadStreamsForMatch(selectedMatch)}>Retry</Button>
             </div>
           ) : selectedStream?.embedUrl ? (
-            <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: (compatMode ? buildCompatIframeHTML : buildSafeIframeHTML)(selectedStream.embedUrl) }} />
+            <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: (compatMode ? buildWrappedIframeHTML : buildCompatIframeHTML)(selectedStream.embedUrl) }} />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
               {playerLoading ? 'Loading streams...' : 'No stream selected.'}
@@ -371,7 +389,7 @@ export default function Page() {
           )}
         </div>
         <div className="px-6 pb-6 text-xs text-muted-foreground">
-          Compatibility mode disables the iframe sandbox to improve player compatibility. Toggle above to re-enable sandboxing if needed.
+          Protection mode places the player inside a sandboxed container to block popups, while keeping the player iframe itself unsandboxed. Toggle off if a source fails to load.
         </div>
       </DialogContent>
     </Dialog>

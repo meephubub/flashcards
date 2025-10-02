@@ -75,6 +75,7 @@ export default function Page() {
   const [noteError, setNoteError] = useState<string | null>(null)
 
   // Sync ?noteId (or ?id) query param to selected note (CSR-safe without Suspense)
+  // Only set from URL when a param is present; do NOT clear selection when absent.
   useEffect(() => {
     const applyFromUrl = () => {
       try {
@@ -82,8 +83,6 @@ export default function Page() {
         const qId = sp.get('noteId') ?? sp.get('id')
         if (qId && qId !== currentNoteId) {
           setCurrentNoteId(qId)
-        } else if (!qId && currentNoteId) {
-          setCurrentNoteId(null)
         }
       } catch {}
     }
