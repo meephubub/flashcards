@@ -10,10 +10,10 @@ export function HeroSection() {
           beamWidth={2}
           beamHeight={15}
           beamNumber={12}
-          lightColor="#ffffff"
+          lightColor="#22c55e"
           speed={2}
           scale={0.2}
-          rotation={0}
+          rotation={40}
         />
       </div>
 
@@ -117,7 +117,7 @@ export function HeroSection() {
               width={true}
               weight={false}
               italic={false}
-              textColor="#ffffff"
+              textColor="#22c55e"
               strokeColor="#000000"
               minFontSize={30}
             />
