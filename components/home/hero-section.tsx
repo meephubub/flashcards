@@ -69,6 +69,23 @@ export function HeroSection() {
             <span style={{ fontSize: '14px', opacity: 0.95 }}>AI-powered flashcards</span>
           </div>
 
+          {/* Title (non-interactive) — moved here */}
+          <div style={{ width: '100%', pointerEvents: 'none' }}>
+            <TextPressure
+              text="Yasashi"
+              flex={true}
+              alpha={true}
+              minAlpha={0.3}
+              stroke={false}
+              width={true}
+              weight={true}
+              italic={false}
+              textColor="#22c55e"
+              strokeColor="#000000"
+              minFontSize={30}
+            />
+          </div>
+
           {/* CTAs */}
           <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
             <a
@@ -104,23 +121,6 @@ export function HeroSection() {
             >
               Learn more
             </a>
-          </div>
-
-          {/* Title (non-interactive) */}
-          <div style={{ width: '100%', pointerEvents: 'none' }}>
-            <TextPressure
-              text="Yasashi"
-              flex={true}
-              alpha={true}
-              minAlpha={0.25}
-              stroke={false}
-              width={true}
-              weight={false}
-              italic={false}
-              textColor="#22c55e"
-              strokeColor="#000000"
-              minFontSize={30}
-            />
           </div>
         </div>
       </div>
