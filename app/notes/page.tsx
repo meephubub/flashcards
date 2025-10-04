@@ -43,7 +43,7 @@ import ExamFromNotesPage from "@/app/exam-from-notes/page"
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment, Bounds, useGLTF } from '@react-three/drei'
 import { STLLoader } from 'three-stdlib'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, X, Star } from 'lucide-react'
 
 export default function Page() {
   const { user } = useAuth()
@@ -73,6 +73,39 @@ export default function Page() {
   const [noteProject, setNoteProject] = useState<string>("")
   const [loadingNote, setLoadingNote] = useState(false)
   const [noteError, setNoteError] = useState<string | null>(null)
+  const [isStarred, setIsStarred] = useState<boolean>(false)
+  const [starSaving, setStarSaving] = useState<boolean>(false)
+  const [starError, setStarError] = useState<string | null>(null)
+
+  // Toggle star for current note
+  const toggleStar = React.useCallback(async () => {
+    if (!user?.id || !currentNoteId) return
+    if (starSaving) return
+    setStarError(null)
+    setStarSaving(true)
+    const next = !isStarred
+    // Optimistic update
+    setIsStarred(next)
+    try {
+      const { data, error } = await supabase
+        .from("notes")
+        .update({ is_starred: next })
+        .eq("id", currentNoteId)
+        .eq("user_id", user.id)
+        .select("is_starred")
+        .single()
+      if (error) {
+        throw error
+      }
+      setIsStarred(Boolean((data as any)?.is_starred))
+    } catch (e: any) {
+      // Revert on failure
+      setIsStarred(!next)
+      setStarError(e?.message || "Failed to update star state")
+    } finally {
+      setStarSaving(false)
+    }
+  }, [user?.id, currentNoteId, isStarred, starSaving, supabase])
 
   // Sync ?noteId (or ?id) query param to selected note (CSR-safe without Suspense)
   // Only set from URL when a param is present; do NOT clear selection when absent.
@@ -540,13 +573,14 @@ export default function Page() {
         setNoteCategory("")
         setNoteUpdatedAt("")
         setNoteProject("")
+        setIsStarred(false)
         return
       }
       setLoadingNote(true)
       setNoteError(null)
       const { data, error } = await supabase
         .from("notes")
-        .select("title, content, category, updated_at, project")
+        .select("title, content, category, updated_at, project, is_starred")
         .eq("id", currentNoteId)
         .eq("user_id", user.id)
         .single()
@@ -561,6 +595,7 @@ export default function Page() {
       setNoteUpdatedAt((data?.updated_at as string) || "")
       setNoteContent((data?.content as string) || "")
       setNoteProject((data?.project as string) || "")
+      setIsStarred(Boolean((data as any)?.is_starred))
       setLoadingNote(false)
     }
     run()
@@ -578,7 +613,7 @@ export default function Page() {
       if (!user?.id) return
       const { data, error } = await supabase
         .from("notes")
-        .select("title, content, category, updated_at, project")
+        .select("title, content, category, updated_at, project, is_starred")
         .eq("id", id)
         .eq("user_id", user.id)
         .single()
@@ -588,6 +623,7 @@ export default function Page() {
       setNoteUpdatedAt((data?.updated_at as string) || "")
       setNoteContent((data?.content as string) || "")
       setNoteProject((data?.project as string) || "")
+      setIsStarred(Boolean((data as any)?.is_starred))
     }
     window.addEventListener('note-updated', handler as EventListener)
     return () => window.removeEventListener('note-updated', handler as EventListener)
@@ -1097,7 +1133,24 @@ Goals:
             {currentNoteId && !examOpen && (
               <article className="mx-auto max-w-3xl">
                 <header className="mb-8">
-                  <h1 className="text-3xl font-bold tracking-tight mb-2">{noteTitle}</h1>
+                  <div className="mb-2 flex items-center gap-2">
+                    <h1 className="text-3xl font-bold tracking-tight flex-1">{noteTitle}</h1>
+                    {currentNoteId && (
+                      <button
+                        type="button"
+                        onClick={() => void toggleStar()}
+                        disabled={starSaving}
+                        title={isStarred ? 'Unstar' : 'Star'}
+                        aria-label={isStarred ? 'Unstar note' : 'Star note'}
+                        className={`inline-flex items-center justify-center h-8 w-8 rounded-md border transition-colors ${isStarred ? 'text-yellow-600 border-yellow-600/40 bg-yellow-50 dark:bg-yellow-900/20' : 'text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900'}`}
+                      >
+                        <Star className="h-4 w-4" fill={isStarred ? 'currentColor' : 'none'} />
+                      </button>
+                    )}
+                  </div>
+                  {starError && (
+                    <div className="-mt-1 mb-2 text-xs text-red-600">{starError}</div>
+                  )}
                   {fillGapsMode && (
                     <div className="text-xs flex flex-col sm:flex-row sm:items-center gap-2 text-emerald-700 dark:text-emerald-300 mb-1">
                       <span className="rounded-md border border-emerald-300/60 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-900/20 px-2 py-0.5">Fill-the-Gap mode ON (Alt+G)</span>
@@ -1308,7 +1361,21 @@ Goals:
                   <article className="mx-auto max-w-3xl">
                     <header className="mb-4 flex items-center justify-between">
                       <div>
-                        <h1 className="text-2xl font-bold tracking-tight">{noteTitle}</h1>
+                        <div className="flex items-center gap-2">
+                          <h1 className="text-2xl font-bold tracking-tight flex-1">{noteTitle}</h1>
+                          {currentNoteId && (
+                            <button
+                              type="button"
+                              onClick={() => void toggleStar()}
+                              disabled={starSaving}
+                              title={isStarred ? 'Unstar' : 'Star'}
+                              aria-label={isStarred ? 'Unstar note' : 'Star note'}
+                              className={`inline-flex items-center justify-center h-8 w-8 rounded-md border transition-colors ${isStarred ? 'text-yellow-600 border-yellow-600/40 bg-yellow-50 dark:bg-yellow-900/20' : 'text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900'}`}
+                            >
+                              <Star className="h-4 w-4" fill={isStarred ? 'currentColor' : 'none'} />
+                            </button>
+                          )}
+                        </div>
                         {(noteCategory || noteUpdatedAt) && (
                           <p className="text-xs text-muted-foreground">
                             {noteCategory && <span>Category: {noteCategory}</span>}

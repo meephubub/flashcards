@@ -11,6 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { LogOut, Trash2 } from "lucide-react"
+import { AppSidebar } from "@/components/notes/app-sidebar"
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -72,97 +76,119 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleSignOut}
-            disabled={isSigningOut}
-          >
-            {isSigningOut ? 'Signing Out...' : (
-              <>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign Out
-              </>
-            )}
-          </Button>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-6" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Settings</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <div className="ml-auto">
+            <Button
+              variant="outline"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+            >
+              {isSigningOut ? 'Signing Out...' : (
+                <>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </>
+              )}
+            </Button>
+          </div>
+        </header>
+
+        <div className="p-4 lg:p-6">
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="mx-auto w-full max-w-5xl">
+            <div className="mb-6">
+              <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+              <p className="text-sm text-muted-foreground">Manage your account and personalize your experience.</p>
+            </div>
+
+            <Tabs defaultValue="account" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="account">Account</TabsTrigger>
+                <TabsTrigger value="application">Application Settings</TabsTrigger>
+              </TabsList>
+              <TabsContent value="account">
+                <Card className="border-muted">
+                  <CardHeader>
+                    <CardTitle>Account</CardTitle>
+                    <CardDescription>Manage your account settings</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Email</p>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Account Created</p>
+                      <p className="text-sm text-muted-foreground">{new Date(user.created_at).toLocaleDateString()}</p>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="border-t px-6 py-4">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Account
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete your account and all associated data.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDeleteAccount}
+                            disabled={isDeleting}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            {isDeleting ? 'Deleting...' : 'Delete Account'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+              <TabsContent value="application">
+                <Card className="border-muted">
+                  <CardHeader>
+                    <CardTitle>Application Settings</CardTitle>
+                    <CardDescription>Customize your application experience</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <SettingsContent />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
-      </div>
-
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      <Tabs defaultValue="account" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="account">Account</TabsTrigger>
-          <TabsTrigger value="application">Application Settings</TabsTrigger>
-        </TabsList>
-        <TabsContent value="account">
-          <Card>
-            <CardHeader>
-              <CardTitle>Account</CardTitle>
-              <CardDescription>Manage your account settings</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Email</p>
-                <p className="text-sm text-muted-foreground">{user.email}</p>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Account Created</p>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(user.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            </CardContent>
-            <CardFooter className="border-t px-6 py-4">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete Account
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete your account and all associated data.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction 
-                      onClick={handleDeleteAccount}
-                      disabled={isDeleting}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      {isDeleting ? 'Deleting...' : 'Delete Account'}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-        <TabsContent value="application">
-          <Card>
-            <CardHeader>
-              <CardTitle>Application Settings</CardTitle>
-              <CardDescription>Customize your application experience</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <SettingsContent />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }

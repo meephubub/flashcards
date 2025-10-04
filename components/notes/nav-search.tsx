@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Search, ChevronRight, ChevronDown } from "lucide-react"
+import { Search, ChevronRight, ChevronDown, Star } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 import { createClient } from "@/lib/supabase/client"
@@ -26,6 +26,8 @@ export function NavSearch({
   const [query, setQuery] = React.useState("")
   const [results, setResults] = React.useState<SearchResult[]>([])
   const [loading, setLoading] = React.useState(false)
+  const [starred, setStarred] = React.useState<SearchResult[]>([])
+  const [loadingStarred, setLoadingStarred] = React.useState(false)
   const supabase = React.useMemo(() => createClient(), [])
   const { user } = useAuth()
   const selectedProject = useProjectStore((s) => s.selectedProject)
@@ -66,6 +68,34 @@ export function NavSearch({
       controller.abort()
     }
   }, [query, supabase, user?.id, selectedProject])
+
+  // Load starred notes (quick list)
+  React.useEffect(() => {
+    let mounted = true
+    const run = async () => {
+      if (!user?.id) return
+      setLoadingStarred(true)
+      let req = supabase
+        .from("notes")
+        .select("id,title,category")
+        .eq("user_id", user.id)
+        .eq("is_starred", true)
+        .order("title", { ascending: true })
+      if (selectedProject) req = req.eq("project", selectedProject)
+      const { data, error } = await req
+      if (!mounted) return
+      if (error) {
+        setStarred([])
+      } else {
+        setStarred((data as SearchResult[] | null) ?? [])
+      }
+      setLoadingStarred(false)
+    }
+    run()
+    const onFocus = () => run()
+    window.addEventListener('focus', onFocus)
+    return () => { mounted = false; window.removeEventListener('focus', onFocus) }
+  }, [supabase, user?.id, selectedProject])
 
   return (
     <SidebarGroup
@@ -111,6 +141,45 @@ export function NavSearch({
             </div>
           </div>
           <SidebarMenu>
+            {/* Starred quick list */}
+            <SidebarMenuItem>
+              <SidebarMenuButton className="text-sidebar-foreground/80" disabled>
+                <Star className="size-4" />
+                <span>Starred</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            {loadingStarred && (
+              <SidebarMenuItem>
+                <SidebarMenuButton className="text-sidebar-foreground/70">
+                  <span>Loading…</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            {!loadingStarred && starred.length === 0 && (
+              <SidebarMenuItem>
+                <SidebarMenuButton className="text-sidebar-foreground/70">
+                  <span>None</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+            {starred.map((r) => (
+              <SidebarMenuItem key={r.id}>
+                <SidebarMenuButton
+                  asChild
+                  onClick={() => {
+                    setCurrentNoteId(r.id)
+                    router.push("/notes")
+                  }}
+                >
+                  <button type="button">
+                    <Star className="size-4" />
+                    <span>{r.title || "Untitled"}</span>
+                  </button>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+
+            {/* Search results / All notes by category filter */}
             {query && !loading && results.length === 0 && (
               <SidebarMenuItem>
                 <SidebarMenuButton className="text-sidebar-foreground/70">
