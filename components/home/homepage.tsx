@@ -5,6 +5,7 @@ import { InteractiveShowcase } from "./interactive-showcase";
 import { CTASection } from "./cta-section";
 import { Footer } from "./footer";
 import Navbar from "./navbar";
+import { Sections } from "./sections";
 
 export function Homepage() {
   return (
@@ -13,6 +14,7 @@ export function Homepage() {
       <HeroSection />
       <BentoFeatures />
       <ModernStudyModes />
+      <Sections />
       <InteractiveShowcase />
       <CTASection />
       <Footer />

@@ -17,9 +17,9 @@ export function ModernStudyModes() {
     <section className="bg-gray-50 py-20 sm:py-32">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center mb-16">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl mb-4">
-            Study modes for every learning style
-          </h2>
+        <h2 className="text-4xl md:text-6xl font-bold leading-tight">
+            <span className="inline-block bg-black text-white px-4 py-2 rounded-lg">Study Modes</span> for every learning style
+        </h2>
           <p className="text-lg text-gray-600">
             Choose the perfect study mode that matches your learning goals and
             preferences.

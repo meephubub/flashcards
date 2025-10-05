@@ -20,9 +20,9 @@ export function BentoFeatures() {
     <section className="py-20 sm:py-32">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center mb-16">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl mb-4">
-            Everything you need to learn effectively
-          </h2>
+        <h2 className="text-4xl md:text-6xl font-bold leading-tight">
+            <span className="inline-block bg-black text-white px-4 py-2 rounded-lg">Everything</span> you need to learn effectively
+        </h2>
           <p className="text-lg text-gray-600">
             Powerful features designed to accelerate your learning and help you
             retain knowledge longer.

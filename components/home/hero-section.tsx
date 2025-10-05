@@ -10,8 +10,8 @@ export function HeroSection() {
           beamWidth={2}
           beamHeight={15}
           beamNumber={12}
-          lightColor="#22c55e"
-          speed={2}
+          lightColor="#fff"
+          speed={5}
           scale={0.2}
           rotation={40}
         />
@@ -57,7 +57,7 @@ export function HeroSection() {
                 display: 'inline-block',
                 padding: '2px 8px',
                 borderRadius: '9999px',
-                background: '#22c55e',
+                background: '#fff',
                 color: '#0b1115',
                 fontSize: '12px',
                 fontWeight: 700,
@@ -73,12 +73,12 @@ export function HeroSection() {
           <div style={{ width: '100%', pointerEvents: 'none' }}>
             <TextPressure
               text="Yasashi"
-              flex={true}
+              flex={false}
               alpha={true}
               minAlpha={0.3}
               stroke={false}
-              width={true}
-              weight={true}
+              width={false}
+              weight={false}
               italic={false}
               textColor="#ffffff"
               strokeColor="#000000"
@@ -96,7 +96,7 @@ export function HeroSection() {
                 justifyContent: 'center',
                 padding: '10px 16px',
                 borderRadius: '10px',
-                background: '#22c55e',
+                background: '#fff',
                 color: '#0b1115',
                 fontWeight: 700,
                 textDecoration: 'none',
