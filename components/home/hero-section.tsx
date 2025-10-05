@@ -80,7 +80,7 @@ export function HeroSection() {
               width={true}
               weight={true}
               italic={false}
-              textColor="#22c55e"
+              textColor="#ffffff"
               strokeColor="#000000"
               minFontSize={30}
             />
