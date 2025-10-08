@@ -13,6 +13,7 @@
     "push": "git add . && git commit -m \"Build and deploy\" && git push origin HEAD --force"
   },
   "dependencies": {
+    "@coinbase/x402": "^0.6.6",
     "@flags-sdk/statsig": "^0.2.2",
     "@gpt4free/g4f.dev": "^1.0.4",
     "@hookform/resolvers": "^3.10.0",
@@ -141,6 +142,7 @@
     "transformers": "github:huggingface/transformers",
     "uuid": "^11.1.0",
     "vaul": "^0.9.9",
+    "x402-next": "^0.6.5",
     "zod": "^3.25.28",
     "zustand": "^5.0.7"
   },

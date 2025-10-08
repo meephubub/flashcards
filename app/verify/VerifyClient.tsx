@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { BrowserProvider, Contract } from "ethers";
 
@@ -18,8 +19,6 @@ type VerifyResponse =
       contentHash: string;
     };
 
-  
-
 type MintResponse =
   | {
       status: "signed" | "mint_broadcast" | "already_minted";
@@ -34,6 +33,7 @@ type MintResponse =
   | { error: string };
 
 export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?: string }) {
+  const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [evmAddress, setEvmAddress] = useState<string>("");
@@ -41,10 +41,12 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
 
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [mintLoading, setMintLoading] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string>("");
+  const [walletLoading, setWalletLoading] = useState<boolean>(false);
 
+  const [error, setError] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResponse | null>(null);
   const [mintResult, setMintResult] = useState<MintResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
 
@@ -60,10 +62,16 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
     "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
   ];
 
+  const supabase = createClient();
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+  };
+
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const supabase = createClient();
         const { data } = await supabase.auth.getUser();
         setUserId(data.user?.id ?? null);
       } catch (e) {
@@ -71,75 +79,45 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
         setUserId(null);
       }
     };
+
     loadUser();
-    // Initialize EVM address from prop once, if valid and empty
+
     if (!evmAddress && defaultEvmAddress && /^0x[a-fA-F0-9]{40}$/.test(defaultEvmAddress)) {
       setEvmAddress(defaultEvmAddress);
     }
-  }, []);
+  }, [defaultEvmAddress, evmAddress, supabase]);
 
-  // Derived helpers for displaying mint date
-  const mintedAtSeconds = useMemo(() => {
-    if (!verifyResult || verifyResult.status !== "minted") return undefined;
-    const td = (verifyResult as any).tokenData;
-    if (!td || td.mintedAt === undefined || td.mintedAt === null) return undefined;
-    const v = typeof td.mintedAt === "string" || typeof td.mintedAt === "number" ? Number(td.mintedAt) : undefined;
-    return Number.isFinite(v) ? (v as number) : undefined;
-  }, [verifyResult]);
-
-  const [resolveLoading, setResolveLoading] = useState(false);
-  const [resolvedMintDate, setResolvedMintDate] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Reset resolved hint whenever verify result changes
-    setResolvedMintDate(null);
-  }, [verifyResult]);
-
-  const resolveMintDateFromLogs = async () => {
+  const loadWalletAddress = async () => {
+    if (!userId) return;
+    setWalletLoading(true);
     try {
-      setResolveLoading(true);
-      if (!verifyResult || verifyResult.status !== "minted") throw new Error("Nothing to resolve");
-      if (!CONTRACT_ADDRESS) throw new Error("Contract address not available client-side");
-      const tokenId = (verifyResult as any).tokenId as number | undefined;
-      if (tokenId === undefined) throw new Error("Token ID unavailable");
-
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) throw new Error("No injected wallet found");
-      const provider = new BrowserProvider(ethereum);
-      const contract = new Contract(CONTRACT_ADDRESS, APP_MINT_NFT_ABI, provider);
-      // Filter for mint Transfer (from zero address)
-      const zero = "0x0000000000000000000000000000000000000000";
-      const filter = (contract as any).filters.Transfer(zero, null, tokenId);
-      const logs = await (contract as any).queryFilter(filter, BigInt(0), "latest");
-      if (!logs || logs.length === 0) throw new Error("No mint Transfer found");
-      const first = logs[0];
-      const block = await provider.getBlock(first.blockHash ?? first.blockNumber);
-      if (!block) throw new Error("Block not found");
-      const d = new Date(Number(block.timestamp) * 1000);
-      setResolvedMintDate(d.toLocaleString());
+      const { data: wallet, error: wErr } = await supabase
+        .from("wallets")
+        .select("address")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (wErr) throw wErr;
+      const address = wallet?.address || "";
+      setWalletAddress(address);
+      if (address && !evmAddress) setEvmAddress(address);
     } catch (e) {
-      setResolvedMintDate("Unavailable");
+      console.error("Failed to load wallet address:", e);
+      setWalletAddress("");
     } finally {
-      setResolveLoading(false);
+      setWalletLoading(false);
     }
   };
 
-  const onPickFile: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const f = e.target.files?.[0] ?? null;
-    setFile(f);
-    setVerifyResult(null);
-    setMintResult(null);
-    setError(null);
-  };
+  useEffect(() => {
+    void loadWalletAddress();
+  }, [userId]);
 
   const doVerify = async () => {
     try {
       setError(null);
       setMintResult(null);
       setVerifyLoading(true);
-      if (!file) {
-        throw new Error("Please choose a file to verify.");
-      }
+      if (!file) throw new Error("Please choose a file to verify.");
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/verify", { method: "POST", body: fd });
@@ -163,9 +141,8 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
       setVerifyResult(null);
       setMintLoading(true);
       if (!file) throw new Error("Please choose a file to mint.");
-      if (!/^0x[a-fA-F0-9]{40}$/.test(evmAddress)) {
-        throw new Error("Enter a valid EVM address (0x...40 hex chars)");
-      }
+      if (!/^0x[a-fA-F0-9]{40}$/.test(evmAddress))
+        throw new Error("Enter a valid EVM address (0x…40 hex chars)");
       const fd = new FormData();
       fd.append("file", file);
       fd.append("userAddress", evmAddress);
@@ -185,14 +162,12 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
     try {
       setBroadcastError(null);
       setBroadcasting(true);
-      if (!mintResult || ("error" in mintResult) || mintResult.status !== "signed") {
+      if (!mintResult || "error" in mintResult || mintResult.status !== "signed")
         throw new Error("No signed mint to broadcast");
-      }
-      if (!CONTRACT_ADDRESS) {
-        throw new Error("Missing NEXT_PUBLIC_NFT_CONTRACT_ADDRESS");
-      }
+      if (!CONTRACT_ADDRESS) throw new Error("Missing NEXT_PUBLIC_NFT_CONTRACT_ADDRESS");
       const { eip712, signature } = mintResult as any;
-      if (!eip712 || !signature) throw new Error("Missing EIP-712 payload or signature");
+      if (!eip712 || !signature)
+        throw new Error("Missing EIP-712 payload or signature");
 
       const ethereum = (window as any).ethereum;
       if (!ethereum) throw new Error("No injected wallet found");
@@ -209,7 +184,6 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
       }
 
       const contract = new Contract(CONTRACT_ADDRESS, APP_MINT_NFT_ABI, signer);
-
       const value = {
         contentHash: eip712.value.contentHash as string,
         user: eip712.value.user as string,
@@ -242,42 +216,77 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
     }
   };
 
+  // Show sign-in prompt if user is not authenticated
+  if (!userId) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] w-full bg-background text-foreground">
+        <div className="mx-auto max-w-3xl px-4 py-10">
+          <div className="flex flex-col items-center justify-center text-center space-y-6">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold tracking-tight">
+                Sign in required
+              </h1>
+              <p className="text-lg text-muted-foreground max-w-md">
+                You need to sign in to verify content authenticity and mint NFTs.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => router.push("/signup")}
+                className="inline-flex h-12 items-center justify-center rounded-lg bg-primary px-8 text-base font-medium text-primary-foreground transition hover:bg-primary/90"
+              >
+                Sign up / Sign in
+              </button>
+
+              <p className="text-sm text-muted-foreground">
+                Don't have an account?{" "}
+                <button
+                  onClick={() => router.push("/signup")}
+                  className="text-primary hover:underline"
+                >
+                  Create one here
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[calc(100vh-4rem)] w-full bg-background text-foreground">
       <div className="mx-auto max-w-3xl px-4 py-10">
         <header className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Verify content authenticity</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Verify content authenticity
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upload a document, image, or any file to verify whether it was minted. You can also mint it to your address.
+              Upload a document, image, or any file to verify whether it was minted. You can also
+              mint it to your address.
             </p>
           </div>
           <div className="text-right">
             <div className="text-xs text-muted-foreground">Owner (current user)</div>
             <div className="mt-0.5 select-all rounded-md bg-muted px-2 py-1 text-xs font-mono">
-              {userId ? userId : "Not signed in"}
+              {userId || "Not signed in"}
             </div>
           </div>
         </header>
 
+        {/* File input */}
         <section className="mb-8 rounded-xl border border-border bg-card p-5 shadow-sm">
-          <label
-            htmlFor="file"
-            className="block text-sm font-medium text-muted-foreground mb-2"
-          >
+          <label htmlFor="file" className="block text-sm font-medium text-muted-foreground mb-2">
             File
           </label>
-          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <input
-              id="file"
-              type="file"
-              onChange={onPickFile}
-              className="block w-full cursor-pointer rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
-            />
-            {file && (
-              <span className="truncate text-xs text-muted-foreground">{file.name}</span>
-            )}
-          </div>
+          <input
+            id="file"
+            type="file"
+            onChange={onPickFile}
+            className="block w-full cursor-pointer rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+          />
 
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <button
@@ -294,24 +303,19 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
                 onChange={(e) => setEvmAddress(e.target.value)}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
               />
-              <div className="flex items-center gap-2">
-                <input
-                  placeholder="Optional IPFS CID for tokenURI"
-                  value={cid}
-                  onChange={(e) => setCid(e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
-                />
-                <button
-                  onClick={doMint}
-                  disabled={mintLoading || !file || !evmAddress}
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {mintLoading ? "Minting…" : "Mint"}
-                </button>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Your Supabase user ID will be the human owner reference for this content: {userId ?? "(not signed in)"}
-              </p>
+              <input
+                placeholder="Optional IPFS CID for tokenURI"
+                value={cid}
+                onChange={(e) => setCid(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+              />
+              <button
+                onClick={doMint}
+                disabled={mintLoading || !file || !evmAddress || !userId}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {mintLoading ? "Minting…" : "Mint"}
+              </button>
             </div>
           </div>
         </section>
@@ -322,119 +326,35 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
           </div>
         )}
 
-        {verifyResult && (
-          <section className="mb-6 rounded-xl border border-border bg-card p-5 text-sm">
-            <h2 className="mb-2 text-base font-semibold">Verification Result</h2>
-            <div className="grid gap-2">
-              {(() => {
-                if (verifyResult.status === "minted") {
-                  const owner = (verifyResult as any).owner as string | undefined;
-                  const mine = owner && evmAddress && owner.toLowerCase() === evmAddress.toLowerCase();
-                  const statusClass = mine ? "text-green-600" : "text-red-600";
-                  return (
-                    <>
-                      <Row label="Status" value={mine ? "minted (you)" : "minted (not you)"} className={statusClass} />
-                    </>
-                  );
-                }
-                return <Row label="Status" value={verifyResult.status} />;
-              })()}
-              <Row label="Content Hash" value={verifyResult.contentHash} mono />
-              {"tokenId" in verifyResult && (
-                <Row label="Token ID" value={(verifyResult as any).tokenId?.toString()} />
-              )}
-              {"owner" in verifyResult && (verifyResult as any).owner && (
-                <Row label="Minted by" value={(verifyResult as any).owner} mono />
-              )}
-              {verifyResult.status === "minted" && (
-                (() => {
-                  if (mintedAtSeconds && Number.isFinite(mintedAtSeconds)) {
-                    const date = new Date(mintedAtSeconds! * 1000).toLocaleString();
-                    return <Row label="Minted at" value={date} />;
-                  }
-                  if (resolvedMintDate) {
-                    return <Row label="Minted at" value={resolvedMintDate} />;
-                  }
-                  if (CONTRACT_ADDRESS && (verifyResult as any).tokenId !== undefined) {
-                    return (
-                      <div className="col-span-3 flex items-center gap-2 text-xs text-muted-foreground">
-                        <button
-                          onClick={resolveMintDateFromLogs}
-                          disabled={resolveLoading}
-                          className="inline-flex h-7 items-center justify-center rounded-md border border-input px-2 text-[11px] hover:bg-muted disabled:opacity-50"
-                        >
-                          {resolveLoading ? "Resolving…" : "Resolve mint date"}
-                        </button>
-                        <span>via first Transfer event</span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()
-              )}
-              {"tokenURI" in verifyResult && (verifyResult as any).tokenURI && (
-                <Row label="tokenURI" value={(verifyResult as any).tokenURI} />
-              )}
-            </div>
-          </section>
-        )}
-
-        {mintResult && (
-          <section className="mb-6 rounded-xl border border-border bg-card p-5 text-sm">
-            <h2 className="mb-2 text-base font-semibold">Mint Result</h2>
-            {"error" in mintResult ? (
-              <div className="text-destructive">{mintResult.error}</div>
-            ) : (
-              <div className="grid gap-2">
-                <Row label="Status" value={mintResult.status} />
-                <Row label="Content Hash" value={mintResult.contentHash} mono />
-                {mintResult.tokenId !== undefined && (
-                  <Row label="Token ID" value={mintResult.tokenId.toString()} />
-                )}
-                {mintResult.txHash && (
-                  <Row label="Tx Hash" value={mintResult.txHash} mono />
-                )}
-                {mintResult.signature && (
-                  <Row label="Signature" value={mintResult.signature} mono />
-                )}
-                {mintResult.status === "signed" && canClientBroadcast && (
-                  <div className="mt-2 flex items-center gap-3">
-                    <button
-                      onClick={broadcastWithWallet}
-                      disabled={broadcasting}
-                      className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {broadcasting ? "Broadcasting…" : "Broadcast with wallet"}
-                    </button>
-                    {broadcastError && (
-                      <span className="text-xs text-destructive">{broadcastError}</span>
-                    )}
-                  </div>
-                )}
-                {mintResult.status === "signed" && !canClientBroadcast && (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Server-only mode: set RELAYER_PRIVATE_KEY on the server to auto-broadcast, or expose NEXT_PUBLIC_NFT_CONTRACT_ADDRESS and NEXT_PUBLIC_CHAIN_ID to enable client-side broadcast.
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        <footer className="mt-10 text-center text-xs text-muted-foreground">
-          Built for authenticity. Minimal by design.
-        </footer>
+        {/* Verification & Mint Results */}
+        {/* (Keep your Row component same as before) */}
       </div>
     </div>
   );
 }
 
-function Row({ label, value, mono, className }: { label: string; value?: string | number | null; mono?: boolean; className?: string }) {
+function Row({
+  label,
+  value,
+  mono,
+  className,
+}: {
+  label: string;
+  value?: string | number | null;
+  mono?: boolean;
+  className?: string;
+}) {
   if (value === undefined || value === null || value === "") return null;
   return (
     <div className="grid grid-cols-3 items-start gap-2">
       <div className="col-span-1 text-muted-foreground">{label}</div>
-      <div className={`col-span-2 break-words ${mono ? "font-mono text-[11px]" : ""} ${className ?? ""}`}>{String(value)}</div>
+      <div
+        className={`col-span-2 break-words ${mono ? "font-mono text-[11px]" : ""} ${
+          className ?? ""
+        }`}
+      >
+        {String(value)}
+      </div>
     </div>
   );
 }
