@@ -423,7 +423,8 @@ export function StorageFileCard({
   fileType,
   previewUrl,
   onMoveClick,
-  onRenameClick
+  onRenameClick,
+  ownedByYou,
 }: {
   file: { name: string; updated_at?: string | null };
   onGetUrl: (e: React.MouseEvent) => void;
@@ -435,6 +436,7 @@ export function StorageFileCard({
   previewUrl?: string | null;
   onMoveClick?: (e: React.MouseEvent) => void;
   onRenameClick?: (e: React.MouseEvent) => void;
+  ownedByYou?: boolean | null;
 }) {
   return (
     <Card className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
@@ -446,6 +448,11 @@ export function StorageFileCard({
         </div>
       )}
       <CardContent className="p-4">
+        {typeof ownedByYou === 'boolean' && (
+          <div className={`absolute right-2 top-2 rounded-md px-2 py-0.5 text-[10px] font-medium ${ownedByYou ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+            {ownedByYou ? 'Owned' : 'Not owned'}
+          </div>
+        )}
         <div className="flex justify-between items-start">
           <h3 className="font-medium line-clamp-2 text-ellipsis">
             {file.name}
@@ -522,7 +529,8 @@ export function StorageFileRow({
   fileType,
   previewUrl,
   onMoveClick,
-  onRenameClick
+  onRenameClick,
+  ownedByYou,
 }: {
   file: { name: string; updated_at?: string | null };
   onGetUrl: (e: React.MouseEvent) => void;
@@ -534,6 +542,7 @@ export function StorageFileRow({
   previewUrl?: string | null;
   onMoveClick?: (e: React.MouseEvent) => void;
   onRenameClick?: (e: React.MouseEvent) => void;
+  ownedByYou?: boolean | null;
 }) {
   return (
     <div className="group relative flex items-center p-3 hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
@@ -554,6 +563,11 @@ export function StorageFileRow({
           )}
           {file.updated_at && (
             <span>{formatRelativeDate(file.updated_at)}</span>
+          )}
+          {typeof ownedByYou === 'boolean' && (
+            <span className={`ml-2 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${ownedByYou ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+              {ownedByYou ? 'Owned' : 'Not owned'}
+            </span>
           )}
         </div>
       </div>

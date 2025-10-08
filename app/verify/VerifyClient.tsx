@@ -49,6 +49,7 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
   const [mintResult, setMintResult] = useState<MintResponse | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_NFT_CONTRACT_ADDRESS;
   const PUBLIC_CHAIN_ID = process.env.NEXT_PUBLIC_CHAIN_ID
@@ -115,6 +116,7 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
   const doVerify = async () => {
     try {
       setError(null);
+      setSuccess(null);
       setMintResult(null);
       setVerifyLoading(true);
       if (!file) throw new Error("Please choose a file to verify.");
@@ -138,6 +140,7 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
   const doMint = async () => {
     try {
       setError(null);
+      setSuccess(null);
       setVerifyResult(null);
       setMintLoading(true);
       if (!file) throw new Error("Please choose a file to mint.");
@@ -149,8 +152,21 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
       if (cid.trim()) fd.append("cid", cid.trim());
       const res = await fetch("/api/mint", { method: "POST", body: fd });
       const json = (await res.json()) as MintResponse;
+      // Handle already minted (HTTP 409) gracefully
+      if (res.status === 409 && (json as any)?.status === "already_minted") {
+        setMintResult(json);
+        return;
+      }
+      // Some backends may return 200 with status already_minted
+      if ((json as any)?.status === "already_minted") {
+        setMintResult(json);
+        return;
+      }
       if (!res.ok) throw new Error((json as any)?.error || "Mint failed");
       setMintResult(json);
+      if ((json as any)?.status === "mint_broadcast") {
+        setSuccess("Mint successful");
+      }
     } catch (e: any) {
       setError(e.message || "Mint error");
     } finally {
@@ -209,6 +225,7 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
         txHash: rc.hash,
         tokenId,
       } as MintResponse);
+      setSuccess("Mint successful");
     } catch (e: any) {
       setBroadcastError(e.message || "Broadcast failed");
     } finally {
@@ -311,11 +328,23 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
               />
               <button
                 onClick={doMint}
-                disabled={mintLoading || !file || !evmAddress || !userId}
+                disabled={
+                  mintLoading ||
+                  !file ||
+                  !evmAddress ||
+                  !userId ||
+                  (verifyResult?.status === "minted") ||
+                  (mintResult && "status" in mintResult && mintResult.status === "already_minted")
+                }
                 className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {mintLoading ? "Minting…" : "Mint"}
               </button>
+              {(verifyResult?.status === "minted" || (mintResult && "status" in mintResult && mintResult.status === "already_minted")) && (
+                <div className="text-xs text-muted-foreground">
+                  This content is already minted. Minting is disabled.
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -325,9 +354,112 @@ export default function VerifyClient({ defaultEvmAddress }: { defaultEvmAddress?
             {error}
           </div>
         )}
+        {success && (
+          <div className="mb-6 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-500">
+            {success}
+          </div>
+        )}
 
         {/* Verification & Mint Results */}
-        {/* (Keep your Row component same as before) */}
+        {verifyResult && (
+          <section className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-medium text-muted-foreground">Verification</div>
+              <div
+                className={`rounded-md px-2 py-1 text-xs ${
+                  verifyResult.status === "minted"
+                    ? "bg-emerald-500/10 text-emerald-500"
+                    : "bg-amber-500/10 text-amber-500"
+                }`}
+              >
+                {verifyResult.status === "minted" ? "Minted" : "Not minted"}
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <Row label="Content hash" value={(verifyResult as any).contentHash} mono />
+              {verifyResult.status === "minted" && (
+                <>
+                  <Row label="Token ID" value={(verifyResult as any).tokenId} mono />
+                  <Row label="Owner" value={(verifyResult as any).owner} mono />
+                  <Row
+                    label="Minter"
+                    value={(verifyResult as any).tokenData?.user || (verifyResult as any).owner}
+                    mono
+                    className={
+                      ((walletAddress || "").toLowerCase() === (((verifyResult as any).tokenData?.user || (verifyResult as any).owner) || "").toLowerCase())
+                        ? "text-emerald-500"
+                        : "text-red-500"
+                    }
+                  />
+                  <Row label="Token URI" value={(verifyResult as any).tokenURI} mono />
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
+        {mintResult && (
+          <section className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-medium text-muted-foreground">Mint</div>
+              <div
+                className={`rounded-md px-2 py-1 text-xs ${
+                  mintResult.status === "mint_broadcast"
+                    ? "bg-emerald-500/10 text-emerald-500"
+                    : mintResult.status === "already_minted"
+                    ? "bg-blue-500/10 text-blue-500"
+                    : "bg-primary/10 text-primary"
+                }`}
+              >
+                {mintResult.status === "signed"
+                  ? "Signed"
+                  : mintResult.status === "mint_broadcast"
+                  ? "Broadcasted"
+                  : "Already minted"}
+              </div>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <Row label="Content hash" value={(mintResult as any).contentHash} mono />
+              {mintResult.status === "already_minted" && (
+                <>
+                  <Row label="Token ID" value={(mintResult as any).tokenId} mono />
+                  <Row label="Owner" value={(mintResult as any).owner} mono />
+                  <Row label="Token URI" value={(mintResult as any).tokenURI} mono />
+                </>
+              )}
+              {mintResult.status === "mint_broadcast" && (
+                <>
+                  <Row label="Tx hash" value={(mintResult as any).txHash} mono />
+                  <Row label="Token ID" value={(mintResult as any).tokenId} mono />
+                </>
+              )}
+            </div>
+
+            {mintResult.status === "signed" && (
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <div className="text-xs text-muted-foreground">
+                  Signature ready. Broadcast to mint on-chain.
+                </div>
+                {canClientBroadcast && (
+                  <button
+                    onClick={broadcastWithWallet}
+                    disabled={broadcasting}
+                    className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {broadcasting ? "Broadcasting…" : "Broadcast with wallet"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {broadcastError && (
+              <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                {broadcastError}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

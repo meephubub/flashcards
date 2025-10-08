@@ -103,6 +103,25 @@ export default function FilesPage() {
   const [previewName, setPreviewName] = useState<string>("")
   // Hover preview cache: fullPath -> signed URL
   const [storagePreviewUrls, setStoragePreviewUrls] = useState<Record<string, string>>({})
+  const [ownedByPath, setOwnedByPath] = useState<Record<string, boolean | undefined>>({})
+  const [walletAddress, setWalletAddress] = useState<string>("")
+
+  useEffect(() => {
+    const loadWallet = async () => {
+      if (!user?.id) return
+      try {
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('address')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        setWalletAddress(wallet?.address || "")
+      } catch {
+        setWalletAddress("")
+      }
+    }
+    void loadWallet()
+  }, [supabase, user?.id])
   // Note content hover preview cache: noteId -> snippet
   const [notePreviews, setNotePreviews] = useState<Record<string, string>>({})
   // Storage rename dialog
@@ -210,6 +229,28 @@ export default function FilesPage() {
       const { data, error } = await supabase.storage.from('userFiles').createSignedUrl(f.fullPath, 3600)
       if (error || !data?.signedUrl) return
       setStoragePreviewUrls((prev) => ({ ...prev, [f.fullPath]: data.signedUrl }))
+    } catch {}
+  }
+
+  const ensureOwnedStatus = async (f: { fullPath: string; name: string }) => {
+    if (ownedByPath[f.fullPath] !== undefined) return
+    try {
+      const { data, error } = await supabase.storage.from('userFiles').createSignedUrl(f.fullPath, 3600)
+      if (error || !data?.signedUrl) return
+      const res = await fetch(data.signedUrl)
+      const blob = await res.blob()
+      const fd = new FormData()
+      fd.append('file', new File([blob], f.name, { type: blob.type || 'application/octet-stream' }))
+      const vr = await fetch('/api/verify', { method: 'POST', body: fd })
+      const json = await vr.json().catch(() => ({}))
+      if (vr.status === 404 && json?.status === 'not_minted') {
+        setOwnedByPath((m) => ({ ...m, [f.fullPath]: false }))
+        return
+      }
+      if (!vr.ok) return
+      const minter = (json?.tokenData?.user || json?.owner || '').toLowerCase()
+      const owned = Boolean(walletAddress && minter && walletAddress.toLowerCase() === minter)
+      setOwnedByPath((m) => ({ ...m, [f.fullPath]: owned }))
     } catch {}
   }
 
@@ -460,6 +501,15 @@ export default function FilesPage() {
           if (error) {
             toast.error(`Upload failed: ${f.name}`)
           }
+          // Attempt to mint the uploaded file with the user's custodial wallet (best-effort)
+          try {
+            const fd = new FormData()
+            fd.append('file', f)
+            const { data: wallet } = await supabase.from('wallets').select('address').eq('user_id', user.id).maybeSingle()
+            const address = wallet?.address || ''
+            if (address) fd.append('userAddress', address)
+            await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => {})
+          } catch {}
         }
         toast.success('Upload complete')
         // refresh list efficiently
@@ -781,13 +831,14 @@ export default function FilesPage() {
                         file={f}
                         fileType={getFileType(f.name).label}
                         previewUrl={storagePreviewUrls[f.fullPath]}
-                        onHoverStart={() => void onHoverStartFile({ fullPath: f.fullPath, name: f.name })}
+                        onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }); void ensureOwnedStatus({ fullPath: f.fullPath, name: f.name }) }}
                         onClick={() => void onDownloadFile(f)}
                         onPreview={(e) => { e.stopPropagation(); void onPreviewFile({ fullPath: f.fullPath, name: f.name }) }}
                         onGetUrl={(e) => { e.stopPropagation(); void onGetFileUrl(f) }}
                         onDelete={(e) => { e.stopPropagation(); openDeleteStorageDialogFor({ name: f.name, fullPath: f.fullPath }) }}
                         onMoveClick={(e) => { e.stopPropagation(); setStorageFileToMove({ fullPath: f.fullPath, name: f.name }); setSelectedMoveFolderId(currentFolder ?? null); setIsMoveDialogOpen(true) }}
                         onRenameClick={(e) => { e.stopPropagation(); setRenameTarget({ fullPath: f.fullPath, name: f.name }); setRenameNewName(f.name); setIsRenameOpen(true) }}
+                        ownedByYou={ownedByPath[f.fullPath] ?? null}
                       />
                     ))}
                   </Grid>
@@ -839,13 +890,14 @@ export default function FilesPage() {
                       file={f}
                       fileType={getFileType(f.name).label}
                       previewUrl={storagePreviewUrls[f.fullPath]}
-                      onHoverStart={() => void onHoverStartFile({ fullPath: f.fullPath, name: f.name })}
+                      onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }); void ensureOwnedStatus({ fullPath: f.fullPath, name: f.name }) }}
                       onClick={() => void onDownloadFile(f)}
                       onPreview={(e) => { e.stopPropagation(); void onPreviewFile({ fullPath: f.fullPath, name: f.name }) }}
                       onGetUrl={(e) => { e.stopPropagation(); void onGetFileUrl(f) }}
                       onDelete={(e) => { e.stopPropagation(); openDeleteStorageDialogFor({ name: f.name, fullPath: f.fullPath }) }}
                       onMoveClick={(e) => { e.stopPropagation(); setStorageFileToMove({ fullPath: f.fullPath, name: f.name }); setSelectedMoveFolderId(currentFolder ?? null); setIsMoveDialogOpen(true) }}
                       onRenameClick={(e) => { e.stopPropagation(); setRenameTarget({ fullPath: f.fullPath, name: f.name }); setRenameNewName(f.name); setIsRenameOpen(true) }}
+                      ownedByYou={ownedByPath[f.fullPath] ?? null}
                     />
                   ))}
                   {filteredNotes.map((n) => (

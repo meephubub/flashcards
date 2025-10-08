@@ -76,6 +76,26 @@ export default function Page() {
   const [isStarred, setIsStarred] = useState<boolean>(false)
   const [starSaving, setStarSaving] = useState<boolean>(false)
   const [starError, setStarError] = useState<string | null>(null)
+  // Custodial wallet + ownership pill state
+  const [walletAddress, setWalletAddress] = useState<string>("")
+  const [noteOwnedByYou, setNoteOwnedByYou] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    const loadWallet = async () => {
+      if (!user?.id) return
+      try {
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('address')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        setWalletAddress(wallet?.address || "")
+      } catch {
+        setWalletAddress("")
+      }
+    }
+    void loadWallet()
+  }, [supabase, user?.id])
 
   // Toggle star for current note
   const toggleStar = React.useCallback(async () => {
@@ -666,9 +686,35 @@ export default function Page() {
       setNoteContent((data?.content as string) ?? draftContent)
       setNoteUpdatedAt((data?.updated_at as string) || "")
       setIsEditing(false)
+      // Best-effort auto-mint and update ownership pill
+      try {
+        const contentStr = (data?.content as string) ?? draftContent
+        // Mint
+        try {
+          const fd = new FormData()
+          fd.append('file', new File([contentStr], `${(noteTitle || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
+          const address = walletAddress || ''
+          if (address) fd.append('userAddress', address)
+          await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => {})
+        } catch {}
+        // Verify
+        try {
+          const fd2 = new FormData()
+          fd2.append('file', new File([contentStr], `${(noteTitle || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
+          const vr = await fetch('/api/verify', { method: 'POST', body: fd2 })
+          const vj = await vr.json().catch(() => ({}))
+          if (vr.status === 404 && vj?.status === 'not_minted') {
+            setNoteOwnedByYou(false)
+          } else if (vr.ok) {
+            const minter = (vj?.tokenData?.user || vj?.owner || '').toLowerCase()
+            const owned = Boolean(walletAddress && minter && walletAddress.toLowerCase() === minter)
+            setNoteOwnedByYou(owned)
+          }
+        } catch {}
+      } catch {}
     }
     setSaving(false)
-  }, [currentNoteId, draftContent, supabase, user?.id, saving])
+  }, [currentNoteId, draftContent, supabase, user?.id, saving, noteTitle, walletAddress])
 
   // Format with AI
   const formatWithAI = React.useCallback(async () => {
@@ -1009,6 +1055,13 @@ Goals:
                 <BreadcrumbItem>
                   <BreadcrumbPage>{noteTitle || "Untitled"}</BreadcrumbPage>
                 </BreadcrumbItem>
+                {noteOwnedByYou !== null && (
+                  <BreadcrumbItem>
+                    <span className={`ml-2 inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium ${noteOwnedByYou ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                      {noteOwnedByYou ? 'Owned' : 'Not owned'}
+                    </span>
+                  </BreadcrumbItem>
+                )}
               </BreadcrumbList>
             </Breadcrumb>
           </div>
