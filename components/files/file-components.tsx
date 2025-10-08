@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import React, { useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import { useRouter } from "next/navigation"
 import { useNoteContextStore } from "@/hooks/use-note-context"
@@ -7,25 +7,117 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { formatRelativeDate } from "@/lib/utils"
 import { 
-  CalendarClock, 
-  FileText, 
-  MoreVertical, 
-  FolderInput,
   FolderOpenIcon,
   FolderIcon,
+  Archive,
+  Box,
+  Briefcase,
+  Database,
+  Package,
+  FolderTree,
   Trash,
-  Pencil
+  Pencil,
+  FileText,
+  FolderInput,
+  MoreVertical,
+  CalendarClock,
+  Loader2
 } from "lucide-react"
+
+// Map of common Lucide icon names to their components for folders (fallback)
+const folderIconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+  Folder: FolderIcon,
+  FolderOpen: FolderOpenIcon,
+  Archive: Archive,
+  Box: Box,
+  Briefcase: Briefcase,
+  Database: Database,
+  Package: Package,
+  FolderTree: FolderTree,
+}
+
+// Cache for dynamically loaded icons
+const iconCache: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null> = {}
+
+// Dynamic icon resolver for all Lucide icons
+async function getLucideIcon(iconName: string): Promise<React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null> {
+  if (iconCache[iconName] !== undefined) {
+    return iconCache[iconName]
+  }
+
+  try {
+    // Dynamically import the icon from lucide-react
+    const module = await import('lucide-react')
+    const IconComponent = (module as any)[iconName] as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+
+    if (IconComponent) {
+      iconCache[iconName] = IconComponent
+      return IconComponent
+    } else {
+      iconCache[iconName] = null
+      return null
+    }
+  } catch (error) {
+    console.warn(`Failed to load Lucide icon: ${iconName}`, error)
+    iconCache[iconName] = null
+    return null
+  }
+}
+
+// Enhanced icon renderer that handles async loading
+function renderFolderIcon(iconName?: string, color?: string) {
+  if (!iconName) {
+    return <FolderOpenIcon className="h-12 w-12 mb-2 transition-colors" style={{ color }} />
+  }
+
+  // Check if it's likely an emoji (contains non-word, non-space characters)
+  if (/[^\w\s]/.test(iconName)) {
+    return <div className="h-12 w-12 mb-2 flex items-center justify-center text-3xl" style={{ color }}>{iconName}</div>
+  }
+
+  // Check static map first for common icons
+  const IconComponent = folderIconMap[iconName] || iconCache[iconName]
+  if (IconComponent) {
+    return <IconComponent className="h-12 w-12 mb-2 transition-colors" style={{ color }} />
+  }
+
+  // For dynamic loading, we'll use a placeholder that can be updated
+  // This is a simple implementation - in a real app you might use React Suspense
+  const [DynamicIcon, setDynamicIcon] = React.useState<React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null>(null)
+
+  React.useEffect(() => {
+    let mounted = true
+
+    getLucideIcon(iconName).then((Icon) => {
+      if (mounted) {
+        setDynamicIcon(Icon)
+      }
+    })
+
+    return () => {
+      mounted = false
+    }
+  }, [iconName])
+
+  if (DynamicIcon) {
+    return <DynamicIcon className="h-12 w-12 mb-2 transition-colors" style={{ color }} />
+  }
+
+  // Show placeholder while loading
+  return <FolderOpenIcon className="h-12 w-12 mb-2 transition-colors animate-pulse" style={{ color }} />
+}
 
 // Component to render a folder in grid view
 export function FolderCard({ 
   name, 
   onClick,
-  onMoveClick
+  onMoveClick,
+  style,
 }: { 
   name: string; 
   onClick: () => void;
   onMoveClick?: (e: React.MouseEvent) => void;
+  style?: { color?: string; icon?: string } | null;
 }) {
   return (
     <Card className="group cursor-pointer transition-colors hover:bg-accent/50">
@@ -35,7 +127,7 @@ export function FolderCard({
             className="flex-1 flex flex-col items-center text-center"
             onClick={onClick}
           >
-            <FolderOpenIcon className="h-12 w-12 text-yellow-500 mb-2 group-hover:text-yellow-600 transition-colors" />
+            {renderFolderIcon(style?.icon, style?.color)}
             <p className="font-medium line-clamp-2">{name}</p>
           </div>
           {onMoveClick && (
@@ -69,15 +161,59 @@ export function FolderCard({
 export function FolderRow({ 
   name, 
   onClick,
-  onMoveClick
+  onMoveClick,
+  style,
 }: { 
   name: string; 
   onClick: () => void;
   onMoveClick?: (e: React.MouseEvent) => void;
+  style?: { color?: string; icon?: string } | null;
 }) {
   return (
     <div className="flex items-center p-3 rounded-lg border hover:bg-accent/50 cursor-pointer" onClick={onClick}>
-      <FolderIcon className="h-5 w-5 text-yellow-500 mr-3" />
+      {(() => {
+        const iconName = style?.icon
+        const color = style?.color
+
+        if (!iconName) {
+          return <FolderIcon className="h-5 w-5 mr-3" style={{ color }} />
+        }
+
+        // Check if it's likely an emoji
+        if (/[^\w\s]/.test(iconName)) {
+          return <div className="h-5 w-5 mr-3 flex items-center justify-center text-lg" style={{ color }}>{iconName}</div>
+        }
+
+        // Check static map first for common icons
+        const IconComponent = folderIconMap[iconName] || iconCache[iconName]
+        if (IconComponent) {
+          return <IconComponent className="h-5 w-5 mr-3" style={{ color }} />
+        }
+
+        // For dynamic loading, use state to handle async loading
+        const [DynamicIcon, setDynamicIcon] = React.useState<React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null>(null)
+
+        React.useEffect(() => {
+          let mounted = true
+
+          getLucideIcon(iconName).then((Icon) => {
+            if (mounted) {
+              setDynamicIcon(Icon)
+            }
+          })
+
+          return () => {
+            mounted = false
+          }
+        }, [iconName])
+
+        if (DynamicIcon) {
+          return <DynamicIcon className="h-5 w-5 mr-3" style={{ color }} />
+        }
+
+        // Show placeholder while loading
+        return <FolderIcon className="h-5 w-5 mr-3 animate-pulse" style={{ color }} />
+      })()}
       <div 
         className="flex-1 min-w-0"
       >
@@ -138,7 +274,7 @@ export function NoteCard({
     onHoverStart?.()
     clearHideTimer()
     clearShowTimer()
-    showTimerRef.current = window.setTimeout(() => setShowPreview(true), 500)
+    showTimerRef.current = window.setTimeout(() => setShowPreview(true), 1000)
   }
   const handleMouseLeave = () => { scheduleHide(); clearShowTimer() }
   return (
@@ -441,6 +577,7 @@ export function StorageFileCard({
   onMoveClick,
   onRenameClick,
   ownedByYou,
+  onVerifyClick,
 }: {
   file: { name: string; updated_at?: string | null };
   onGetUrl: (e: React.MouseEvent) => void;
@@ -453,6 +590,7 @@ export function StorageFileCard({
   onMoveClick?: (e: React.MouseEvent) => void;
   onRenameClick?: (e: React.MouseEvent) => void;
   ownedByYou?: boolean | null;
+  onVerifyClick?: (e: React.MouseEvent) => void;
 }) {
   return (
     <Card className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
@@ -496,6 +634,12 @@ export function StorageFileCard({
                 <DropdownMenuItem onClick={onRenameClick}>
                   <Pencil className="mr-2 h-4 w-4" />
                   <span>Rename</span>
+                </DropdownMenuItem>
+              )}
+              {onVerifyClick && (
+                <DropdownMenuItem onClick={onVerifyClick}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>Verify</span>
                 </DropdownMenuItem>
               )}
               {onPreview && (
@@ -547,6 +691,7 @@ export function StorageFileRow({
   onMoveClick,
   onRenameClick,
   ownedByYou,
+  onVerifyClick,
 }: {
   file: { name: string; updated_at?: string | null };
   onGetUrl: (e: React.MouseEvent) => void;
@@ -559,6 +704,7 @@ export function StorageFileRow({
   onMoveClick?: (e: React.MouseEvent) => void;
   onRenameClick?: (e: React.MouseEvent) => void;
   ownedByYou?: boolean | null;
+  onVerifyClick?: (e: React.MouseEvent) => void;
 }) {
   return (
     <div className="group relative flex items-center p-3 hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
@@ -605,6 +751,12 @@ export function StorageFileRow({
             <DropdownMenuItem onClick={onRenameClick}>
               <Pencil className="mr-2 h-4 w-4" />
               <span>Rename</span>
+            </DropdownMenuItem>
+          )}
+          {onVerifyClick && (
+            <DropdownMenuItem onClick={onVerifyClick}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span>Verify</span>
             </DropdownMenuItem>
           )}
           {onPreview && (

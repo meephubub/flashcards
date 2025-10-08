@@ -1,16 +1,18 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from "react"
-import { useAuth } from "@/context/auth-context"
+import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import type { Note } from "@/lib/supabase"
 import { useNoteContextStore } from "@/hooks/use-note-context"
 import { useRouter } from "next/navigation"
 import { useFolder } from "@/context/folder-context"
+import { useAuth } from "@/context/auth-context"
 
 import { AppSidebar } from "@/components/notes/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
 import { 
   Breadcrumb, 
   BreadcrumbItem, 
@@ -30,19 +32,133 @@ import {
   List as ListIcon, 
   FileText,
   FolderPlus,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  Loader2,
+  ArrowLeft,
+  FolderOpenIcon,
+  FolderIcon,
+  Archive,
+  Box,
+  Briefcase,
+  Database,
+  Package,
+  FolderTree
 } from "lucide-react"
-import { toast } from "sonner"
+
+// Preset pastel colors for folder customization
+const PASTEL_COLORS = [
+  { name: 'Pink', value: '#FFB3BA' },
+  { name: 'Light Blue', value: '#BAFFC9' },
+  { name: 'Mint', value: '#BAE1FF' },
+  { name: 'Lavender', value: '#E1BAFF' },
+  { name: 'Peach', value: '#FFDFBA' },
+  { name: 'Sage', value: '#C9FFBA' },
+  { name: 'Sky', value: '#BAF2FF' },
+  { name: 'Lilac', value: '#F0BAFF' },
+  { name: 'Coral', value: '#FFC9BA' },
+  { name: 'Aqua', value: '#BAFFF2' },
+]
+
+// Color preset component
+function ColorPreset({ color, onSelect, isSelected }: { color: string; onSelect: () => void; isSelected: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
+        isSelected ? 'border-foreground scale-110' : 'border-border hover:border-foreground/50'
+      }`}
+      style={{ backgroundColor: color }}
+      title={`Select ${color}`}
+    />
+  )
+}
 import { 
   FolderCard, 
   NoteCard, 
-  NoteRow,
   FolderTreeItem,
   StorageFileCard,
   StorageFileRow,
   FolderRow
 } from "@/components/files/file-components"
 import { NoteDeleteDialog } from "@/components/note-delete-dialog"
+
+// Preview component for folder icon
+function FolderIconPreview({ icon, color }: { icon?: string; color?: string }) {
+  return (
+    <div className="flex items-center justify-center p-4 border rounded-lg bg-muted/50">
+      <div className="flex flex-col items-center text-center">
+        {(() => {
+          if (!icon) {
+            return <FolderOpenIcon className="h-12 w-12 mb-2 transition-colors" style={{ color }} />
+          }
+
+          // Check if it's likely an emoji (contains non-word, non-space characters)
+          if (/[^\w\s]/.test(icon)) {
+            return <div className="h-12 w-12 mb-2 flex items-center justify-center text-3xl" style={{ color }}>{icon}</div>
+          }
+
+          // Check static map first for common icons
+          const folderIconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+            Folder: FolderIcon,
+            FolderOpen: FolderOpenIcon,
+            Archive: Archive,
+            Box: Box,
+            Briefcase: Briefcase,
+            Database: Database,
+            Package: Package,
+            FolderTree: FolderTree,
+          }
+
+          const IconComponent = folderIconMap[icon]
+          if (IconComponent) {
+            return <IconComponent className="h-12 w-12 mb-2 transition-colors" style={{ color }} />
+          }
+
+          // For dynamic loading, we'll use a placeholder that can be updated
+          // This is a simple implementation - in a real app you might use React Suspense
+          const [DynamicIcon, setDynamicIcon] = React.useState<React.ComponentType<{ className?: string; style?: React.CSSProperties }> | null>(null)
+
+          React.useEffect(() => {
+            let mounted = true
+
+            const loadIcon = async () => {
+              try {
+                const module = await import('lucide-react')
+                const IconComponent = (module as any)[icon] as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+
+                if (IconComponent && mounted) {
+                  setDynamicIcon(IconComponent)
+                } else if (mounted) {
+                  setDynamicIcon(null) // Icon not found
+                }
+              } catch (error) {
+                console.warn(`Failed to load Lucide icon: ${icon}`, error)
+                if (mounted) {
+                  setDynamicIcon(null)
+                }
+              }
+            }
+
+            loadIcon()
+
+            return () => {
+              mounted = false
+            }
+          }, [icon])
+
+          if (DynamicIcon) {
+            return <DynamicIcon className="h-12 w-12 mb-2 transition-colors" style={{ color }} />
+          }
+
+          // Show placeholder while loading or if not found
+          return <FolderOpenIcon className="h-12 w-12 mb-2 transition-colors animate-pulse" style={{ color }} />
+        })()}
+        <span className="text-sm font-medium">Preview</span>
+      </div>
+    </div>
+  )
+}
 
 interface NoteWithFolder extends Pick<Note, "id" | "title" | "updated_at" | "category" | "project"> {
   folder_id?: string | null
@@ -128,6 +244,11 @@ export default function FilesPage() {
   const [isRenameOpen, setIsRenameOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ fullPath: string; name: string } | null>(null)
   const [renameNewName, setRenameNewName] = useState<string>("")
+  // Upload progress state
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
+  const [uploadTotal, setUploadTotal] = useState<number>(0)
+  const [uploadDone, setUploadDone] = useState<number>(0)
 
   // Persist view preference locally
   useEffect(() => {
@@ -232,11 +353,11 @@ export default function FilesPage() {
     } catch {}
   }
 
-  const ensureOwnedStatus = async (f: { fullPath: string; name: string }) => {
-    if (ownedByPath[f.fullPath] !== undefined) return
+  // Verify storage file ownership only when user requests (no auto on hover)
+  const verifyStorageFile = async (f: { fullPath: string; name: string }) => {
     try {
       const { data, error } = await supabase.storage.from('userFiles').createSignedUrl(f.fullPath, 3600)
-      if (error || !data?.signedUrl) return
+      if (error || !data?.signedUrl) throw error || new Error('Could not sign URL')
       const res = await fetch(data.signedUrl)
       const blob = await res.blob()
       const fd = new FormData()
@@ -245,13 +366,17 @@ export default function FilesPage() {
       const json = await vr.json().catch(() => ({}))
       if (vr.status === 404 && json?.status === 'not_minted') {
         setOwnedByPath((m) => ({ ...m, [f.fullPath]: false }))
+        toast.info('Not minted')
         return
       }
-      if (!vr.ok) return
+      if (!vr.ok) throw new Error(json?.error || 'Verify failed')
       const minter = (json?.tokenData?.user || json?.owner || '').toLowerCase()
       const owned = Boolean(walletAddress && minter && walletAddress.toLowerCase() === minter)
       setOwnedByPath((m) => ({ ...m, [f.fullPath]: owned }))
-    } catch {}
+      toast.success('Minted')
+    } catch (e: any) {
+      toast.error(e?.message || 'Verify failed')
+    }
   }
 
   // Handle creating a new folder
@@ -490,6 +615,10 @@ export default function FilesPage() {
       input.onchange = async () => {
         const files = Array.from(input.files || [])
         if (files.length === 0) return
+        setIsUploading(true)
+        setUploadTotal(files.length)
+        setUploadDone(0)
+        setUploadProgress(0)
         const base = user.id
         const sub = currentFolder ? `${currentFolder}` : ""
         const dirPath = sub ? `${base}/${sub}` : `${base}`
@@ -510,15 +639,27 @@ export default function FilesPage() {
             if (address) fd.append('userAddress', address)
             await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => {})
           } catch {}
+          // update progress per-file
+          setUploadDone((d) => {
+            const next = d + 1
+            const pct = Math.round((next / files.length) * 100)
+            setUploadProgress(pct)
+            return next
+          })
         }
         toast.success('Upload complete')
         // refresh list efficiently
         void refreshStorageFiles()
+        setIsUploading(false)
+        setUploadProgress(0)
+        setUploadTotal(0)
+        setUploadDone(0)
       }
       input.click()
     } catch (e) {
       console.error('Upload error', e)
       toast.error('Upload failed')
+      setIsUploading(false)
     }
   }
 
@@ -681,6 +822,21 @@ export default function FilesPage() {
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
+            {folderPath.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  // Navigate back to parent folder or root
+                  const parentFolder = folderPath.length > 1 ? folderPath[folderPath.length - 2].id : null
+                  setCurrentFolder(parentFolder)
+                }}
+                className="ml-auto"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back
+              </Button>
+            )}
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
@@ -740,6 +896,17 @@ export default function FilesPage() {
                 </div>
               </div>
             </div>
+
+            {isUploading && (
+              <div className="mb-4 rounded-md border p-3">
+                <div className="mb-2 flex items-center gap-2 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Uploading {uploadDone}/{uploadTotal}…</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} />
+              </div>
+            )}
 
             {/* Delete Storage File Dialog (shared UI) */}
             <NoteDeleteDialog
@@ -818,6 +985,7 @@ export default function FilesPage() {
                       <FolderCard 
                         key={f.id}
                         name={f.name}
+                        style={f.style || null}
                         onClick={() => setCurrentFolder(f.id)}
                       />
                     ))}
@@ -831,13 +999,14 @@ export default function FilesPage() {
                         file={f}
                         fileType={getFileType(f.name).label}
                         previewUrl={storagePreviewUrls[f.fullPath]}
-                        onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }); void ensureOwnedStatus({ fullPath: f.fullPath, name: f.name }) }}
+                        onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }) }}
                         onClick={() => void onDownloadFile(f)}
                         onPreview={(e) => { e.stopPropagation(); void onPreviewFile({ fullPath: f.fullPath, name: f.name }) }}
                         onGetUrl={(e) => { e.stopPropagation(); void onGetFileUrl(f) }}
                         onDelete={(e) => { e.stopPropagation(); openDeleteStorageDialogFor({ name: f.name, fullPath: f.fullPath }) }}
                         onMoveClick={(e) => { e.stopPropagation(); setStorageFileToMove({ fullPath: f.fullPath, name: f.name }); setSelectedMoveFolderId(currentFolder ?? null); setIsMoveDialogOpen(true) }}
                         onRenameClick={(e) => { e.stopPropagation(); setRenameTarget({ fullPath: f.fullPath, name: f.name }); setRenameNewName(f.name); setIsRenameOpen(true) }}
+                        onVerifyClick={(e) => { e.stopPropagation(); void verifyStorageFile({ fullPath: f.fullPath, name: f.name }) }}
                         ownedByYou={ownedByPath[f.fullPath] ?? null}
                       />
                     ))}
@@ -908,6 +1077,7 @@ export default function FilesPage() {
                     <FolderRow
                       key={f.id}
                       name={f.name}
+                      style={f.style || null}
                       onClick={() => setCurrentFolder(f.id)}
                       onMoveClick={undefined}
                     />
@@ -918,13 +1088,14 @@ export default function FilesPage() {
                       file={f}
                       fileType={getFileType(f.name).label}
                       previewUrl={storagePreviewUrls[f.fullPath]}
-                      onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }); void ensureOwnedStatus({ fullPath: f.fullPath, name: f.name }) }}
+                      onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }) }}
                       onClick={() => void onDownloadFile(f)}
                       onPreview={(e) => { e.stopPropagation(); void onPreviewFile({ fullPath: f.fullPath, name: f.name }) }}
                       onGetUrl={(e) => { e.stopPropagation(); void onGetFileUrl(f) }}
                       onDelete={(e) => { e.stopPropagation(); openDeleteStorageDialogFor({ name: f.name, fullPath: f.fullPath }) }}
                       onMoveClick={(e) => { e.stopPropagation(); setStorageFileToMove({ fullPath: f.fullPath, name: f.name }); setSelectedMoveFolderId(currentFolder ?? null); setIsMoveDialogOpen(true) }}
                       onRenameClick={(e) => { e.stopPropagation(); setRenameTarget({ fullPath: f.fullPath, name: f.name }); setRenameNewName(f.name); setIsRenameOpen(true) }}
+                      onVerifyClick={(e) => { e.stopPropagation(); void verifyStorageFile({ fullPath: f.fullPath, name: f.name }) }}
                       ownedByYou={ownedByPath[f.fullPath] ?? null}
                     />
                   ))}
@@ -1009,6 +1180,20 @@ export default function FilesPage() {
                       placeholder="Icon (emoji or Lucide name)"
                     />
                   </div>
+                  {/* Color Presets */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">Quick Colors:</label>
+                    <div className="flex flex-wrap gap-2">
+                      {PASTEL_COLORS.map((preset) => (
+                        <ColorPreset
+                          key={preset.value}
+                          color={preset.value}
+                          onSelect={() => setNewFolderColor(preset.value)}
+                          isSelected={newFolderColor === preset.value}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button variant="ghost" onClick={() => setIsCreateFolderDialogOpen(false)}>Cancel</Button>
@@ -1024,23 +1209,44 @@ export default function FilesPage() {
                   <DialogTitle>Edit folder</DialogTitle>
                   <DialogDescription>Change the folder name, color or icon.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-2">
-                  <Input
-                    value={editFolderName}
-                    onChange={(e) => setEditFolderName(e.target.value)}
-                    placeholder="Folder name"
-                  />
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={editFolderColor}
-                      onChange={(e) => setEditFolderColor(e.target.value)}
-                      placeholder="#AABBCC or tailwind token"
-                    />
-                    <Input
-                      value={editFolderIcon}
-                      onChange={(e) => setEditFolderIcon(e.target.value)}
-                      placeholder="Icon (emoji or Lucide name)"
-                    />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Input
+                        value={editFolderName}
+                        onChange={(e) => setEditFolderName(e.target.value)}
+                        placeholder="Folder name"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editFolderColor}
+                          onChange={(e) => setEditFolderColor(e.target.value)}
+                          placeholder="#AABBCC or tailwind token"
+                        />
+                        <Input
+                          value={editFolderIcon}
+                          onChange={(e) => setEditFolderIcon(e.target.value)}
+                          placeholder="Icon (emoji or Lucide name)"
+                        />
+                      </div>
+                      {/* Color Presets */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">Quick Colors:</label>
+                        <div className="flex flex-wrap gap-2">
+                          {PASTEL_COLORS.map((preset) => (
+                            <ColorPreset
+                              key={preset.value}
+                              color={preset.value}
+                              onSelect={() => setEditFolderColor(preset.value)}
+                              isSelected={editFolderColor === preset.value}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center">
+                      <FolderIconPreview icon={editFolderIcon} color={editFolderColor} />
+                    </div>
                   </div>
                 </div>
                 <DialogFooter>
