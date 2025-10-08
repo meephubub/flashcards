@@ -45,6 +45,7 @@ export function NavSearch({
         .from("notes")
         .select("id,title,category")
         .eq("user_id", user.id)
+        .eq("is_starred", false)
         .order("title", { ascending: true })
       if (q) {
         req = req.ilike("category", `%${q}%`)
@@ -81,7 +82,6 @@ export function NavSearch({
         .eq("user_id", user.id)
         .eq("is_starred", true)
         .order("title", { ascending: true })
-      if (selectedProject) req = req.eq("project", selectedProject)
       const { data, error } = await req
       if (!mounted) return
       if (error) {
@@ -95,7 +95,7 @@ export function NavSearch({
     const onFocus = () => run()
     window.addEventListener('focus', onFocus)
     return () => { mounted = false; window.removeEventListener('focus', onFocus) }
-  }, [supabase, user?.id, selectedProject])
+  }, [supabase, user?.id])
 
   return (
     <SidebarGroup
@@ -178,7 +178,11 @@ export function NavSearch({
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
-
+            {(!loadingStarred && starred.length > 0) && (
+              <SidebarMenuItem aria-hidden>
+                <div className="mx-2 my-1 h-px bg-border" />
+              </SidebarMenuItem>
+            )}
             {/* Search results / All notes by category filter */}
             {query && !loading && results.length === 0 && (
               <SidebarMenuItem>

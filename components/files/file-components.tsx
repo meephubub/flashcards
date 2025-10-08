@@ -109,6 +109,7 @@ export function NoteCard({
   onClick,
   onMoveClick,
   onDeleteClick,
+  onVerifyClick,
   previewSnippet,
   onHoverStart,
 }: { 
@@ -116,6 +117,7 @@ export function NoteCard({
   onClick: () => void;
   onMoveClick?: (e: React.MouseEvent) => void;
   onDeleteClick?: (e: React.MouseEvent) => void;
+  onVerifyClick?: (e: React.MouseEvent) => void;
   previewSnippet?: string;
   onHoverStart?: () => void;
 }) {
@@ -136,7 +138,7 @@ export function NoteCard({
     onHoverStart?.()
     clearHideTimer()
     clearShowTimer()
-    showTimerRef.current = window.setTimeout(() => setShowPreview(true), 200)
+    showTimerRef.current = window.setTimeout(() => setShowPreview(true), 500)
   }
   const handleMouseLeave = () => { scheduleHide(); clearShowTimer() }
   return (
@@ -193,6 +195,12 @@ export function NoteCard({
                 <FolderInput className="mr-2 h-4 w-4" />
                 <span>Move to...</span>
               </DropdownMenuItem>
+              {onVerifyClick && (
+                <DropdownMenuItem onClick={onVerifyClick}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>Verify</span>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={onDeleteClick} className="text-red-600 focus:text-red-600">
                 <Trash className="mr-2 h-4 w-4" />
                 <span>Delete</span>
@@ -224,6 +232,7 @@ export function NoteRow({
   onClick,
   onMoveClick,
   onDeleteClick,
+  onVerifyClick,
   previewSnippet,
   onHoverStart
 }: { 
@@ -231,6 +240,7 @@ export function NoteRow({
   onClick: () => void;
   onMoveClick?: (e: React.MouseEvent) => void;
   onDeleteClick?: (e: React.MouseEvent) => void;
+  onVerifyClick?: (e: React.MouseEvent) => void;
   previewSnippet?: string;
   onHoverStart?: () => void;
 }) {
@@ -315,6 +325,12 @@ export function NoteRow({
               <FolderInput className="mr-2 h-4 w-4" />
               <span>Move to...</span>
             </DropdownMenuItem>
+          {onVerifyClick && (
+            <DropdownMenuItem onClick={onVerifyClick}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span>Verify</span>
+            </DropdownMenuItem>
+          )}
             <DropdownMenuItem onClick={onDeleteClick} className="text-red-600 focus:text-red-600">
               <Trash className="mr-2 h-4 w-4" />
               <span>Delete</span>

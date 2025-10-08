@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { motion, AnimatePresence } from "framer-motion"
 import { Search, Send, BarChart2, Globe, Video, PlaneTakeoff, AudioLines, PlusCircle, Trash2, Copy, Check, HelpCircle, X, Image as ImageIcon, Download, Pencil, GitMerge, ListTodo } from "lucide-react"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter } from "next/navigation"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
 import { useNoteContextStore } from "@/hooks/use-note-context"
@@ -363,23 +363,20 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
   // Category rail state and config
   const [selectedCategory, setSelectedCategory] = useState<
-    'all' | 'basic' | 'ai' | 'notes' | 'decks' | 'models' | 'nav' | 'device' | 'todos'
+    'all' | 'ai' | 'notes' | 'decks' | 'nav' | 'todos'
   >('all')
   const categories: { id: typeof selectedCategory; label: string; icon: React.ReactNode }[] = [
     { id: 'all', label: 'All', icon: <Search className="w-4 h-4" /> },
-    { id: 'basic', label: 'Basic', icon: <PlusCircle className="w-4 h-4" /> },
-    { id: 'ai', label: 'AI', icon: <HelpCircle className="w-4 h-4" /> },
     { id: 'notes', label: 'Notes', icon: <Pencil className="w-4 h-4" /> },
     { id: 'decks', label: 'Decks', icon: <GitMerge className="w-4 h-4" /> },
-    { id: 'models', label: 'Models', icon: <BarChart2 className="w-4 h-4" /> },
+    { id: 'ai', label: 'AI', icon: <HelpCircle className="w-4 h-4" /> },
     { id: 'nav', label: 'Nav', icon: <Globe className="w-4 h-4" /> },
-    { id: 'device', label: 'Device', icon: <AudioLines className="w-4 h-4" /> },
     { id: 'todos', label: 'Todos', icon: <ListTodo className="w-4 h-4" /> },
   ]
   const debouncedQuery = useDebounce(query, 200)
   const router = useRouter()
-  const [showAll, setShowAll] = useState(false)
-  const pathname = usePathname()
+  // Dynamic max visible actions based on viewport height
+  const [maxVisible, setMaxVisible] = useState(8)
   const { openDialog } = useNoteDialogStore()
   const [openNoteFromContent, setOpenNoteFromContent] = useState(false)
   const [openMoveProject, setOpenMoveProject] = useState(false)
@@ -476,8 +473,34 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [todos, setTodos] = useState<HomeworkRow[]>([])
   const [todoError, setTodoError] = useState<string | null>(null)
 
+  // Minimal Notes search state
+  interface NoteRow { id: string; title: string | null; category: string | null; project: string | null; updated_at: string | null }
+  const [noteSearchCategory, setNoteSearchCategory] = useState("")
+  const [noteSearchProject, setNoteSearchProject] = useState("")
+  const [noteResults, setNoteResults] = useState<NoteRow[]>([])
+  const [noteLoading, setNoteLoading] = useState(false)
+  const [noteError, setNoteError] = useState<string | null>(null)
+
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  // Compute how many actions can fit based on screen height
+  useEffect(() => {
+    const compute = () => {
+      try {
+        const h = typeof window !== 'undefined' ? window.innerHeight : 800
+        const reserved = 320 // approximate non-list UI height (search, helper blocks)
+        const row = 44 // approx row height
+        const count = Math.max(6, Math.floor((h - reserved) / row))
+        setMaxVisible(count)
+      } catch {
+        setMaxVisible(8)
+      }
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    return () => window.removeEventListener('resize', compute)
   }, [])
 
   // Fetch tasks when opening palette and switching to todos
@@ -509,6 +532,42 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
     }
     void maybeFetch()
   }, [open, selectedCategory])
+
+  // Fetch notes for minimal search (title/content) with optional category/project filters, using top search bar query
+  useEffect(() => {
+    const run = async () => {
+      if (!open || selectedCategory !== 'notes') return
+      try {
+        setNoteLoading(true)
+        setNoteError(null)
+        const { data: userRes, error: uErr } = await supabase.auth.getUser()
+        if (uErr) throw uErr
+        const uid = userRes?.user?.id
+        if (!uid) { setNoteResults([]); setNoteLoading(false); return }
+        let q = (supabase as any)
+          .from('notes')
+          .select('id,title,category,project,updated_at')
+          .eq('user_id', uid)
+        const term = debouncedQuery.trim()
+        if (term) {
+          const like = `%${term}%`
+          q = q.or(`title.ilike.${like},content.ilike.${like}`)
+        }
+        if (noteSearchCategory.trim()) q = q.eq('category', noteSearchCategory.trim())
+        if (noteSearchProject.trim()) q = q.eq('project', noteSearchProject.trim())
+        q = q.order('updated_at', { ascending: false }).limit(30)
+        const { data, error } = await q
+        if (error) throw error
+        setNoteResults(((data as unknown) as NoteRow[]) || [])
+      } catch (e: any) {
+        console.error('Notes search failed', e)
+        setNoteError(e?.message || 'Failed to search notes')
+      } finally {
+        setNoteLoading(false)
+      }
+    }
+    void run()
+  }, [open, selectedCategory, debouncedQuery, noteSearchCategory, noteSearchProject])
 
   // ...
 
@@ -600,9 +659,8 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
 
   const computeEffectiveActions = (): Action[] => {
     let base = actions
-    // Notes-specific quick actions
-    if (pathname.startsWith('/notes')) {
-      const prepend: Action[] = [
+    // Global quick actions (were notes-only; now available universally)
+    const prepend: Action[] = [
         {
           id: "create-note-from-content",
           label: "Create note from content",
@@ -915,8 +973,7 @@ Note content:\n\n${data.content}`
           priority: 96,
         },
       ]
-      base = [...prepend, ...base]
-    }
+    base = [...prepend, ...base]
     // Enhance the "Question" action to prime the input with '? '
     base = base.map(a => a.id === "question"
       ? {
@@ -934,16 +991,6 @@ Note content:\n\n${data.content}`
         }
       : a
     )
-    // Context-aware filtering
-    if (!pathname.startsWith('/notes')) {
-      base = base.filter(a => ![
-        'delete-note','edit-note','create-note','move-note-project','exam-from-note','fix-note-content','edit-with-ai','create-note-from-image','create-note-from-content'
-      ].includes(a.id))
-    }
-    if (pathname.startsWith('/models')) {
-      // Do not show note deletion (reinforced by the above), keep model-related only if present
-      base = base.filter(a => a.id !== 'delete-note')
-    }
     return base
   }
 
@@ -956,8 +1003,7 @@ Note content:\n\n${data.content}`
         e.stopPropagation()
         setOpen(true)
         setIsFocused(true)
-        setShowAll(false)
-        setResult({ actions: computeEffectiveActions().slice(0, 8) })
+        setResult({ actions: computeEffectiveActions().slice(0, maxVisible) })
         // focus input after open
         setTimeout(() => {
           if (typeof document !== 'undefined') {
@@ -969,12 +1015,11 @@ Note content:\n\n${data.content}`
       }
       if (e.key === "Escape") {
         setOpen(false)
-        setShowAll(false)
       }
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [])
+  }, [maxVisible])
 
   useEffect(() => {
     const eff = computeEffectiveActions()
@@ -986,10 +1031,10 @@ Note content:\n\n${data.content}`
     // Category selection is applied after computing context-aware actions
     const scoped = selectedCategory === 'all'
       ? eff
-      : eff.filter(a => (a.category || 'basic') === selectedCategory)
+      : eff.filter(a => a.category === selectedCategory)
 
     if (!debouncedQuery) {
-      setResult({ actions: showAll ? scoped : scoped.slice(0, 8) })
+      setResult({ actions: scoped.slice(0, maxVisible) })
       return
     }
 
@@ -1013,8 +1058,9 @@ Note content:\n\n${data.content}`
 
     // If nothing matches, prefer showing navigation quick links so the user always has something to do
     const navActions = scoped.filter((a) => !!a.href)
-    setResult({ actions: scored.length > 0 ? scored : navActions })
-  }, [debouncedQuery, isFocused, open, showAll, pathname, selectedCategory])
+    const finalList = scored.length > 0 ? scored : navActions
+    setResult({ actions: finalList.slice(0, maxVisible) })
+  }, [debouncedQuery, isFocused, open, selectedCategory, maxVisible])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
@@ -1226,6 +1272,12 @@ Note content:\n\n${data.content}`
                   e.preventDefault()
                   const q = (isAiUi ? query.slice(2) : query).trim()
                   const lower = q.toLowerCase()
+                  // Route quick-nav: any input starting with '/' navigates
+                  if (q.startsWith('/')) {
+                    router.push(q)
+                    setOpen(false)
+                    return
+                  }
                   if (lower.startsWith('generate image:')) {
                     const prompt = q.slice('generate image:'.length).trim()
                     if (prompt.length > 0) {
@@ -1505,6 +1557,64 @@ Note content:\n\n${data.content}`
             </div>
           </div>
         )}
+        {/* Minimal Notes Search UI */}
+        {selectedCategory === 'notes' && (
+          <div className="w-full px-4 pb-2 -mt-2">
+            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input
+                  placeholder="Category"
+                  value={noteSearchCategory}
+                  onChange={(e) => setNoteSearchCategory(e.target.value)}
+                  className="h-8"
+                />
+                <Input
+                  placeholder="Project"
+                  value={noteSearchProject}
+                  onChange={(e) => setNoteSearchProject(e.target.value)}
+                  className="h-8"
+                />
+              </div>
+              {noteError && <div className="text-xs text-red-500">{noteError}</div>}
+              {noteLoading && (
+                <div className="p-2 text-xs text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+                </div>
+              )}
+              {!noteLoading && (
+                <div className="max-h-64 overflow-auto divide-y">
+                  {noteResults.length === 0 ? (
+                    <div className="p-2 text-xs text-muted-foreground">No notes</div>
+                  ) : (
+                    noteResults.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        className="w-full text-left p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+                        onClick={() => {
+                          try { useNoteContextStore.getState?.()?.setCurrentNoteId?.(n.id) } catch {}
+                          router.push('/notes')
+                          setOpen(false)
+                        }}
+                        title={n.title || 'Open note'}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{n.title || 'Untitled'}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">{[n.category, n.project].filter(Boolean).join(' · ') || '—'}</div>
+                          </div>
+                          {n.updated_at && (
+                            <div className="text-[10px] text-muted-foreground whitespace-nowrap">{new Date(n.updated_at).toLocaleDateString()}</div>
+                          )}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {/* Slow Image Generation UI (below search bar) */}
         {(isGenSlow || slowLoading || slowUrl || slowError) && (
           <div className="w-full px-4 pb-2 -mt-2">
@@ -1757,8 +1867,14 @@ Note content:\n\n${data.content}`
                 animate="show"
                 exit="exit"
               >
+                {/* Empty state hint when no category chosen (All) and no query */}
+                {!debouncedQuery && selectedCategory === 'all' && (
+                  <div className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-400">
+                    Start typing to begin. Type '/' followed by a route (e.g., /login) to navigate.
+                  </div>
+                )}
                 <motion.ul>
-                  {!imageNoteOpen && result.actions.map((action) => (
+                  {!imageNoteOpen && selectedCategory !== 'notes' && result.actions.map((action) => (
                     <motion.li
                       key={action.id}
                       className="px-3 py-2 flex items-center justify-between hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
@@ -1932,19 +2048,7 @@ Note content:\n\n${data.content}`
                     </div>
                   </div>
                 )}
-                {/* Show more when query empty and limited list is shown */}
-                {!imageNoteOpen && selectedCategory !== 'todos' && !debouncedQuery && !showAll && computeEffectiveActions().length > 8 && (
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 border-t border-black/5 dark:border-white/10"
-                    onClick={() => {
-                      setShowAll(true)
-                      setResult({ actions: computeEffectiveActions() })
-                    }}
-                  >
-                    Show more ({computeEffectiveActions().length - 8} more)
-                  </button>
-                )}
+                {/* Removed "Show more" - list size is now auto-limited by viewport height */}
               </motion.div>
             )}
           </AnimatePresence>

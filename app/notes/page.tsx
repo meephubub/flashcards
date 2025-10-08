@@ -16,6 +16,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import React, { useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 import { distance as levenshteinDistance } from 'fastest-levenshtein'
 import { createClient } from "@/lib/supabase/client"
 import type { Note } from "@/lib/supabase"
@@ -79,6 +80,8 @@ export default function Page() {
   // Custodial wallet + ownership pill state
   const [walletAddress, setWalletAddress] = useState<string>("")
   const [noteOwnedByYou, setNoteOwnedByYou] = useState<boolean | null>(null)
+  const [noteVerifying, setNoteVerifying] = useState<boolean>(false)
+  const [noteAlreadyMinted, setNoteAlreadyMinted] = useState<boolean>(false)
 
   useEffect(() => {
     const loadWallet = async () => {
@@ -666,6 +669,66 @@ export default function Page() {
     return () => setStartEditCurrentNote(undefined)
   }, [setStartEditCurrentNote, currentNoteId, noteContent])
 
+  // Global Alt+V handler: verify current note
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const content = (noteContent || '').trim()
+        if (!content) return
+        setNoteVerifying(true)
+        setNoteOwnedByYou(null)
+        const fd = new FormData()
+        fd.append('file', new File([content], `${(noteTitle || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
+        const vr = await fetch('/api/verify', { method: 'POST', body: fd })
+        const j = await vr.json().catch(() => ({}))
+        if (vr.status === 404 && j?.status === 'not_minted') {
+          setNoteOwnedByYou(false)
+        } else if (vr.ok) {
+          const minter = (j?.tokenData?.user || j?.owner || '').toLowerCase()
+          const owned = Boolean(walletAddress && minter && walletAddress.toLowerCase() === minter)
+          setNoteOwnedByYou(owned)
+        }
+      } catch {}
+      finally {
+        setNoteVerifying(false)
+      }
+    }
+    const onEvent = () => { void handler() }
+    window.addEventListener('notes-verify-current', onEvent as EventListener)
+    return () => window.removeEventListener('notes-verify-current', onEvent as EventListener)
+  }, [noteContent, noteTitle, walletAddress])
+
+  // Global Alt+M handler: mint current note with custodial wallet
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const content = (noteContent || '').trim()
+        if (!content) return
+        toast.message('Minting…')
+        const fd = new FormData()
+        fd.append('file', new File([content], `${(noteTitle || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
+        const address = walletAddress || ''
+        if (address) fd.append('userAddress', address)
+        if (noteAlreadyMinted) { toast.info('Already minted'); return }
+        const res = await fetch('/api/mint', { method: 'POST', body: fd })
+        const j = await res.json().catch(() => ({}))
+        if (res.status === 409 || j?.status === 'already_minted') {
+          setNoteAlreadyMinted(true)
+          toast.info('Already minted')
+          return
+        }
+        if (!res.ok) {
+          toast.error((j && j.error) || 'Mint failed')
+        } else {
+          toast.success('Minted successfully')
+        }
+      } catch {}
+    }
+    const onEvent = () => { void handler() }
+    window.addEventListener('notes-mint-current', onEvent as EventListener)
+    return () => window.removeEventListener('notes-mint-current', onEvent as EventListener)
+  }, [noteContent, noteTitle, walletAddress])
+
   // Save handler
   const saveDraft = React.useCallback(async () => {
     if (!user?.id || !currentNoteId) return
@@ -686,31 +749,14 @@ export default function Page() {
       setNoteContent((data?.content as string) ?? draftContent)
       setNoteUpdatedAt((data?.updated_at as string) || "")
       setIsEditing(false)
-      // Best-effort auto-mint and update ownership pill
+      // No automatic verify; mint only (on-demand verify via dropdown/shortcut)
       try {
         const contentStr = (data?.content as string) ?? draftContent
-        // Mint
-        try {
-          const fd = new FormData()
-          fd.append('file', new File([contentStr], `${(noteTitle || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
-          const address = walletAddress || ''
-          if (address) fd.append('userAddress', address)
-          await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => {})
-        } catch {}
-        // Verify
-        try {
-          const fd2 = new FormData()
-          fd2.append('file', new File([contentStr], `${(noteTitle || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
-          const vr = await fetch('/api/verify', { method: 'POST', body: fd2 })
-          const vj = await vr.json().catch(() => ({}))
-          if (vr.status === 404 && vj?.status === 'not_minted') {
-            setNoteOwnedByYou(false)
-          } else if (vr.ok) {
-            const minter = (vj?.tokenData?.user || vj?.owner || '').toLowerCase()
-            const owned = Boolean(walletAddress && minter && walletAddress.toLowerCase() === minter)
-            setNoteOwnedByYou(owned)
-          }
-        } catch {}
+        const fd = new FormData()
+        fd.append('file', new File([contentStr], `${(noteTitle || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
+        const address = walletAddress || ''
+        if (address) fd.append('userAddress', address)
+        await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => {})
       } catch {}
     }
     setSaving(false)
@@ -1011,6 +1057,17 @@ Goals:
       const newId = (data as { id: string } | null)?.id
       if (newId) setCurrentNoteId(newId)
       setCreateOpen(false)
+      // Mint created content (best-effort). Verify is on-demand.
+      try {
+        const createdContent = content ?? ''
+        if (createdContent) {
+          const fd = new FormData()
+          fd.append('file', new File([createdContent], `${(title || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
+          const address = walletAddress || ''
+          if (address) fd.append('userAddress', address)
+          await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => {})
+        }
+      } catch {}
     }
     setCreating(false)
   }
@@ -1055,16 +1112,42 @@ Goals:
                 <BreadcrumbItem>
                   <BreadcrumbPage>{noteTitle || "Untitled"}</BreadcrumbPage>
                 </BreadcrumbItem>
-                {noteOwnedByYou !== null && (
+                {(noteVerifying || noteOwnedByYou !== null) && (
                   <BreadcrumbItem>
-                    <span className={`ml-2 inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium ${noteOwnedByYou ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
-                      {noteOwnedByYou ? 'Owned' : 'Not owned'}
-                    </span>
+                    {noteVerifying ? (
+                      <span className={"ml-2 inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium bg-muted/60 text-muted-foreground"}>
+                        Verifying…
+                      </span>
+                    ) : (
+                      <span className={`ml-2 inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium ${noteOwnedByYou ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                        {noteOwnedByYou ? 'Owned' : 'Not owned'}
+                      </span>
+                    )}
                   </BreadcrumbItem>
                 )}
               </BreadcrumbList>
             </Breadcrumb>
           </div>
+          {/* Alt+V shortcut to verify current note */}
+          <script dangerouslySetInnerHTML={{ __html: `
+            (function(){
+              if (window.__alt_v_bound__) return; window.__alt_v_bound__ = true;
+              window.addEventListener('keydown', function(e){
+                try{
+                  if (e.altKey && (e.key==='v' || e.key==='V')) {
+                    e.preventDefault();
+                    const ev = new CustomEvent('notes-verify-current');
+                    window.dispatchEvent(ev);
+                  }
+                  if (e.altKey && (e.key==='m' || e.key==='M')) {
+                    e.preventDefault();
+                    const ev2 = new CustomEvent('notes-mint-current');
+                    window.dispatchEvent(ev2);
+                  }
+                }catch(_){}
+              });
+            })();
+          `}} />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           <div className={`bg-background min-h-[100vh] flex-1 rounded-xl md:min-h-min p-6 md:p-10 transition-[padding-right] duration-200 ${(dictOpen || qaOpen) ? 'pr-[28rem]' : ''}`}>

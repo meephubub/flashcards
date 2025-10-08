@@ -862,6 +862,34 @@ export default function FilesPage() {
                           e.stopPropagation()
                           openDeleteDialogFor({ id: n.id, title: n.title })
                         }}
+                        onVerifyClick={async (e) => {
+                          e.stopPropagation()
+                          try {
+                            // Fetch content to verify
+                            const { data, error } = await supabase
+                              .from('notes')
+                              .select('content')
+                              .eq('id', n.id)
+                              .eq('user_id', user?.id)
+                              .maybeSingle()
+                            if (error) throw error
+                            const content = (data as any)?.content || ''
+                            if (!content) { toast.message('Note is empty'); return }
+                            const fd = new FormData()
+                            fd.append('file', new File([content], `${(n.title || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
+                            const vr = await fetch('/api/verify', { method: 'POST', body: fd })
+                            const j = await vr.json().catch(() => ({}))
+                            if (vr.status === 404 && j?.status === 'not_minted') {
+                              toast.info('Not minted')
+                            } else if (vr.ok) {
+                              toast.success('Minted')
+                            } else {
+                              toast.error(j?.error || 'Verify failed')
+                            }
+                          } catch (err: any) {
+                            toast.error(err?.message || 'Verify failed')
+                          }
+                        }}
                       />
                     ))}
                   </Grid>
@@ -916,6 +944,33 @@ export default function FilesPage() {
                       onDeleteClick={(e) => {
                         e.stopPropagation()
                         openDeleteDialogFor({ id: n.id, title: n.title })
+                      }}
+                      onVerifyClick={async (e) => {
+                        e.stopPropagation()
+                        try {
+                          const { data, error } = await supabase
+                            .from('notes')
+                            .select('content')
+                            .eq('id', n.id)
+                            .eq('user_id', user?.id)
+                            .maybeSingle()
+                          if (error) throw error
+                          const content = (data as any)?.content || ''
+                          if (!content) { toast.message('Note is empty'); return }
+                          const fd = new FormData()
+                          fd.append('file', new File([content], `${(n.title || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
+                          const vr = await fetch('/api/verify', { method: 'POST', body: fd })
+                          const j = await vr.json().catch(() => ({}))
+                          if (vr.status === 404 && j?.status === 'not_minted') {
+                            toast.info('Not minted')
+                          } else if (vr.ok) {
+                            toast.success('Minted')
+                          } else {
+                            toast.error(j?.error || 'Verify failed')
+                          }
+                        } catch (err: any) {
+                          toast.error(err?.message || 'Verify failed')
+                        }
                       }}
                     />
                   ))}
