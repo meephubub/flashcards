@@ -46,7 +46,7 @@ import {
 } from "lucide-react"
 
 // Preset pastel colors for folder customization
-const NEUTRAL_COLORS = [
+const PASTEL_COLORS = [
   { name: 'Pure White', value: '#FFFFFF' },
   { name: 'Snow Gray', value: '#F9FAFB' },
   { name: 'Platinum', value: '#E5E7EB' },
