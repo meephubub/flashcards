@@ -46,17 +46,17 @@ import {
 } from "lucide-react"
 
 // Preset pastel colors for folder customization
-const PASTEL_COLORS = [
-  { name: 'Soft Slate', value: '#64748B' },   // muted cool gray-blue
-  { name: 'Warm Stone', value: '#A8A29E' },   // warm gray-taupe
-  { name: 'Mist Blue', value: '#93C5FD' },    // soft sky tint
-  { name: 'Lilac Gray', value: '#C4B5FD' },   // pale violet accent
-  { name: 'Blush', value: '#F9A8D4' },        // light rose-pink accent
-  { name: 'Mint Gray', value: '#A7F3D0' },    // subtle green tint
-  { name: 'Cream', value: '#FDE68A' },        // gentle amber highlight
-  { name: 'Ice', value: '#E0F2FE' },          // very light cyan background
-  { name: 'Graphite', value: '#374151' },     // dark accent (for contrast)
-  { name: 'Snow', value: '#F9FAFB' },         // soft white background tone
+const NEUTRAL_COLORS = [
+  { name: 'Pure White', value: '#FFFFFF' },
+  { name: 'Snow Gray', value: '#F9FAFB' },
+  { name: 'Platinum', value: '#E5E7EB' },
+  { name: 'Ash', value: '#D1D5DB' },
+  { name: 'Silver', value: '#9CA3AF' },
+  { name: 'Smoke', value: '#6B7280' },
+  { name: 'Granite', value: '#4B5563' },
+  { name: 'Charcoal', value: '#374151' },
+  { name: 'Graphite', value: '#1F2937' },
+  { name: 'Jet Black', value: '#0F172A' },
 ];
 
 // Color preset component
@@ -77,6 +77,7 @@ import {
   FolderCard, 
   NoteCard, 
   FolderTreeItem,
+  NoteRow,
   StorageFileCard,
   StorageFileRow,
   FolderRow
