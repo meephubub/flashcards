@@ -24,6 +24,12 @@ import {
   Loader2
 } from "lucide-react"
 
+function normalizeLucideName(name: string): string {
+  const parts = (name || "").split(/[^a-zA-Z0-9]+/).filter(Boolean)
+  if (parts.length === 0) return name
+  return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join("")
+}
+
 // Map of common Lucide icon names to their components for folders (fallback)
 const folderIconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   Folder: FolderIcon,
@@ -48,7 +54,11 @@ async function getLucideIcon(iconName: string): Promise<React.ComponentType<{ cl
   try {
     // Dynamically import the icon from lucide-react
     const module = await import('lucide-react')
-    const IconComponent = (module as any)[iconName] as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+    const normalized = normalizeLucideName(iconName)
+    let IconComponent = (module as any)[normalized] as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+    if (!IconComponent) {
+      IconComponent = (module as any)[iconName] as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+    }
 
     if (IconComponent) {
       iconCache[iconName] = IconComponent
@@ -71,12 +81,13 @@ function renderFolderIcon(iconName?: string, color?: string) {
   }
 
   // Check if it's likely an emoji (contains non-word, non-space characters)
-  if (/[^\w\s]/.test(iconName)) {
+  if (/[^\w\s-]/.test(iconName)) {
     return <div className="h-12 w-12 mb-2 flex items-center justify-center text-3xl" style={{ color }}>{iconName}</div>
   }
 
   // Check static map first for common icons
-  const IconComponent = folderIconMap[iconName] || iconCache[iconName]
+  const normalized = normalizeLucideName(iconName)
+  const IconComponent = folderIconMap[normalized] || folderIconMap[iconName] || iconCache[iconName]
   if (IconComponent) {
     return <IconComponent className="h-12 w-12 mb-2 transition-colors" style={{ color }} />
   }
@@ -179,13 +190,14 @@ export function FolderRow({
           return <FolderIcon className="h-5 w-5 mr-3" style={{ color }} />
         }
 
-        // Check if it's likely an emoji
-        if (/[^\w\s]/.test(iconName)) {
+        // Check if it's likely an emoji (contains non-word, non-space characters)
+        if (/[^\w\s-]/.test(iconName)) {
           return <div className="h-5 w-5 mr-3 flex items-center justify-center text-lg" style={{ color }}>{iconName}</div>
         }
 
         // Check static map first for common icons
-        const IconComponent = folderIconMap[iconName] || iconCache[iconName]
+        const normalized = normalizeLucideName(iconName)
+        const IconComponent = folderIconMap[normalized] || folderIconMap[iconName] || iconCache[iconName]
         if (IconComponent) {
           return <IconComponent className="h-5 w-5 mr-3" style={{ color }} />
         }
@@ -609,7 +621,10 @@ export function StorageFileCard({
         )}
         <div className="flex justify-between items-start">
           <h3 className="font-medium line-clamp-2 text-ellipsis">
-            {file.name}
+            {(() => {
+              const idx = file.name.lastIndexOf('.')
+              return idx > 0 ? file.name.slice(0, idx) : file.name
+            })()}
           </h3>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -716,7 +731,7 @@ export function StorageFileRow({
       )}
       <FileText className="h-5 w-5 text-emerald-500 mr-3" />
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium truncate">{file.name}</h3>
+        <h3 className="font-medium truncate">{(() => { const idx = file.name.lastIndexOf('.'); return idx > 0 ? file.name.slice(0, idx) : file.name })()}</h3>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {fileType && (
             <span className="inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium">

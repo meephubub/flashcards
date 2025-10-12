@@ -47,16 +47,16 @@ import {
 
 // Preset pastel colors for folder customization
 const PASTEL_COLORS = [
-  { name: 'Blush Pink', value: '#F9D5D3' },
-  { name: 'Soft Blue', value: '#C9E4F6' },
-  { name: 'Mint Green', value: '#C6F2D3' },
-  { name: 'Lavender Mist', value: '#DCD1F0' },
-  { name: 'Peach Cream', value: '#FADFCB' },
-  { name: 'Sage Green', value: '#D4E8D2' },
-  { name: 'Sky Haze', value: '#CFE8F3' },
-  { name: 'Lilac Glow', value: '#E6D4F4' },
-  { name: 'Coral Cloud', value: '#F6CFC3' },
-  { name: 'Aqua Whisper', value: '#CFF6EE' },
+  { name: 'Soft Slate', value: '#64748B' },   // muted cool gray-blue
+  { name: 'Warm Stone', value: '#A8A29E' },   // warm gray-taupe
+  { name: 'Mist Blue', value: '#93C5FD' },    // soft sky tint
+  { name: 'Lilac Gray', value: '#C4B5FD' },   // pale violet accent
+  { name: 'Blush', value: '#F9A8D4' },        // light rose-pink accent
+  { name: 'Mint Gray', value: '#A7F3D0' },    // subtle green tint
+  { name: 'Cream', value: '#FDE68A' },        // gentle amber highlight
+  { name: 'Ice', value: '#E0F2FE' },          // very light cyan background
+  { name: 'Graphite', value: '#374151' },     // dark accent (for contrast)
+  { name: 'Snow', value: '#F9FAFB' },         // soft white background tone
 ];
 
 // Color preset component
@@ -85,6 +85,11 @@ import { NoteDeleteDialog } from "@/components/note-delete-dialog"
 
 // Preview component for folder icon
 function FolderIconPreview({ icon, color }: { icon?: string; color?: string }) {
+  function normalizeLucideName(name: string): string {
+    const parts = (name || "").split(/[^a-zA-Z0-9]+/).filter(Boolean)
+    if (parts.length === 0) return name
+    return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join("")
+  }
   return (
     <div className="flex items-center justify-center p-4 border rounded-lg bg-muted/50">
       <div className="flex flex-col items-center text-center">
@@ -94,7 +99,7 @@ function FolderIconPreview({ icon, color }: { icon?: string; color?: string }) {
           }
 
           // Check if it's likely an emoji (contains non-word, non-space characters)
-          if (/[^\w\s]/.test(icon)) {
+          if (/[^\w\s-]/.test(icon)) {
             return <div className="h-12 w-12 mb-2 flex items-center justify-center text-3xl" style={{ color }}>{icon}</div>
           }
 
@@ -110,7 +115,8 @@ function FolderIconPreview({ icon, color }: { icon?: string; color?: string }) {
             FolderTree: FolderTree,
           }
 
-          const IconComponent = folderIconMap[icon]
+          const normalized = normalizeLucideName(icon)
+          const IconComponent = folderIconMap[normalized] || folderIconMap[icon]
           if (IconComponent) {
             return <IconComponent className="h-12 w-12 mb-2 transition-colors" style={{ color }} />
           }
@@ -125,7 +131,11 @@ function FolderIconPreview({ icon, color }: { icon?: string; color?: string }) {
             const loadIcon = async () => {
               try {
                 const module = await import('lucide-react')
-                const IconComponent = (module as any)[icon] as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+                const normalizedName = normalizeLucideName(icon)
+                let IconComponent = (module as any)[normalizedName] as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+                if (!IconComponent) {
+                  IconComponent = (module as any)[icon] as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+                }
 
                 if (IconComponent && mounted) {
                   setDynamicIcon(IconComponent)
