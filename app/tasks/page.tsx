@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { Loader2, Plus, Trash2, Link as LinkIcon, ChevronsUpDown, Check } from "lucide-react"
+import { Loader2, Plus, Trash2, Link as LinkIcon, ChevronsUpDown, Check, Pencil } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -29,6 +29,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface HomeworkRow {
   id: number
@@ -74,6 +75,16 @@ export default function TasksPage() {
   const [notes, setNotes] = React.useState<NoteRow[]>([])
   const [loadingNotes, setLoadingNotes] = React.useState(false)
   const [noteComboOpen, setNoteComboOpen] = React.useState(false)
+
+  // Edit dialog state
+  const [editing, setEditing] = React.useState<HomeworkRow | null>(null)
+  const [editSubject, setEditSubject] = React.useState<string>("")
+  const [editDueDate, setEditDueDate] = React.useState<Date | undefined>(undefined)
+  const [editPriority, setEditPriority] = React.useState<number | null>(null)
+  const [editLinkUrl, setEditLinkUrl] = React.useState<string>("")
+  const [editSelectedNoteId, setEditSelectedNoteId] = React.useState<string>("")
+  const [savingEdit, setSavingEdit] = React.useState(false)
+  const [editNoteComboOpen, setEditNoteComboOpen] = React.useState(false)
 
   // Keep calendar selection and due date in sync
   React.useEffect(() => {
@@ -219,6 +230,119 @@ export default function TasksPage() {
     fetchTasks()
   }
 
+  // Sort tasks so incomplete appear first, completed at the bottom
+  const sortedTasks = React.useMemo(() => {
+    return [...tasks].sort((a, b) => {
+      const ad = !!a.done
+      const bd = !!b.done
+      if (ad !== bd) return ad ? 1 : -1
+      return 0
+    })
+  }, [tasks])
+
+  // Urgency color: white if >3 days away or no due date; orange if due in <=3 days; red if overdue
+  const getUrgencyClass = (t: HomeworkRow): string => {
+    try {
+      if (!t.due_date) return ""
+      const now = new Date()
+      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+      let due: Date
+      if (/^\d{4}-\d{2}-\d{2}$/.test(t.due_date)) {
+        const [yy, mm, dd] = t.due_date.split('-').map((x) => parseInt(x, 10))
+        due = new Date(Date.UTC(yy, mm - 1, dd))
+      } else {
+        const d = new Date(t.due_date)
+        due = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+      }
+      const msPerDay = 24 * 60 * 60 * 1000
+      const diffDays = Math.floor((due.getTime() - today.getTime()) / msPerDay)
+      if (diffDays < 0) return "bg-red-50 dark:bg-red-950/30 ring-1 ring-red-300/40 dark:ring-red-900/50"
+      if (diffDays <= 3) return "bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300/40 dark:ring-amber-900/50"
+      return ""
+    } catch {
+      return ""
+    }
+  }
+
+  // Derive a simple due status for badge styling
+  const getDueStatus = (t: HomeworkRow): 'overdue' | 'soon' | 'normal' | 'none' => {
+    if (!t.due_date) return 'none'
+    try {
+      const now = new Date()
+      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+      let due: Date
+      if (/^\d{4}-\d{2}-\d{2}$/.test(t.due_date)) {
+        const [yy, mm, dd] = t.due_date.split('-').map((x) => parseInt(x, 10))
+        due = new Date(Date.UTC(yy, mm - 1, dd))
+      } else {
+        const d = new Date(t.due_date)
+        due = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+      }
+      const msPerDay = 24 * 60 * 60 * 1000
+      const diffDays = Math.floor((due.getTime() - today.getTime()) / msPerDay)
+      if (diffDays < 0) return 'overdue'
+      if (diffDays <= 3) return 'soon'
+      return 'normal'
+    } catch {
+      return 'none'
+    }
+  }
+
+  const openEdit = (t: HomeworkRow) => {
+    setEditing(t)
+    setEditSubject(t.subject || "")
+    // Prefill due date
+    if (t.due_date) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(t.due_date)) {
+        const [yy, mm, dd] = t.due_date.split('-').map((x) => parseInt(x, 10))
+        setEditDueDate(new Date(Date.UTC(yy, mm - 1, dd)))
+      } else {
+        const d = new Date(t.due_date)
+        setEditDueDate(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())))
+      }
+    } else {
+      setEditDueDate(undefined)
+    }
+    setEditPriority(t.priority ?? null)
+    const meta = (t.metadata || {}) as any
+    setEditLinkUrl(typeof meta?.link_url === 'string' ? meta.link_url : "")
+    setEditSelectedNoteId(typeof meta?.note_id === 'string' ? meta.note_id : "")
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    try {
+      setSavingEdit(true)
+      const dueIso = editDueDate
+        ? (() => {
+            const y = editDueDate.getUTCFullYear()
+            const m = editDueDate.getUTCMonth()
+            const d = editDueDate.getUTCDate()
+            return new Date(Date.UTC(y, m, d, 12, 0, 0, 0)).toISOString()
+          })()
+        : null
+      const payload: any = {
+        subject: editSubject || null,
+        due_date: dueIso,
+        priority: editPriority,
+        metadata: (editLinkUrl || editSelectedNoteId)
+          ? {
+              ...(editLinkUrl ? { link_url: editLinkUrl } : {}),
+              ...(editSelectedNoteId ? { note_id: editSelectedNoteId } : {}),
+            }
+          : null,
+      }
+      const { error } = await supabase.from('homework').update(payload).eq('id', editing.id)
+      if (error) throw error
+      setEditing(null)
+      await fetchTasks()
+    } catch (e) {
+      console.error('Save edit failed', e)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -234,7 +358,7 @@ export default function TasksPage() {
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Tasks{selectedDate ? ` • ${format(selectedDate, "PPP")}` : ""}</BreadcrumbPage>
+                  <BreadcrumbPage>Tasks{selectedDate ? ` • ${format(selectedDate, "dd/MM/yy")}` : ""}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -268,7 +392,7 @@ export default function TasksPage() {
                         <button className="underline" onClick={() => { setSelectedDate(undefined); setDueDate(undefined) }}>
                           Clear filter
                         </button>
-                        {selectedDate ? <span>{format(selectedDate, "PPP")}</span> : null}
+                        {selectedDate ? <span>{format(selectedDate, "dd/MM/yy")}</span> : null}
                       </div>
                     </div>
                   </div>
@@ -390,16 +514,47 @@ export default function TasksPage() {
                       {!loading && tasks.length === 0 && (
                         <div className="p-4 text-sm text-muted-foreground">No tasks</div>
                       )}
-                      {tasks.map((t) => {
+                      <div className="divide-y border-x border-t rounded-t-md">
+                        {sortedTasks.map((t, index) => {
                         const urlGuess = taskExplicitOrGuessedLink(t)
+                        const dueStatus = !t.done ? getDueStatus(t) : null
+                        const dueLabel = t.due_date ? `Due ${format(new Date(t.due_date), "dd/MM/yy")}` : "No due date"
+                        const dueBadgeCls = !t.due_date
+                          ? "bg-muted text-foreground/80 dark:text-foreground/70"
+                          : dueStatus === 'overdue'
+                            ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                            : dueStatus === 'soon'
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+                              : "bg-muted text-foreground/80 dark:text-foreground/70"
+                        const priorityLabel = t.priority === 3 ? 'High' : t.priority === 2 ? 'Medium' : t.priority === 1 ? 'Low' : null
+                        const priorityCls = t.priority === 3
+                          ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                          : t.priority === 2
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+                            : t.priority === 1
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                              : ""
                         return (
-                          <div key={t.id} className="p-3 flex items-center gap-3">
+                          <div key={t.id} className={cn(
+                            "p-3 md:p-3.5 flex items-center gap-3 transition-colors",
+                            !t.done ? getUrgencyClass(t) : "",
+                            !t.done && dueStatus === 'overdue' 
+                              ? "hover:bg-red-100/70 dark:hover:bg-red-950/30" 
+                              : !t.done && dueStatus === 'soon' 
+                                ? "hover:bg-amber-100/70 dark:hover:bg-amber-950/30"
+                                : "hover:bg-muted/50 dark:hover:bg-muted/50",
+                            index === sortedTasks.length - 1 ? "rounded-b-md" : ""
+                          )}>
                             <Checkbox checked={!!t.done} onCheckedChange={(v) => updateDone(t.id, !!v)} />
                             <div className="flex-1 min-w-0">
-                              <div className={cn("text-sm", t.done ? "line-through text-muted-foreground" : "")}>{t.subject || "Homework"}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {t.due_date ? `Due ${format(new Date(t.due_date), "PPP")}` : "No due date"}
-                                {t.priority ? ` · Priority ${t.priority}` : ""}
+                              <div className={cn("text-sm font-medium", t.done ? "line-through text-muted-foreground" : "")}>{t.subject || "Homework"}</div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", dueBadgeCls)}>{dueLabel}</span>
+                                {priorityLabel && (
+                                  <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", priorityCls)}>
+                                    {priorityLabel} priority
+                                  </span>
+                                )}
                               </div>
                             </div>
                             {urlGuess && (
@@ -407,12 +562,16 @@ export default function TasksPage() {
                                 <LinkIcon className="h-3.5 w-3.5 mr-1" /> Open
                               </Link>
                             )}
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" onClick={() => removeTask(t.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         )
                       })}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -420,6 +579,85 @@ export default function TasksPage() {
             </div>
           </div>
         </div>
+        {/* Edit task dialog */}
+        <Dialog open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null) }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit task</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-3 md:gap-4">
+              <div>
+                <Label htmlFor="edit-subject">Task</Label>
+                <Input id="edit-subject" value={editSubject} onChange={(e) => setEditSubject(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-end">
+                <div>
+                  <Label htmlFor="edit-due">Due date</Label>
+                  <Input
+                    id="edit-due"
+                    type="date"
+                    value={editDueDate ? format(editDueDate, "yyyy-MM-dd") : ""}
+                    onChange={(e) => setEditDueDate(e.target.value ? new Date(e.target.value) : undefined)}
+                  />
+                </div>
+                <div>
+                  <Label>Priority</Label>
+                  <Select value={editPriority?.toString() ?? ""} onValueChange={(v) => setEditPriority(v ? parseInt(v) : null)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Low</SelectItem>
+                      <SelectItem value="2">Medium</SelectItem>
+                      <SelectItem value="3">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Attach note</Label>
+                  <Popover open={editNoteComboOpen} onOpenChange={setEditNoteComboOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" role="combobox" aria-expanded={editNoteComboOpen} className="w-full justify-between">
+                        {editSelectedNoteId
+                          ? (notes.find((n) => n.id === editSelectedNoteId)?.title || "Selected note")
+                          : (loadingNotes ? "Loading notes…" : "Select a note (optional)")}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[240px]">
+                      <Command>
+                        <CommandInput placeholder="Search notes…" />
+                        <CommandEmpty>No notes found.</CommandEmpty>
+                        <CommandList>
+                          <CommandGroup>
+                            <CommandItem value="" onSelect={() => { setEditSelectedNoteId(""); setEditNoteComboOpen(false) }}>
+                              <Check className={cn("mr-2 h-4 w-4", editSelectedNoteId === "" ? "opacity-100" : "opacity-0")} />
+                              No note
+                            </CommandItem>
+                            {notes.map((n) => (
+                              <CommandItem key={n.id} value={n.title || "Untitled note"} onSelect={() => { setEditSelectedNoteId(n.id); setEditNoteComboOpen(false) }}>
+                                <Check className={cn("mr-2 h-4 w-4", editSelectedNoteId === n.id ? "opacity-100" : "opacity-0")} />
+                                {n.title || "Untitled note"}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="edit-link">Link URL</Label>
+                <Input id="edit-link" placeholder="https://… or /notes?note=… (optional)" value={editLinkUrl} onChange={(e) => setEditLinkUrl(e.target.value)} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button onClick={saveEdit} disabled={savingEdit}>{savingEdit ? 'Saving…' : 'Save'}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarInset>
     </SidebarProvider>
   )
@@ -441,6 +679,7 @@ function taskExplicitOrGuessedLink(t: HomeworkRow): string | null {
   }
   return guessLinkForTask(t)
 }
+
 
 // Very simple helper: try to infer a link from the subject text like "deck: <id>" or "note: <id>" or "model: <id>"
 function guessLinkForTask(t: HomeworkRow): string | null {

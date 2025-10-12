@@ -47,17 +47,17 @@ import {
 
 // Preset pastel colors for folder customization
 const PASTEL_COLORS = [
-  { name: 'Pink', value: '#FFB3BA' },
-  { name: 'Light Blue', value: '#BAFFC9' },
-  { name: 'Mint', value: '#BAE1FF' },
-  { name: 'Lavender', value: '#E1BAFF' },
-  { name: 'Peach', value: '#FFDFBA' },
-  { name: 'Sage', value: '#C9FFBA' },
-  { name: 'Sky', value: '#BAF2FF' },
-  { name: 'Lilac', value: '#F0BAFF' },
-  { name: 'Coral', value: '#FFC9BA' },
-  { name: 'Aqua', value: '#BAFFF2' },
-]
+  { name: 'Blush Pink', value: '#F9D5D3' },
+  { name: 'Soft Blue', value: '#C9E4F6' },
+  { name: 'Mint Green', value: '#C6F2D3' },
+  { name: 'Lavender Mist', value: '#DCD1F0' },
+  { name: 'Peach Cream', value: '#FADFCB' },
+  { name: 'Sage Green', value: '#D4E8D2' },
+  { name: 'Sky Haze', value: '#CFE8F3' },
+  { name: 'Lilac Glow', value: '#E6D4F4' },
+  { name: 'Coral Cloud', value: '#F6CFC3' },
+  { name: 'Aqua Whisper', value: '#CFF6EE' },
+];
 
 // Color preset component
 function ColorPreset({ color, onSelect, isSelected }: { color: string; onSelect: () => void; isSelected: boolean }) {
