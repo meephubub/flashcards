@@ -83,6 +83,14 @@ export default function Page() {
   const [noteVerifying, setNoteVerifying] = useState<boolean>(false)
   const [noteAlreadyMinted, setNoteAlreadyMinted] = useState<boolean>(false)
 
+  // Highlight color state (for DOM-only highlights in reader)
+  const [highlightColor, setHighlightColor] = useState<'green' | 'red' | 'blue'>('green')
+
+  // Keep MarkdownContent in sync without re-rendering it (avoid wiping DOM highlights)
+  useEffect(() => {
+    try { window.dispatchEvent(new CustomEvent('notes-set-highlight-color', { detail: { color: highlightColor } })) } catch {}
+  }, [highlightColor])
+
   useEffect(() => {
     const loadWallet = async () => {
       if (!user?.id) return
@@ -876,8 +884,8 @@ Goals:
       return
     }
 
-    // Ctrl/Cmd + D: wrap selection with == == for permanent highlight
-    const isCtrlD = (e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')
+    // Ctrl/Cmd + D: wrap selection with == == for permanent highlight (no Shift)
+    const isCtrlD = (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'd' || e.key === 'D')
     if (isCtrlD) {
       e.preventDefault()
       wrapSelection('==')
@@ -945,6 +953,16 @@ Goals:
         })
         // Close dictionary if Q&A opens to avoid overlap
         setDictOpen(false)
+      }
+      // Ctrl+Shift+D: cycle highlight color (green -> red -> blue)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault()
+        setHighlightColor((cur) => {
+          const order: Array<'green'|'red'|'blue'> = ['green','red','blue']
+          const idx = order.indexOf(cur || 'green')
+          return order[(idx + 1) % order.length]
+        })
+        return
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -1112,6 +1130,24 @@ Goals:
                 <BreadcrumbItem>
                   <BreadcrumbPage>{noteTitle || "Untitled"}</BreadcrumbPage>
                 </BreadcrumbItem>
+                {currentNoteId && (
+                  <BreadcrumbItem>
+                    <span
+                      className="ml-2 inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium border"
+                      title="Current highlight color"
+                      style={{
+                        backgroundColor: highlightColor === 'green' ? 'rgba(34,197,94,0.12)'
+                          : highlightColor === 'red' ? 'rgba(244,63,94,0.12)'
+                          : 'rgba(59,130,246,0.12)',
+                        color: highlightColor === 'green' ? 'rgb(5, 122, 85)'
+                          : highlightColor === 'red' ? 'rgb(190, 18, 60)'
+                          : 'rgb(29, 78, 216)'
+                      }}
+                    >
+                      HL: {highlightColor}
+                    </span>
+                  </BreadcrumbItem>
+                )}
                 {(noteVerifying || noteOwnedByYou !== null) && (
                   <BreadcrumbItem>
                     {noteVerifying ? (
@@ -1484,7 +1520,7 @@ Goals:
                         <ExamFromNotesPage />
                       </div>
                     ) : (
-                      <MarkdownContent content={noteContent} fillGaps={fillGapsMode} density={fillGapsDensity} seed={cacheKey} />
+                      <MemoMarkdownContent content={noteContent} fillGaps={fillGapsMode} density={fillGapsDensity} seed={cacheKey} />
                     )}
                   </div>
                 )}
@@ -1561,7 +1597,7 @@ Goals:
                       {examLoading ? (
                         <InlineNoteSkeleton />
                       ) : (
-                        <MarkdownContent key={examVersion} content={examMarkdown} fillGaps={false} seed={cacheKey} />
+                        <MemoMarkdownContent key={examVersion} content={examMarkdown} fillGaps={false} seed={cacheKey} />
                       )}
                     </div>
                   </div>
@@ -1789,6 +1825,17 @@ Goals:
   )
 }
 
+// Prevent re-render of MarkdownContent unless its meaningful props change
+const MemoMarkdownContent = React.memo(
+  MarkdownContent,
+  (prev, next) => (
+    prev.content === next.content &&
+    prev.fillGaps === next.fillGaps &&
+    prev.density === next.density &&
+    prev.seed === next.seed
+  )
+)
+
 function MarkdownContent({ content, fillGaps, density, seed }: { content: string; fillGaps?: boolean; density?: number; seed?: string }) {
   // Utilities to modify mdast with parent tracking
   function visitWithParent(tree: any, visitor: (node: any, parent: any, index: number) => void) {
@@ -1803,8 +1850,22 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
     walk(tree, null)
   }
 
-  // DOM-only Ctrl+D highlighter (temporary, not persisted)
+  // DOM-only highlighter (temporary, not persisted)
   const containerRef = React.useRef<HTMLDivElement | null>(null)
+  const currentHLRef = React.useRef<'green'|'red'|'blue'>('green')
+
+  // Listen for color changes from Page without causing re-renders
+  React.useEffect(() => {
+    const onSet = (ev: Event) => {
+      try {
+        const e = ev as CustomEvent<{ color?: 'green'|'red'|'blue' }>
+        const c = e?.detail?.color
+        if (c === 'green' || c === 'red' || c === 'blue') currentHLRef.current = c
+      } catch {}
+    }
+    window.addEventListener('notes-set-highlight-color', onSet as EventListener)
+    return () => window.removeEventListener('notes-set-highlight-color', onSet as EventListener)
+  }, [])
 
   // Q&A: scroll and highlight a snippet within the rendered markdown
   React.useEffect(() => {
@@ -1829,11 +1890,17 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
     }
 
     // Create a transient highlight span for a given range
-    const highlightRange = (range: Range) => {
+    const colorToStyle = (color: 'green'|'red'|'blue') => {
+      if (color === 'red') return { bg: 'rgba(244,63,94,0.35)', cls: 'dom-red-highlight' } // rose-500 @35%
+      if (color === 'blue') return { bg: 'rgba(59,130,246,0.35)', cls: 'dom-blue-highlight' } // sky-500 @35%
+      return { bg: 'rgba(34,197,94,0.35)', cls: 'dom-green-highlight' } // emerald-500 @35%
+    }
+
+    const highlightRange = (range: Range, color: 'green'|'red'|'blue') => {
       try {
         const span = document.createElement('span')
         span.className = 'qa-highlight'
-        span.style.backgroundColor = 'rgba(59,130,246,0.35)' // sky-500 @ ~35%
+        span.style.backgroundColor = colorToStyle(color).bg
         span.style.borderRadius = '4px'
         range.surroundContents(span)
         // Scroll into view
@@ -1885,7 +1952,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
       const range = document.createRange()
       range.setStart(found.node, Math.max(0, found.start))
       range.setEnd(found.node, Math.min(found.node.data.length, found.end))
-      highlightRange(range)
+      highlightRange(range, 'blue')
     }
 
     window.addEventListener('qa-scroll-to', onScrollTo as EventListener)
@@ -1894,7 +1961,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
 
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const isCtrlD = (e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')
+      const isCtrlD = (e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'd' || e.key === 'D')
       if (!isCtrlD) return
       const root = containerRef.current
       if (!root) return
@@ -1906,7 +1973,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
         if (!node) return null
         let el: HTMLElement | null = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : (node.parentElement as HTMLElement | null)
         while (el && el !== root) {
-          if (el.classList && el.classList.contains('dom-green-highlight')) return el
+          if (el.classList && (el.classList.contains('dom-green-highlight') || el.classList.contains('dom-red-highlight') || el.classList.contains('dom-blue-highlight'))) return el
           el = el.parentElement
         }
         return null
@@ -1972,12 +2039,13 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
         return
       }
 
-      // Otherwise, apply highlight normally
+      // Otherwise, apply highlight normally using current color
       try {
         const fragment = range.extractContents()
         const span = document.createElement('span')
-        span.className = 'dom-green-highlight'
-        span.style.backgroundColor = 'rgba(34,197,94,0.35)' // emerald-500 @ ~35%
+        const color = currentHLRef.current
+        span.className = color === 'red' ? 'dom-red-highlight' : color === 'blue' ? 'dom-blue-highlight' : 'dom-green-highlight'
+        span.style.backgroundColor = color === 'red' ? 'rgba(244,63,94,0.35)' : color === 'blue' ? 'rgba(59,130,246,0.35)' : 'rgba(34,197,94,0.35)'
         span.style.borderRadius = '4px'
         span.appendChild(fragment)
         range.insertNode(span)
@@ -1991,9 +2059,42 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
         // Ignore selections that cannot be highlighted cleanly
       }
     }
+    const onCustom = (ev: Event) => {
+      const e = ev as CustomEvent<{ color?: 'green'|'red'|'blue' }>
+      const color = e?.detail?.color || currentHLRef.current
+      const root = containerRef.current
+      if (!root) return
+      const sel = window.getSelection()
+      if (!sel || sel.rangeCount === 0) return
+
+      const range = sel.getRangeAt(0)
+      const containerNode = range.commonAncestorContainer
+      if (!root.contains(containerNode)) return
+      // Apply highlight with provided color
+      try {
+        const fragment = range.extractContents()
+        const span = document.createElement('span')
+        span.className = color === 'red' ? 'dom-red-highlight' : color === 'blue' ? 'dom-blue-highlight' : 'dom-green-highlight'
+        span.style.backgroundColor = color === 'red' ? 'rgba(244,63,94,0.35)' : color === 'blue' ? 'rgba(59,130,246,0.35)' : 'rgba(34,197,94,0.35)'
+        span.style.borderRadius = '4px'
+        span.appendChild(fragment)
+        range.insertNode(span)
+        sel.removeAllRanges()
+        const after = document.createRange()
+        after.setStartAfter(span)
+        after.collapse(true)
+        sel.addRange(after)
+      } catch {}
+    }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('notes-highlight-selection', onCustom as EventListener)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('notes-highlight-selection', onCustom as EventListener)
+    }
   }, [])
+
+  // No-op: color cycling is handled at Page; this component only listens via events to avoid re-renders
 
   // Mermaid rendering helpers
   const mermaidInitializedRef = React.useRef(false)
