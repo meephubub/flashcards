@@ -305,6 +305,9 @@ importers:
       path:
         specifier: latest
         version: 0.12.7
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
       pdf-parse:
         specifier: ^1.1.1
         version: 1.1.1
@@ -1764,6 +1767,12 @@ packages:
   '@paulmillr/qr@0.2.1':
     resolution: {integrity: sha512-IHnV6A+zxU7XwmKFinmYjUcwlyK9+xkG3/s9KcQhI9BjQKycrJ1JRO+FbNYPwZiPKW3je/DR0k7w8/gLa5eaxQ==}
     deprecated: 'The package is now available as "qr": npm install qr'
+
+  '@pdf-lib/standard-fonts@1.0.0':
+    resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
+
+  '@pdf-lib/upng@1.0.1':
+    resolution: {integrity: sha512-dQK2FUMQtowVP00mtIksrlZhdFXQZPC+taih1q4CvPZ5vqdxR/LKBaFg0oAfzd1GlHZXXSPdQfzQnt+ViGvEIQ==}
 
   '@picovoice/cobra-web@2.0.3':
     resolution: {integrity: sha512-Zr/FwboSzby/sSpNEQdFFCM021EeDAYOftAr9/oKjmRMFR/RzZ/jJD8cIxJO0MefV3IonYjx8+71cEDPZfM9vg==}
@@ -6516,6 +6525,9 @@ packages:
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
+  pdf-lib@1.17.1:
+    resolution: {integrity: sha512-V/mpyJAoTsN4cnP31vc0wfNA1+p20evqqnap0KLoRUN0Yk/p3wN52DOEsL4oBFcLdb76hlpKPtzJIgo67j/XLw==}
+
   pdf-parse@1.1.1:
     resolution: {integrity: sha512-v6ZJ/efsBpGrGGknjtq9J/oC8tZWq0KWL5vQrk2GlzLEQPUDB1ex+13Rmidl1neNN358Jn9EHZw5y07FFtaC7A==}
     engines: {node: '>=6.8.1'}
@@ -8302,7 +8314,7 @@ snapshots:
       '@solana/spl-token': 0.4.14(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10))(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@solana/web3.js': 1.98.4(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
       abitype: 1.0.6(typescript@5.9.2)(zod@3.25.76)
-      axios: 1.12.2
+      axios: 1.12.2(debug@4.4.1)
       axios-retry: 4.5.0(axios@1.12.2)
       jose: 6.1.0
       md5: 2.3.0
@@ -9237,6 +9249,14 @@ snapshots:
       fastq: 1.19.1
 
   '@paulmillr/qr@0.2.1': {}
+
+  '@pdf-lib/standard-fonts@1.0.0':
+    dependencies:
+      pako: 1.0.11
+
+  '@pdf-lib/upng@1.0.1':
+    dependencies:
+      pako: 1.0.11
 
   '@picovoice/cobra-web@2.0.3':
     dependencies:
@@ -11725,7 +11745,7 @@ snapshots:
       eventemitter3: 5.0.1
       mipd: 0.0.7(typescript@5.9.2)
       viem: 2.38.0(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@3.25.76)
-      zustand: 5.0.0(@types/react@19.1.9)(react@19.1.1)(use-sync-external-store@1.5.0(react@19.1.1))
+      zustand: 5.0.0(@types/react@19.1.9)(react@19.1.1)(use-sync-external-store@1.4.0(react@19.1.1))
     optionalDependencies:
       '@tanstack/query-core': 5.90.2
       typescript: 5.9.2
@@ -12399,10 +12419,10 @@ snapshots:
 
   axios-retry@4.5.0(axios@1.12.2):
     dependencies:
-      axios: 1.12.2
+      axios: 1.12.2(debug@4.4.1)
       is-retry-allowed: 2.2.0
 
-  axios@1.11.0(debug@4.4.1):
+  axios@1.11.0:
     dependencies:
       follow-redirects: 1.15.11(debug@4.4.1)
       form-data: 4.0.4
@@ -12410,7 +12430,7 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  axios@1.12.2:
+  axios@1.12.2(debug@4.4.1):
     dependencies:
       follow-redirects: 1.15.11(debug@4.4.1)
       form-data: 4.0.4
@@ -13526,7 +13546,7 @@ snapshots:
   g4f@1.4.6:
     dependencies:
       '@types/signale': 1.4.7
-      axios: 1.11.0(debug@4.4.1)
+      axios: 1.11.0
       signale: 1.4.0
     transitivePeerDependencies:
       - debug
@@ -13868,7 +13888,7 @@ snapshots:
       '@types/debug': 4.1.12
       '@types/node': 18.19.121
       '@types/tough-cookie': 4.0.5
-      axios: 1.11.0(debug@4.4.1)
+      axios: 1.12.2(debug@4.4.1)
       camelcase: 6.3.0
       debug: 4.4.1
       dotenv: 16.6.1
@@ -13878,7 +13898,7 @@ snapshots:
       isstream: 0.1.2
       jsonwebtoken: 9.0.2
       mime-types: 2.1.35
-      retry-axios: 2.6.0(axios@1.11.0(debug@4.4.1))
+      retry-axios: 2.6.0(axios@1.12.2)
       tough-cookie: 4.1.4
     transitivePeerDependencies:
       - supports-color
@@ -14169,7 +14189,7 @@ snapshots:
       yaml: 2.8.0
       zod: 3.25.76
     optionalDependencies:
-      axios: 1.12.2
+      axios: 1.12.2(debug@4.4.1)
       cheerio: 1.1.2
     transitivePeerDependencies:
       - '@opentelemetry/api'
@@ -15435,6 +15455,13 @@ snapshots:
 
   pathe@2.0.3: {}
 
+  pdf-lib@1.17.1:
+    dependencies:
+      '@pdf-lib/standard-fonts': 1.0.0
+      '@pdf-lib/upng': 1.0.1
+      pako: 1.0.11
+      tslib: 1.14.1
+
   pdf-parse@1.1.1:
     dependencies:
       debug: 3.2.7
@@ -16209,9 +16236,9 @@ snapshots:
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
-  retry-axios@2.6.0(axios@1.11.0(debug@4.4.1)):
+  retry-axios@2.6.0(axios@1.12.2):
     dependencies:
-      axios: 1.11.0(debug@4.4.1)
+      axios: 1.12.2(debug@4.4.1)
 
   retry@0.13.1: {}
 
@@ -17440,11 +17467,11 @@ snapshots:
       '@types/react': 19.1.9
       react: 19.1.1
 
-  zustand@5.0.0(@types/react@19.1.9)(react@19.1.1)(use-sync-external-store@1.5.0(react@19.1.1)):
+  zustand@5.0.0(@types/react@19.1.9)(react@19.1.1)(use-sync-external-store@1.4.0(react@19.1.1)):
     optionalDependencies:
       '@types/react': 19.1.9
       react: 19.1.1
-      use-sync-external-store: 1.5.0(react@19.1.1)
+      use-sync-external-store: 1.4.0(react@19.1.1)
 
   zustand@5.0.3(@types/react@19.1.9)(react@19.1.1)(use-sync-external-store@1.4.0(react@19.1.1)):
     optionalDependencies:

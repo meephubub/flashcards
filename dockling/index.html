@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Granite Docling Image Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .loader {
+        border-top-color: #3498db;
+        animation: spin 1s linear infinite;
+      }
+      .loader-large {
+        border: 8px solid #e5e7eb;
+        border-top: 8px solid #3498db;
+        animation: spin 1s linear infinite;
+      }
+      .loader-small {
+        border: 4px solid #e5e7eb;
+        border-top: 4px solid #3498db;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      /* Custom toggle switch */
+      .toggle-checkbox:checked {
+        right: 0;
+        border-color: #4f46e5;
+      }
+      .toggle-checkbox:checked + .toggle-label {
+        background-color: #4f46e5;
+      }
+      .overlay {
+        border: 2px solid var(--overlay-color);
+        transition: background-color 0.2s;
+      }
+      .overlay:hover {
+        background-color: rgba(var(--overlay-color-rgb), 0.7);
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 text-gray-800 antialiased">
+    <div id="model-loader-overlay" class="fixed inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-50">
+      <div class="loader-large ease-linear rounded-full h-24 w-24 mb-4"></div>
+      <h2 class="text-center text-white text-xl font-semibold">Loading Model...</h2>
+      <p class="text-center text-white text-md mt-2">This may take a moment. The model is being downloaded to your browser.</p>
+      <progress id="model-progress" value="0" max="100" class="w-64 mt-4 bg-gray-200 rounded-full h-2"></progress>
+      <p id="progress-text" class="text-center text-white text-sm mt-2">0%</p>
+    </div>
+
+    <main class="container mx-auto p-4 md:p-8">
+      <header class="text-center mb-8">
+        <h1 class="text-4xl font-bold text-gray-900">Granite Docling WebGPU</h1>
+        <p class="text-lg text-gray-600 mt-2">Convert document images to HTML using 🤗 Transformers.js!</p>
+      </header>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Left Panel: Image Input -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <h2 class="text-2xl font-semibold mb-4">1. Select an Image</h2>
+
+          <div
+            id="image-drop-area"
+            class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer transition-colors duration-200 hover:border-indigo-500 hover:bg-indigo-50"
+          >
+            <div id="image-placeholder">
+              <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                <path
+                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <p class="mt-2 text-sm text-gray-600">
+                <span class="font-semibold text-indigo-600">Drag and drop</span>
+                or click to select a file
+              </p>
+              <p class="text-xs text-gray-500">PNG, JPG, WEBP</p>
+              <input type="file" id="file-input" class="hidden" accept="image/*" />
+            </div>
+            <div id="image-preview-container" class="hidden relative">
+              <img id="image-preview" src="" alt="Selected image" class="mx-auto rounded-md shadow-sm" />
+              <button
+                id="remove-image-btn"
+                class="absolute top-2 right-2 z-10 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fill-rule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-4 flex">
+            <input
+              type="text"
+              id="prompt-input"
+              class="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value="Convert this page to docling."
+            />
+            <button
+              id="generate-btn"
+              class="ml-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              Generate
+            </button>
+          </div>
+
+          <h3 class="text-lg font-semibold mt-6 mb-3" id="examples-title">Or try an example:</h3>
+          <div class="flex space-x-4 overflow-x-auto" id="examples-container">
+            <img
+              src="./assets/document.png"
+              class="example-image h-36 w-auto border-2 border-gray-200 rounded-md cursor-pointer hover:border-indigo-500 transition-colors"
+              alt="Example document"
+              data-prompt="Convert this page to docling."
+              title="Document parsing"
+            />
+            <img
+              src="./assets/chart.png"
+              class="example-image h-36 w-auto border-2 border-gray-200 rounded-md cursor-pointer hover:border-indigo-500 transition-colors"
+              alt="Example chart"
+              data-prompt="Convert chart to OTSL."
+              title="Chart parsing"
+            />
+            <img
+              src="./assets/table.jpg"
+              class="example-image h-36 w-auto border-2 border-gray-200 rounded-md cursor-pointer hover:border-indigo-500 transition-colors"
+              alt="Example table"
+              data-prompt="Convert this table to OTSL."
+              title="Table parsing"
+            />
+            <img
+              src="./assets/code.jpg"
+              class="example-image h-36 w-auto border-2 border-gray-200 rounded-md cursor-pointer hover:border-indigo-500 transition-colors"
+              alt="Example code"
+              data-prompt="Convert code to text."
+              title="Code parsing"
+            />
+          </div>
+        </div>
+
+        <!-- Right Panel: Output -->
+        <div class="bg-white p-6 rounded-lg shadow-md flex flex-col">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-semibold">2. View Result</h2>
+            <div id="processing-indicator" class="flex items-center space-x-2 text-gray-500 hidden">
+              <div class="loader-small ease-linear rounded-full h-6 w-6"></div>
+              <p class="text-sm">Processing image...</p>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-sm font-medium">Docling</span>
+              <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                <input
+                  type="checkbox"
+                  name="toggle"
+                  id="view-toggle"
+                  class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                  checked
+                />
+                <label for="view-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+              </div>
+              <span class="text-sm font-medium text-indigo-600">HTML</span>
+            </div>
+          </div>
+
+          <div id="output-container" class="flex-1 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+            <div id="welcome-message" class="h-full flex items-center justify-center text-center text-gray-500">
+              <p>Select an image to see the result here.</p>
+            </div>
+
+            <!-- Docling Output -->
+            <div id="docling-view" class="h-full p-4 hidden">
+              <pre class="h-full whitespace-pre-wrap text-sm overflow-auto"><code id="docling-output"></code></pre>
+            </div>
+
+            <!-- HTML Output -->
+            <div id="html-view" class="h-full w-full">
+              <iframe id="html-iframe" sandbox="allow-scripts" class="w-full h-full border-0"></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Hidden canvas for image processing -->
+    <canvas id="hidden-canvas" class="hidden"></canvas>
+
+    <script type="module">
+      import { AutoProcessor, AutoModelForVision2Seq, RawImage, TextStreamer, load_image } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5";
+      import { doclingToHtml } from "./parser.js";
+
+      const modelLoaderOverlay = document.getElementById("model-loader-overlay");
+      const imageDropArea = document.getElementById("image-drop-area");
+      const imagePlaceholder = document.getElementById("image-placeholder");
+      const imagePreviewContainer = document.getElementById("image-preview-container");
+      const imagePreview = document.getElementById("image-preview");
+      const removeImageBtn = document.getElementById("remove-image-btn");
+      const fileInput = document.getElementById("file-input");
+      const exampleImages = document.querySelectorAll(".example-image");
+      const examplesContainer = document.getElementById("examples-container");
+      const examplesTitle = document.getElementById("examples-title");
+
+      const processingIndicator = document.getElementById("processing-indicator");
+      const welcomeMessage = document.getElementById("welcome-message");
+      const doclingView = document.getElementById("docling-view");
+      const htmlView = document.getElementById("html-view");
+      const doclingOutput = document.getElementById("docling-output");
+      const htmlIframe = document.getElementById("html-iframe");
+      const viewToggle = document.getElementById("view-toggle");
+      const hiddenCanvas = document.getElementById("hidden-canvas");
+      const promptInput = document.getElementById("prompt-input");
+      const generateBtn = document.getElementById("generate-btn");
+
+      let model, processor;
+      let currentImageWidth, currentImageHeight;
+      let currentImage = null;
+
+      /**
+       * Loads and initializes the model and processor.
+       */
+      async function initializeModel() {
+        try {
+          const model_id = "onnx-community/granite-docling-258M-ONNX";
+          processor = await AutoProcessor.from_pretrained(model_id);
+
+          const progress = {};
+          model = await AutoModelForVision2Seq.from_pretrained(model_id, {
+            dtype: {
+              embed_tokens: "fp16", // fp32 (231 MB) | fp16 (116 MB)
+              vision_encoder: "fp32", // fp32 (374 MB)
+              decoder_model_merged: "fp32", // fp32 (658 MB) | q4 (105 MB), q4 sometimes into repetition issues
+            },
+            device: "webgpu",
+            progress_callback: (data) => {
+              if (data.status === "progress" && data.file?.endsWith?.("onnx_data")) {
+                progress[data.file] = data;
+                const progressPercent = Math.round(data.progress);
+
+                if (Object.keys(progress).length !== 3) return;
+                let sum = 0;
+                let total = 0;
+                for (const [key, val] of Object.entries(progress)) {
+                  sum += val.loaded;
+                  total += val.total;
+                }
+
+                const overallPercent = Math.round((sum / total) * 100);
+                document.getElementById("model-progress").value = overallPercent;
+                document.getElementById("progress-text").textContent = overallPercent + "%";
+              }
+            },
+          });
+          modelLoaderOverlay.style.display = "none";
+          console.log("Model loaded successfully.");
+        } catch (error) {
+          console.error("Failed to load model:", error);
+          modelLoaderOverlay.innerHTML = `
+                    <h2 class="text-center text-red-500 text-xl font-semibold">Failed to Load Model</h2>
+                    <p class="text-center text-white text-md mt-2">Please refresh the page to try again. Check the console for errors.</p>
+                `;
+        }
+      }
+
+      /**
+       * Processes an image and generates Docling text.
+       * @param {ImageBitmap|HTMLImageElement} imageObject An image object to process.
+       */
+      async function processImage(imageObject) {
+        if (!model || !processor) {
+          alert("Model is not loaded yet. Please wait.");
+          return;
+        }
+
+        // Reset UI
+        setUiState("processing");
+        clearOverlays();
+        let fullText = "";
+        doclingOutput.textContent = "";
+        htmlIframe.srcdoc = "";
+
+        try {
+          // 1. Draw image to canvas and get RawImage
+          const ctx = hiddenCanvas.getContext("2d");
+          hiddenCanvas.width = imageObject.width;
+          hiddenCanvas.height = imageObject.height;
+          ctx.drawImage(imageObject, 0, 0);
+          const image = RawImage.fromCanvas(hiddenCanvas);
+
+          // 2. Create input messages
+          const messages = [
+            {
+              role: "user",
+              content: [{ type: "image" }, { type: "text", text: promptInput.value }],
+            },
+          ];
+
+          // 3. Prepare inputs for the model
+          const text = processor.apply_chat_template(messages, {
+            add_generation_prompt: true,
+          });
+          const inputs = await processor(text, [image], {
+            do_image_splitting: true,
+          });
+          // 5. Generate output
+          await model.generate({
+            ...inputs,
+            max_new_tokens: 4096,
+            streamer: new TextStreamer(processor.tokenizer, {
+              skip_prompt: true,
+              skip_special_tokens: false,
+              callback_function: (streamedText) => {
+                fullText += streamedText;
+                doclingOutput.textContent += streamedText;
+              },
+            }),
+          });
+
+          // Strip <|end_of_text|> from the end
+          fullText = fullText.replace(/<\|end_of_text\|>$/, "");
+          doclingOutput.textContent = fullText;
+
+          // Parse loc tags and create overlays
+          const tagRegex = /<(\w+)><loc_(\d+)><loc_(\d+)><loc_(\d+)><loc_(\d+)>/g;
+          const overlays = [];
+          let match;
+          while ((match = tagRegex.exec(fullText)) !== null) {
+            const tagType = match[1];
+            const locs = [parseInt(match[2]), parseInt(match[3]), parseInt(match[4]), parseInt(match[5])];
+            overlays.push({ tagType, locs });
+          }
+          const colorMap = {};
+          function getRandomColor() {
+            return `rgb(${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)}, ${Math.floor(Math.random() * 256)})`;
+          }
+          const imgRect = imagePreview.getBoundingClientRect();
+          const containerRect = imagePreviewContainer.getBoundingClientRect();
+          const imageOffsetLeft = imgRect.left - containerRect.left;
+          const imageOffsetTop = imgRect.top - containerRect.top;
+          const scaleX = imgRect.width / currentImageWidth;
+          const scaleY = imgRect.height / currentImageHeight;
+          overlays.forEach(({ tagType, locs }) => {
+            const color = colorMap[tagType] || (colorMap[tagType] = getRandomColor());
+            const [leftLoc, topLoc, rightLoc, bottomLoc] = locs;
+            const left = imageOffsetLeft + (leftLoc / 500) * currentImageWidth * scaleX;
+            const top = imageOffsetTop + (topLoc / 500) * currentImageHeight * scaleY;
+            const width = ((rightLoc - leftLoc) / 500) * currentImageWidth * scaleX;
+            const height = ((bottomLoc - topLoc) / 500) * currentImageHeight * scaleY;
+            const overlay = document.createElement("div");
+            overlay.className = "overlay";
+            overlay.style.setProperty('--overlay-color', color);
+            const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            overlay.style.setProperty('--overlay-color-rgb', `${rgbMatch[1]},${rgbMatch[2]},${rgbMatch[3]}`);
+            overlay.style.position = "absolute";
+            overlay.style.left = left + "px";
+            overlay.style.top = top + "px";
+            overlay.style.width = width + "px";
+            overlay.style.height = height + "px";
+            imagePreviewContainer.appendChild(overlay);
+          });
+
+          // After generation, create the HTML iframe
+          htmlIframe.srcdoc = doclingToHtml(fullText);
+        } catch (error) {
+          console.error("Error during image processing:", error);
+          doclingOutput.textContent = `An error occurred: ${error.message}`;
+        } finally {
+          setUiState("result");
+        }
+      }
+
+      /**
+       * Handles the selection of an image file.
+       * @param {File|string} source The image file or URL.
+       */
+      function handleImageSelection(source) {
+        const reader = new FileReader();
+        const img = new Image();
+
+        img.onload = () => {
+          currentImageWidth = img.naturalWidth;
+          currentImageHeight = img.naturalHeight;
+          currentImage = img;
+          imagePreview.src = img.src;
+          imagePlaceholder.classList.add("hidden");
+          imagePreviewContainer.classList.remove("hidden");
+          examplesContainer.classList.add("hidden");
+          examplesTitle.classList.add("hidden");
+          processImage(img);
+        };
+
+        img.onerror = () => {
+          alert("Failed to load image.");
+        };
+
+        if (typeof source === "string") {
+          // It's a URL
+          // To avoid CORS issues with canvas, we can try to fetch it first
+          fetch(source)
+            .then((res) => res.blob())
+            .then((blob) => {
+              img.src = URL.createObjectURL(blob);
+            })
+            .catch((e) => {
+              console.error("CORS issue likely. Trying proxy or direct load.", e);
+              // Fallback to direct load which might taint the canvas
+              img.crossOrigin = "anonymous";
+              img.src = source;
+            });
+        } else {
+          // It's a File object
+          reader.onload = (e) => {
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(source);
+        }
+      }
+
+      /**
+       * Manages the visibility of UI components based on the app state.
+       * @param {'initial'|'processing'|'result'} state The current state.
+       */
+      function setUiState(state) {
+        welcomeMessage.style.display = "none";
+        processingIndicator.classList.add("hidden");
+        doclingView.classList.add("hidden");
+        htmlView.classList.add("hidden");
+
+        if (state === "initial") {
+          welcomeMessage.style.display = "flex";
+          generateBtn.disabled = true;
+        } else if (state === "processing") {
+          viewToggle.checked = false;
+          processingIndicator.classList.remove("hidden");
+          doclingView.classList.remove("hidden");
+          generateBtn.disabled = true;
+        } else if (state === "result") {
+          viewToggle.checked = true;
+          htmlView.classList.remove("hidden");
+          generateBtn.disabled = false;
+        }
+      }
+
+      /**
+       * Clears all overlay divs from the image preview container.
+       */
+      function clearOverlays() {
+        document.querySelectorAll(".overlay").forEach((el) => el.remove());
+      }
+
+      // Drag and Drop
+      imageDropArea.addEventListener("click", () => fileInput.click());
+      imageDropArea.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        imageDropArea.classList.add("border-indigo-500", "bg-indigo-50");
+      });
+      imageDropArea.addEventListener("dragleave", () => {
+        imageDropArea.classList.remove("border-indigo-500", "bg-indigo-50");
+      });
+      imageDropArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        imageDropArea.classList.remove("border-indigo-500", "bg-indigo-50");
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].type.startsWith("image/")) {
+          handleImageSelection(files[0]);
+        }
+      });
+
+      // File input
+      fileInput.addEventListener("change", (e) => {
+        const files = e.target.files;
+        if (files.length > 0) {
+          handleImageSelection(files[0]);
+        }
+      });
+
+      // Example images
+      exampleImages.forEach((img) => {
+        img.addEventListener("click", () => {
+          promptInput.value = img.dataset.prompt;
+          handleImageSelection(img.src);
+        });
+      });
+
+      // Remove image
+      removeImageBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        currentImage = null;
+        imagePreview.src = "";
+        fileInput.value = ""; // Reset file input
+        imagePlaceholder.classList.remove("hidden");
+        imagePreviewContainer.classList.add("hidden");
+        examplesContainer.classList.remove("hidden");
+        examplesTitle.classList.remove("hidden");
+        setUiState("initial");
+        doclingOutput.textContent = "";
+        htmlIframe.srcdoc = "";
+        clearOverlays();
+      });
+
+      // View toggle
+      viewToggle.addEventListener("change", () => {
+        const isHtmlView = viewToggle.checked;
+        htmlView.classList.toggle("hidden", !isHtmlView);
+        doclingView.classList.toggle("hidden", isHtmlView);
+      });
+
+      // Generate button
+      generateBtn.addEventListener("click", () => {
+        if (currentImage) {
+          processImage(currentImage);
+        }
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        setUiState("initial"); // Set initial view correctly
+        initializeModel();
+      });
+    </script>
+  </body>
+</html>

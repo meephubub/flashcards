@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+<body>
+<script>
+(async () => {
+  if (!navigator.gpu) return console.error("WebGPU not supported");
+  const adapter = await navigator.gpu.requestAdapter();
+  console.log("Adapter:", adapter);
+  const device = await adapter.requestDevice();
+  console.log("Device:", device);
+})();
+</script>
+</body>
+</html>

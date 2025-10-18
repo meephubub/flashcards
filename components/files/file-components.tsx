@@ -590,6 +590,8 @@ export function StorageFileCard({
   onRenameClick,
   ownedByYou,
   onVerifyClick,
+  onConvertToMd,
+  onDownload,
 }: {
   file: { name: string; updated_at?: string | null };
   onGetUrl: (e: React.MouseEvent) => void;
@@ -603,6 +605,8 @@ export function StorageFileCard({
   onRenameClick?: (e: React.MouseEvent) => void;
   ownedByYou?: boolean | null;
   onVerifyClick?: (e: React.MouseEvent) => void;
+  onConvertToMd?: (e: React.MouseEvent) => void;
+  onDownload?: (e: React.MouseEvent) => void;
 }) {
   return (
     <Card className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
@@ -657,10 +661,22 @@ export function StorageFileCard({
                   <span>Verify</span>
                 </DropdownMenuItem>
               )}
+              {(() => { const ext = (file.name.split('.').pop() || '').toLowerCase(); return ['png','jpg','jpeg','pdf'].includes(ext) })() && (
+                <DropdownMenuItem onClick={(e) => { onConvertToMd ? onConvertToMd(e) : console.log('TODO: Convert to MD via OCR API'); }}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>Convert to MD</span>
+                </DropdownMenuItem>
+              )}
               {onPreview && (
                 <DropdownMenuItem onClick={onPreview}>
                   <FileText className="mr-2 h-4 w-4" />
                   <span>Preview</span>
+                </DropdownMenuItem>
+              )}
+              {onDownload && (
+                <DropdownMenuItem onClick={onDownload}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  <span>Download</span>
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={onGetUrl}>
@@ -707,6 +723,8 @@ export function StorageFileRow({
   onRenameClick,
   ownedByYou,
   onVerifyClick,
+  onConvertToMd,
+  onDownload,
 }: {
   file: { name: string; updated_at?: string | null };
   onGetUrl: (e: React.MouseEvent) => void;
@@ -720,6 +738,8 @@ export function StorageFileRow({
   onRenameClick?: (e: React.MouseEvent) => void;
   ownedByYou?: boolean | null;
   onVerifyClick?: (e: React.MouseEvent) => void;
+  onConvertToMd?: (e: React.MouseEvent) => void;
+  onDownload?: (e: React.MouseEvent) => void;
 }) {
   return (
     <div className="group relative flex items-center p-3 hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
@@ -774,10 +794,22 @@ export function StorageFileRow({
               <span>Verify</span>
             </DropdownMenuItem>
           )}
+          {(() => { const ext = (file.name.split('.').pop() || '').toLowerCase(); return ['png','jpg','jpeg','pdf'].includes(ext) })() && (
+            <DropdownMenuItem onClick={(e) => { onConvertToMd ? onConvertToMd(e) : console.log('TODO: Convert to MD via OCR API'); }}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span>Convert to MD</span>
+            </DropdownMenuItem>
+          )}
           {onPreview && (
             <DropdownMenuItem onClick={onPreview}>
               <FileText className="mr-2 h-4 w-4" />
               <span>Preview</span>
+            </DropdownMenuItem>
+          )}
+          {onDownload && (
+            <DropdownMenuItem onClick={onDownload}>
+              <FileText className="mr-2 h-4 w-4" />
+              <span>Download</span>
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={onGetUrl}>

@@ -100,7 +100,7 @@ export function HeroSection() {
                 color: '#0b1115',
                 fontWeight: 700,
                 textDecoration: 'none',
-                boxShadow: '0 10px 20px rgba(34,197,94,0.25)'
+                boxShadow: '0 10px 20px rgba(255, 255, 255, 0.25)'
               }}
             >
               Get started

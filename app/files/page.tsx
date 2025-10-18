@@ -34,6 +34,7 @@ import {
   FolderPlus,
   Upload as UploadIcon,
   Loader2,
+  Camera,
   ArrowLeft,
   FolderOpenIcon,
   FolderIcon,
@@ -44,6 +45,8 @@ import {
   Package,
   FolderTree
 } from "lucide-react"
+import DocumentScanner from "@/components/scanner/DocumentScanner"
+import OcrDoclingModal from "@/components/ocr/OcrDoclingModal"
 
 // Preset pastel colors for folder customization
 const PASTEL_COLORS = [
@@ -260,6 +263,12 @@ export default function FilesPage() {
   const [uploadProgress, setUploadProgress] = useState<number>(0)
   const [uploadTotal, setUploadTotal] = useState<number>(0)
   const [uploadDone, setUploadDone] = useState<number>(0)
+  // Scanner modal state
+  const [isScanOpen, setIsScanOpen] = useState(false)
+  // OCR modal state
+  const [isOcrOpen, setIsOcrOpen] = useState(false)
+  const [ocrImageUrl, setOcrImageUrl] = useState<string | null>(null)
+  const [ocrTitleBase, setOcrTitleBase] = useState<string>("Scan")
 
   // Persist view preference locally
   useEffect(() => {
@@ -350,6 +359,24 @@ export default function FilesPage() {
     const ext = (lower.split('.').pop() || '').trim()
     const image = ['png','jpg','jpeg','gif','webp','bmp','svg'].includes(ext)
     return { label: ext || 'file', isImage: image }
+  }
+
+  const openOcrForFile = async (f: { fullPath: string; name: string }) => {
+    try {
+      const lower = f.name.toLowerCase()
+      if (!/(\.png|\.jpe?g|\.webp|\.bmp)$/.test(lower)) {
+        toast.message('OCR currently supports images only (png/jpg/webp/bmp)')
+        return
+      }
+      const { data, error } = await supabase.storage.from('userFiles').createSignedUrl(f.fullPath, 3600)
+      if (error || !data?.signedUrl) throw error || new Error('No URL')
+      setOcrImageUrl(data.signedUrl)
+      setOcrTitleBase(() => { const idx = f.name.lastIndexOf('.'); return idx > 0 ? f.name.slice(0, idx) : f.name })
+      setIsOcrOpen(true)
+    } catch (e) {
+      console.error('Open OCR failed', e)
+      toast.error('Failed to open OCR')
+    }
   }
 
   // Prefetch hover preview for images
@@ -720,12 +747,19 @@ export default function FilesPage() {
     try {
       const { data, error } = await supabase.storage.from('userFiles').createSignedUrl(f.fullPath, 3600)
       if (error || !data?.signedUrl) throw error || new Error('No URL')
+      // Fetch the file to avoid cross-origin behavior that opens a new tab
+      const resp = await fetch(data.signedUrl)
+      if (!resp.ok) throw new Error('Failed to fetch file')
+      const blob = await resp.blob()
+      const objectUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = data.signedUrl
-      a.download = f.name || ''
+      a.href = objectUrl
+      a.download = f.name || 'download'
       document.body.appendChild(a)
       a.click()
       a.remove()
+      // Revoke after a short delay to ensure the download has started
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
     } catch (e) {
       console.error('Download failed', e)
       toast.error('Download failed')
@@ -873,6 +907,10 @@ export default function FilesPage() {
                     </Button>
                   </>
                 )}
+                <Button size="sm" variant="outline" onClick={() => setIsScanOpen(true)}>
+                  <Camera className="h-4 w-4 mr-2" />
+                  Scan
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => void onUploadFiles()}>
                   <UploadIcon className="h-4 w-4 mr-2" />
                   Upload
@@ -953,6 +991,83 @@ export default function FilesPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+            {/* OCR Modal */}
+            <OcrDoclingModal
+              open={isOcrOpen}
+              onOpenChange={setIsOcrOpen}
+              imageUrl={ocrImageUrl}
+              onMarkdown={async (markdown) => {
+                try {
+                  if (!user?.id) return
+                  const titleBase = ocrTitleBase || 'Scan'
+                  const { error } = await supabase.from('notes').insert({
+                    user_id: user.id,
+                    title: `${titleBase} (OCR)`,
+                    content: markdown,
+                    folder_id: currentFolder ?? null,
+                  })
+                  if (error) throw error
+                  toast.success('Note created from OCR')
+                } catch (e) {
+                  console.error('Create note from OCR failed', e)
+                  toast.error('Failed to create note')
+                }
+              }}
+            />
+
+            {/* Scanner Dialog */}
+            <Dialog open={isScanOpen} onOpenChange={(o) => setIsScanOpen(o)}>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Scan document</DialogTitle>
+                  <DialogDescription>Capture one JPEG or a multi-page PDF, then upload.</DialogDescription>
+                </DialogHeader>
+                <div>
+                  <DocumentScanner
+                    onClose={() => setIsScanOpen(false)}
+                    onSaveJpeg={async (blob: Blob) => {
+                      if (!user?.id) return
+                      try {
+                        const base = user.id
+                        const sub = currentFolder ? `${currentFolder}` : ""
+                        const dirPath = sub ? `${base}/${sub}` : `${base}`
+                        const ts = new Date()
+                        const name = `Scan ${ts.toISOString().slice(0,19).replace(/[:T]/g, '-')}.jpg`
+                        const uniqueName = await ensureUniqueName(dirPath, name)
+                        const path = `${dirPath}/${uniqueName}`
+                        const { error } = await supabase.storage.from('userFiles').upload(path, blob, { upsert: false, contentType: 'image/jpeg' })
+                        if (error) throw error
+                        toast.success('Scan uploaded')
+                        void refreshStorageFiles()
+                      } catch (e) {
+                        console.error('Scan upload failed', e)
+                        toast.error('Failed to upload scan')
+                      }
+                    }}
+                    onSavePdf={async (blob: Blob) => {
+                      if (!user?.id) return
+                      try {
+                        const base = user.id
+                        const sub = currentFolder ? `${currentFolder}` : ""
+                        const dirPath = sub ? `${base}/${sub}` : `${base}`
+                        const ts = new Date()
+                        const name = `Scan ${ts.toISOString().slice(0,19).replace(/[:T]/g, '-')}.pdf`
+                        const uniqueName = await ensureUniqueName(dirPath, name)
+                        const path = `${dirPath}/${uniqueName}`
+                        const { error } = await supabase.storage.from('userFiles').upload(path, blob, { upsert: false, contentType: 'application/pdf' })
+                        if (error) throw error
+                        toast.success('Scan uploaded')
+                        void refreshStorageFiles()
+                      } catch (e) {
+                        console.error('Scan upload failed', e)
+                        toast.error('Failed to upload scan')
+                      }
+                    }}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
             
 
           {loading && view === "grid" && (
@@ -1011,8 +1126,9 @@ export default function FilesPage() {
                         fileType={getFileType(f.name).label}
                         previewUrl={storagePreviewUrls[f.fullPath]}
                         onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }) }}
-                        onClick={() => void onDownloadFile(f)}
+                        onClick={() => void onPreviewFile({ fullPath: f.fullPath, name: f.name })}
                         onPreview={(e) => { e.stopPropagation(); void onPreviewFile({ fullPath: f.fullPath, name: f.name }) }}
+                        onConvertToMd={(e) => { e.stopPropagation(); void openOcrForFile({ fullPath: f.fullPath, name: f.name }) }}
                         onGetUrl={(e) => { e.stopPropagation(); void onGetFileUrl(f) }}
                         onDelete={(e) => { e.stopPropagation(); openDeleteStorageDialogFor({ name: f.name, fullPath: f.fullPath }) }}
                         onMoveClick={(e) => { e.stopPropagation(); setStorageFileToMove({ fullPath: f.fullPath, name: f.name }); setSelectedMoveFolderId(currentFolder ?? null); setIsMoveDialogOpen(true) }}
@@ -1100,8 +1216,9 @@ export default function FilesPage() {
                       fileType={getFileType(f.name).label}
                       previewUrl={storagePreviewUrls[f.fullPath]}
                       onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }) }}
-                      onClick={() => void onDownloadFile(f)}
+                      onClick={() => void onPreviewFile({ fullPath: f.fullPath, name: f.name })}
                       onPreview={(e) => { e.stopPropagation(); void onPreviewFile({ fullPath: f.fullPath, name: f.name }) }}
+                      onConvertToMd={(e) => { e.stopPropagation(); void openOcrForFile({ fullPath: f.fullPath, name: f.name }) }}
                       onGetUrl={(e) => { e.stopPropagation(); void onGetFileUrl(f) }}
                       onDelete={(e) => { e.stopPropagation(); openDeleteStorageDialogFor({ name: f.name, fullPath: f.fullPath }) }}
                       onMoveClick={(e) => { e.stopPropagation(); setStorageFileToMove({ fullPath: f.fullPath, name: f.name }); setSelectedMoveFolderId(currentFolder ?? null); setIsMoveDialogOpen(true) }}

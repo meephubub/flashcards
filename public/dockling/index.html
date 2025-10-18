@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Granite Docling OCR (Embed)</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+      .wrap { display: flex; flex-direction: column; height: 100%; }
+      header { padding: 8px 12px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; }
+      main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+      .pane { border: 1px solid #eee; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+      .pane h3 { margin: 0; padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 14px; background: #fafafa; }
+      .pane .content { flex: 1; overflow: auto; }
+      .center { display: flex; align-items: center; justify-content: center; height: 100%; color: #777; }
+      #preview { max-width: 100%; height: auto; display: block; margin: 8px auto; }
+      #loader { display: none; gap: 8px; align-items: center; color: #555; padding: 8px; }
+      #actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+      button { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; }
+      button:disabled { opacity: 0.6; cursor: default; }
+      textarea { width: 100%; height: 100%; box-sizing: border-box; border: 0; padding: 8px; font-family: ui-monospace, Menlo, Monaco, "Courier New", monospace; font-size: 12px; }
+      iframe, .html-box { width: 100%; height: 100%; border: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <strong>Granite Docling OCR</strong>
+        <span id="hint">Load an image to convert to HTML, then Markdown.</span>
+        <div id="actions">
+          <input id="file" type="file" accept="image/*" />
+          <button id="run" disabled>Run OCR</button>
+          <button id="send" disabled>Send Markdown</button>
+        </div>
+      </header>
+      <div id="loader">Loading model… This may take a moment.</div>
+      <main>
+        <section class="pane">
+          <h3>Image</h3>
+          <div class="content" id="imageBox">
+            <div class="center" id="dropmsg">Drop an image or choose a file…</div>
+            <img id="preview" alt="preview" />
+          </div>
+        </section>
+        <section class="pane">
+          <h3>Output</h3>
+          <div class="content">
+            <div class="pane" style="height: 50%">
+              <h3>HTML</h3>
+              <iframe id="html" class="html-box"></iframe>
+            </div>
+            <div class="pane" style="height: 50%">
+              <h3>Markdown</h3>
+              <textarea id="md" placeholder="Markdown will appear here…"></textarea>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <canvas id="hidden-canvas" class="hidden"></canvas>
+
+    <script type="module">
+      import TurndownService from 'https://cdn.jsdelivr.net/npm/turndown@7.2.0/dist/turndown.es.js'
+      import { AutoProcessor, AutoModelForVision2Seq, RawImage, TextStreamer } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5";
+      import { doclingToHtml } from "./parser.js";
+
+      const file = document.getElementById('file')
+      const runBtn = document.getElementById('run')
+      const sendBtn = document.getElementById('send')
+      const preview = document.getElementById('preview')
+      const dropmsg = document.getElementById('dropmsg')
+      const htmlFrame = document.getElementById('html')
+      const mdBox = document.getElementById('md')
+      const loader = document.getElementById('loader')
+      const canvas = document.getElementById('hidden-canvas')
+
+      let processor, model
+      let currentImage = null
+
+      async function ensureModel() {
+        if (processor && model) return
+        loader.style.display = 'flex'
+        const model_id = "onnx-community/granite-docling-258M-ONNX"
+        processor = await AutoProcessor.from_pretrained(model_id)
+        model = await AutoModelForVision2Seq.from_pretrained(model_id, {
+          dtype: { embed_tokens: 'fp16', vision_encoder: 'fp32', decoder_model_merged: 'fp32' },
+          device: 'webgpu'
+        })
+        loader.style.display = 'none'
+      }
+
+      function setImage(img) {
+        currentImage = img
+        preview.src = img.src
+        dropmsg.style.display = 'none'
+        runBtn.disabled = false
+      }
+
+      function loadFromUrl(url) {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => setImage(img)
+        img.onerror = () => console.error('Failed to load image for OCR')
+        img.src = url
+      }
+
+      file.addEventListener('change', (e) => {
+        const f = e.target.files?.[0]
+        if (!f) return
+        const reader = new FileReader()
+        reader.onload = () => {
+          const img = new Image()
+          img.onload = () => setImage(img)
+          img.src = reader.result
+        }
+        reader.readAsDataURL(f)
+      })
+
+      document.getElementById('imageBox').addEventListener('dragover', e => { e.preventDefault() })
+      document.getElementById('imageBox').addEventListener('drop', e => {
+        e.preventDefault()
+        const f = e.dataTransfer.files?.[0]
+        if (!f) return
+        const reader = new FileReader()
+        reader.onload = () => {
+          const img = new Image()
+          img.onload = () => setImage(img)
+          img.src = reader.result
+        }
+        reader.readAsDataURL(f)
+      })
+
+      async function runOcr() {
+        if (!currentImage) return
+        await ensureModel()
+        const ctx = canvas.getContext('2d')
+        canvas.width = currentImage.naturalWidth || currentImage.width
+        canvas.height = currentImage.naturalHeight || currentImage.height
+        ctx.drawImage(currentImage, 0, 0)
+        const raw = RawImage.fromCanvas(canvas)
+        const messages = [{ role: 'user', content: [{ type: 'image' }, { type: 'text', text: 'Convert this page to docling.' }] }]
+        const text = processor.apply_chat_template(messages, { add_generation_prompt: true })
+        const inputs = await processor(text, [raw], { do_image_splitting: true })
+        let full = ''
+        await model.generate({
+          ...inputs,
+          max_new_tokens: 4096,
+          streamer: new TextStreamer(processor.tokenizer, { skip_prompt: true, skip_special_tokens: false, callback_function: t => { full += t } })
+        })
+        full = full.replace(/<\|end_of_text\|>$/, '')
+        const html = doclingToHtml(full)
+        htmlFrame.srcdoc = html
+        const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
+        const doc = new DOMParser().parseFromString(html, 'text/html')
+        const body = doc.querySelector('body')
+        mdBox.value = turndown.turndown(body || html)
+        sendBtn.disabled = false
+      }
+
+      runBtn.addEventListener('click', () => { runOcr().catch(console.error) })
+      sendBtn.addEventListener('click', () => {
+        if (!mdBox.value) return
+        window.parent?.postMessage({ type: 'docling-markdown', markdown: mdBox.value }, '*')
+      })
+
+      // Auto-load from query param
+      const params = new URLSearchParams(location.search)
+      const imgUrl = params.get('img')
+      if (imgUrl) {
+        loadFromUrl(imgUrl)
+        ensureModel().catch(console.error)
+      }
+    </script>
+  </body>
+</html>
