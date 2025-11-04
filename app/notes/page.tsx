@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button"
 import ReactMarkdown from "react-markdown"
 import { Textarea } from "@/components/ui/textarea"
 import { WysiwygEditor } from "@/components/notes/wysiwyg-editor"
+import { isOnline, loadNoteContent, saveNoteContent } from "@/lib/offline"
 
 // react-markdown plugins
 import remarkGfm from "remark-gfm"
@@ -609,6 +610,20 @@ export default function Page() {
       }
       setLoadingNote(true)
       setNoteError(null)
+      if (!isOnline()) {
+        const cached = await loadNoteContent(user.id, currentNoteId)
+        if (!mounted) return
+        if (cached) {
+          setNoteTitle(cached.title || "Untitled")
+          setNoteCategory("")
+          setNoteUpdatedAt(cached.updated_at || "")
+          setNoteContent(cached.content || "")
+          setNoteProject("")
+          setIsStarred(false)
+          setLoadingNote(false)
+          return
+        }
+      }
       const { data, error } = await supabase
         .from("notes")
         .select("title, content, category, updated_at, project, is_starred")
@@ -627,6 +642,7 @@ export default function Page() {
       setNoteContent((data?.content as string) || "")
       setNoteProject((data?.project as string) || "")
       setIsStarred(Boolean((data as any)?.is_starred))
+      try { await saveNoteContent(user.id, { id: currentNoteId, title: (data?.title as string) || "", content: (data?.content as string) || "", updated_at: (data?.updated_at as string) || null }) } catch {}
       setLoadingNote(false)
     }
     run()
@@ -753,11 +769,10 @@ export default function Page() {
     if (error) {
       setSaveError(error.message)
     } else {
-      // Commit to view state
       setNoteContent((data?.content as string) ?? draftContent)
       setNoteUpdatedAt((data?.updated_at as string) || "")
       setIsEditing(false)
-      // No automatic verify; mint only (on-demand verify via dropdown/shortcut)
+      try { await saveNoteContent(user.id, { id: currentNoteId, title: noteTitle || "", content: ((data?.content as string) ?? draftContent) || "", updated_at: (data?.updated_at as string) || null }) } catch {}
       try {
         const contentStr = (data?.content as string) ?? draftContent
         const fd = new FormData()

@@ -3,17 +3,18 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { DeckProvider } from "@/context/deck-context";
-import { SettingsProvider } from "@/context/settings-context";
-import { AuthProvider } from "@/context/auth-context";
-import { FolderProvider } from "@/context/folder-context";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Analytics } from "@vercel/analytics/next";
-import ActionSearchBar from "@/components/action-search-bar";
+import { AuthProvider } from "@/context/auth-context";
+import { SettingsProvider } from "@/context/settings-context";
+import { DeckProvider } from "@/context/deck-context";
+import { FolderProvider } from "@/context/folder-context";
 import MobilePaletteButton from "@/components/mobile-palette-button";
+import ActionSearchBar from "@/components/action-search-bar";
 import PwaInit from "@/components/pwa-init";
 import EnvBannerClient from "@/components/env-banner-client";
+import OnlineIndicator from "@/components/online-indicator";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -76,6 +77,7 @@ export default function RootLayout({
                   <SpeedInsights />
                   <Analytics />
                   <PwaInit />
+                  <OnlineIndicator />
                   <EnvBannerClient />
                 </FolderProvider>
               </DeckProvider>

@@ -8,6 +8,7 @@ import { useNoteContextStore } from "@/hooks/use-note-context"
 import { useRouter } from "next/navigation"
 import { useFolder } from "@/context/folder-context"
 import { useAuth } from "@/context/auth-context"
+import { isOnline, saveNotesMeta, loadNotesMeta, NoteMeta } from "@/lib/offline"
 
 import { AppSidebar } from "@/components/notes/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
@@ -202,6 +203,7 @@ export default function FilesPage() {
   const [notes, setNotes] = useState<NoteWithFolder[]>([])
   const [query, setQuery] = useState("")
   const [view, setView] = useState<"grid" | "list">("grid")
+  const [reloadCounter, setReloadCounter] = useState(0)
   const [newFolderName, setNewFolderName] = useState("")
   const [newFolderColor, setNewFolderColor] = useState<string>("")
   const [newFolderIcon, setNewFolderIcon] = useState<string>("")
@@ -290,6 +292,13 @@ export default function FilesPage() {
       setError(null)
       
       try {
+        if (!isOnline()) {
+          const cached = await loadNotesMeta(user.id)
+          const filtered = cached.filter((n) => (currentFolder ? n.folder_id === currentFolder : n.folder_id === null))
+          const rows: NoteWithFolder[] = filtered.map((n) => ({ id: n.id, title: n.title, updated_at: "", category: "", project: "", folder_id: n.folder_id }))
+          if (!cancelled) setNotes(rows)
+          return
+        }
         let query = supabase
           .from("notes")
           .select("id, title, updated_at, category, project, folder_id")
@@ -310,7 +319,10 @@ export default function FilesPage() {
         
         if (error) throw error
         
-        setNotes(data || [])
+        const rows = (data as NoteWithFolder[]) || []
+        setNotes(rows)
+        const metas: NoteMeta[] = rows.map((r) => ({ id: r.id, title: r.title || "", folder_id: r.folder_id ?? null, public_url: `/notes?noteId=${encodeURIComponent(r.id)}` }))
+        await saveNotesMeta(user.id, metas)
       } catch (err) {
         console.error("Error fetching notes:", err)
         setError("Failed to load notes. Please try again.")
@@ -321,7 +333,18 @@ export default function FilesPage() {
     
     run()
     return () => { cancelled = true }
-  }, [user?.id, supabase, currentFolder])
+  }, [user?.id, supabase, currentFolder, reloadCounter])
+
+  useEffect(() => {
+    const onOnline = () => setReloadCounter((n) => n + 1)
+    const onSync = () => setReloadCounter((n) => n + 1)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('app-sync', onSync as EventListener)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('app-sync', onSync as EventListener)
+    }
+  }, [])
 
   // Fetch storage files for current path (reusable)
   const refreshStorageFiles = async () => {

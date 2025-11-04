@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import * as dataService from '../lib/data'
 import type { Card, CardProgressInput } from '../lib/supabase'
 import type { CardProgress as LocalCardProgress } from '../lib/spaced-repetition'
+import { isOnline, loadDecksMeta, saveDecksMeta, loadDeckCards, saveDeckCards } from '@/lib/offline'
 
 export interface Deck {
   id: number
@@ -67,6 +68,26 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     }
     try {
       setLoading(true)
+      if (!isOnline()) {
+        const cached = await loadDecksMeta(user.id)
+        const minimal = await Promise.all(cached.map(async (d) => {
+          const cards = await loadDeckCards(user.id, d.id)
+          return {
+            id: d.id,
+            user_id: user.id,
+            name: d.name,
+            description: d.description || "",
+            tag: null,
+            card_count: cards.length,
+            last_studied: 'Never',
+            cards: cards as any,
+            created_at: undefined,
+            updated_at: undefined,
+          } as Deck
+        }))
+        setDecks(minimal)
+        return
+      }
       console.log("Fetching decks for user:", user.id)
       const fetchedSupabaseDecks = await dataService.getDecks(supabase, user.id) // Pass user.id
       console.log("Fetched decks count:", fetchedSupabaseDecks.length)
@@ -133,6 +154,12 @@ export function DeckProvider({ children }: { children: ReactNode }) {
       
       // Update with complete deck data including cards
       setDecks(validCompletedDecks)
+      try {
+        await saveDecksMeta(user.id, validCompletedDecks.map((d) => ({ id: d.id, name: d.name, description: d.description || null })))
+        for (const d of validCompletedDecks) {
+          try { await saveDeckCards(user.id, d.id, (d.cards || []) as any) } catch {}
+        }
+      } catch {}
       setDueCardsCache({})
     } catch (error) {
       console.error("Error refreshing decks:", error);
@@ -163,6 +190,17 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     // Intentionally not reacting to `session` directly if `user` is the primary gate for data fetching.
     // If session presence without a user object means something, adjust logic.
   }, [user, authIsLoading, session, refreshDecks, authContext]);
+
+  useEffect(() => {
+    const onOnline = () => { void refreshDecks() }
+    const onSync = () => { void refreshDecks() }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('app-sync', onSync as unknown as EventListener)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('app-sync', onSync as unknown as EventListener)
+    }
+  }, [refreshDecks])
 
   const addDeck = async (name: string, description: string, tag: string | null = null): Promise<Deck> => {
     if (!user) throw new Error("User not authenticated");

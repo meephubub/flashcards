@@ -16,6 +16,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { isOnline, saveTasksMeta, loadTasksMeta, saveNotesMeta, loadNotesMeta, TaskMeta } from "@/lib/offline"
 
 // Notes layout components for consistent shell
 import { AppSidebar } from "@/components/notes/app-sidebar"
@@ -96,6 +97,24 @@ export default function TasksPage() {
   const fetchTasks = React.useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
+    if (!isOnline()) {
+      try {
+        const cached = await loadTasksMeta(user.id)
+        setTasks(cached.map((c) => ({
+          id: Number(c.id),
+          created_at: "",
+          user_id: user.id,
+          due_date: c.due_date,
+          subject: c.subject,
+          priority: c.priority,
+          done: c.done,
+          metadata: null,
+        })))
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
     let q = supabase
       .from("homework")
       .select('id, created_at, user_id, due_date, subject, priority, done, metadata')
@@ -122,6 +141,14 @@ export default function TasksPage() {
         })
       }
       setTasks(rows)
+      const metas: TaskMeta[] = rows.map((r) => ({
+        id: String(r.id),
+        subject: r.subject,
+        due_date: r.due_date,
+        done: r.done ?? null,
+        priority: r.priority ?? null,
+      }))
+      await saveTasksMeta(user.id, metas)
     }
     setLoading(false)
   }, [selectedDate, supabase, user?.id])
@@ -129,13 +156,23 @@ export default function TasksPage() {
   const fetchNotes = React.useCallback(async () => {
     if (!user?.id) return
     setLoadingNotes(true)
+    if (!isOnline()) {
+      const cached = await loadNotesMeta(user.id)
+      setNotes(cached.map((n) => ({ id: n.id, title: n.title } as NoteRow)))
+      setLoadingNotes(false)
+      return
+    }
     const { data, error } = await supabase
       .from("notes")
       .select("id, title")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(200)
-    if (!error) setNotes((data as NoteRow[]) || [])
+    if (!error) {
+      const rows = (data as NoteRow[]) || []
+      setNotes(rows)
+      await saveNotesMeta(user.id, rows.map((r) => ({ id: r.id, title: r.title || "", folder_id: null })))
+    }
     setLoadingNotes(false)
   }, [supabase, user?.id])
 
@@ -146,6 +183,17 @@ export default function TasksPage() {
   React.useEffect(() => {
     fetchNotes()
   }, [fetchNotes])
+
+  React.useEffect(() => {
+    const onOnline = () => { void fetchTasks(); void fetchNotes() }
+    const onSync = () => { void fetchTasks(); void fetchNotes() }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('app-sync', onSync as EventListener)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('app-sync', onSync as EventListener)
+    }
+  }, [fetchTasks, fetchNotes])
 
   const addTask = async () => {
     if (!user?.id) return

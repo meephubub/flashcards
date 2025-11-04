@@ -4,6 +4,7 @@ import { createContext, useContext, useCallback, useState, useEffect } from "rea
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/context/auth-context"
 import { Tables } from "@/types/supabase"
+import { isOnline, saveFoldersMeta, loadFoldersMeta, FolderMeta } from "@/lib/offline"
 
 type FolderWithChildren = Tables<"folders"> & {
   children: FolderWithChildren[]
@@ -45,6 +46,21 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
     setError(null)
     
     try {
+      if (!isOnline()) {
+        const cached = await loadFoldersMeta(user.id)
+        const data = cached.map((f) => ({ id: f.id, name: f.name, parent_id: f.parent_id, user_id: user.id, style: null })) as any[]
+        const buildTree = (parentId: string | null): FolderWithChildren[] => {
+          return (data || [])
+            .filter((folder: any) => folder.parent_id === parentId)
+            .map((folder: any) => ({
+              ...folder,
+              children: buildTree(folder.id)
+            }))
+        }
+        const tree = buildTree(null)
+        setFolders(tree)
+        return tree
+      }
       const { data, error } = await supabase
         .from('folders')
         .select('*')
@@ -53,7 +69,6 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
       
       if (error) throw error
       
-      // Build folder tree
       const buildTree = (parentId: string | null): FolderWithChildren[] => {
         return (data || [])
           .filter((folder: any) => folder.parent_id === parentId)
@@ -65,6 +80,8 @@ export function FolderProvider({ children }: { children: React.ReactNode }) {
       
       const tree = buildTree(null)
       setFolders(tree)
+      const metas: FolderMeta[] = (data as any[] || []).map((f: any) => ({ id: f.id, name: f.name, parent_id: f.parent_id ?? null }))
+      await saveFoldersMeta(user.id, metas)
       return tree
     } catch (err) {
       console.error('Error fetching folders:', err)
