@@ -1130,18 +1130,22 @@ Goals:
                 <BreadcrumbItem>
                   <BreadcrumbPage>{noteTitle || "Untitled"}</BreadcrumbPage>
                 </BreadcrumbItem>
-                {currentNoteId && (
+                {currentNoteId && highlightColor !== 'green' && (
                   <BreadcrumbItem>
                     <span
                       className="ml-2 inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium border"
                       title="Current highlight color"
                       style={{
-                        backgroundColor: highlightColor === 'green' ? 'rgba(34,197,94,0.12)'
-                          : highlightColor === 'red' ? 'rgba(244,63,94,0.12)'
-                          : 'rgba(59,130,246,0.12)',
-                        color: highlightColor === 'green' ? 'rgb(5, 122, 85)'
-                          : highlightColor === 'red' ? 'rgb(190, 18, 60)'
-                          : 'rgb(29, 78, 216)'
+                        backgroundColor: ({
+                          green: 'rgba(34,197,94,0.12)',
+                          red: 'rgba(244,63,94,0.12)',
+                          blue: 'rgba(59,130,246,0.12)'
+                        } as const)[highlightColor],
+                        color: ({
+                          green: 'rgb(5, 122, 85)',
+                          red: 'rgb(190, 18, 60)',
+                          blue: 'rgb(29, 78, 216)'
+                        } as const)[highlightColor]
                       }}
                     >
                       HL: {highlightColor}
@@ -1314,7 +1318,7 @@ Goals:
                         disabled={starSaving}
                         title={isStarred ? 'Unstar' : 'Star'}
                         aria-label={isStarred ? 'Unstar note' : 'Star note'}
-                        className={`inline-flex items-center justify-center h-8 w-8 rounded-md border transition-colors ${isStarred ? 'text-yellow-600 border-yellow-600/40 bg-yellow-50 dark:bg-yellow-900/20' : 'text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900'}`}
+                        className={`inline-flex items-center justify-center h-8 w-8 rounded-md border transition-colors ${isStarred ? 'text-neutral-700 dark:text-neutral-200 border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900' : 'text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900'}`}
                       >
                         <Star className="h-4 w-4" fill={isStarred ? 'currentColor' : 'none'} />
                       </button>
@@ -1542,7 +1546,7 @@ Goals:
                               disabled={starSaving}
                               title={isStarred ? 'Unstar' : 'Star'}
                               aria-label={isStarred ? 'Unstar note' : 'Star note'}
-                              className={`inline-flex items-center justify-center h-8 w-8 rounded-md border transition-colors ${isStarred ? 'text-yellow-600 border-yellow-600/40 bg-yellow-50 dark:bg-yellow-900/20' : 'text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900'}`}
+                              className={`inline-flex items-center justify-center h-8 w-8 rounded-md border transition-colors ${isStarred ? 'text-neutral-700 dark:text-neutral-200 border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900' : 'text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900'}`}
                             >
                               <Star className="h-4 w-4" fill={isStarred ? 'currentColor' : 'none'} />
                             </button>

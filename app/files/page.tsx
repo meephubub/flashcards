@@ -732,10 +732,28 @@ export default function FilesPage() {
 
   const onGetFileUrl = async (file: { fullPath: string }) => {
     try {
-      const { data, error } = await supabase.storage.from('userFiles').createSignedUrl(file.fullPath, 3600)
-      if (error || !data?.signedUrl) throw error || new Error('No URL')
-      await navigator.clipboard.writeText(data.signedUrl)
-      toast.success('URL copied to clipboard')
+      const pub = supabase.storage.from('userFiles').getPublicUrl(file.fullPath)
+      const publicUrl = pub?.data?.publicUrl || ''
+      let finalUrl = publicUrl
+      let useSigned = false
+      if (!publicUrl) {
+        useSigned = true
+      } else {
+        try {
+          const head = await fetch(publicUrl, { method: 'HEAD' })
+          if (!head.ok) useSigned = true
+        } catch {
+          useSigned = true
+        }
+      }
+      if (useSigned) {
+        const { data, error } = await supabase.storage.from('userFiles').createSignedUrl(file.fullPath, 3600)
+        if (error || !data?.signedUrl) throw error || new Error('No URL')
+        finalUrl = data.signedUrl
+        toast.message('Bucket is private; copied a temporary link (1 hour)')
+      }
+      await navigator.clipboard.writeText(finalUrl)
+      if (!useSigned) toast.success('Permanent URL copied to clipboard')
     } catch (e) {
       console.error('Get URL failed', e)
       toast.error('Failed to get URL')
@@ -1015,6 +1033,35 @@ export default function FilesPage() {
                 }
               }}
             />
+
+            <Dialog open={isPreviewOpen} onOpenChange={(o) => setIsPreviewOpen(o)}>
+              <DialogContent className="max-w-5xl">
+                <DialogHeader>
+                  <DialogTitle>{previewName || 'Preview'}</DialogTitle>
+                  <DialogDescription>Preview file</DialogDescription>
+                </DialogHeader>
+                <div className="w-full">
+                  {previewType === 'image' && previewUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previewUrl} alt={previewName} className="max-h-[70vh] w-auto mx-auto object-contain" />
+                  )}
+                  {previewType === 'video' && previewUrl && (
+                    <video src={previewUrl} controls className="max-h-[70vh] w-full" />
+                  )}
+                  {previewType === 'audio' && previewUrl && (
+                    <audio src={previewUrl} controls className="w-full" />
+                  )}
+                  {previewType === 'pdf' && previewUrl && (
+                    <iframe src={previewUrl} className="h-[75vh] w-full" />
+                  )}
+                  {previewType === 'unknown' && previewUrl && (
+                    <div className="text-sm">
+                      <a href={previewUrl} target="_blank" rel="noreferrer" className="underline">Open in new tab</a>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Scanner Dialog */}
             <Dialog open={isScanOpen} onOpenChange={(o) => setIsScanOpen(o)}>
