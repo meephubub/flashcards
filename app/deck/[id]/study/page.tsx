@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/notes/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { createClient } from "@/lib/supabase/client";
+import { isOnline, loadDecksMeta } from "@/lib/offline";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -47,6 +48,12 @@ export default function StudyPage({ params }: { params: { id: string } }) {
       if (!user?.id || !deckId || Number.isNaN(deckId)) {
         if (mounted) setDeckTitle("");
         return;
+      }
+      if (!isOnline()) {
+        const metas = await loadDecksMeta(user.id)
+        const found = metas.find((m) => m.id === deckId)
+        if (mounted) setDeckTitle(found?.name || "")
+        return
       }
       const { data, error } = await supabase
         .from("decks")

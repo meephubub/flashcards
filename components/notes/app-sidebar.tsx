@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/context/auth-context"
 import { createClient } from "@/lib/supabase/client"
+import { isOnline, loadTasksMeta } from "@/lib/offline"
 import { CreateDeckDialog } from "@/components/create-deck-dialog"
 import { ImportMarkdownDialog } from "@/components/import-markdown-dialog"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
@@ -208,6 +209,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     let mounted = true
     const run = async () => {
       if (!user?.id) return
+      if (!isOnline()) {
+        const metas = await loadTasksMeta(user.id)
+        const pending = metas.filter(m => m.done !== true)
+        pending.sort((a, b) => {
+          const da = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER
+          const db = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER
+          return da - db
+        })
+        if (!mounted) return
+        setUpcomingTasks(pending.slice(0, 5).map(m => ({ id: Number(m.id), subject: m.subject, due_date: m.due_date })))
+        return
+      }
       const { data, error } = await supabase
         .from('homework')
         .select('id, subject, due_date, done')

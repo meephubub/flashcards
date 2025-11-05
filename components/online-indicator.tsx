@@ -37,6 +37,8 @@ export default function OnlineIndicator() {
     return () => { mounted = false }
   }, [user?.id, online])
 
+  if (online) return null
+
   return (
     <div style={{ position: 'fixed', bottom: 12, right: 12, zIndex: 9999 }}>
       <div style={{
@@ -46,19 +48,20 @@ export default function OnlineIndicator() {
         padding: '6px 10px',
         borderRadius: 999,
         fontSize: 12,
-        background: online ? 'rgba(16,185,129,.12)' : 'rgba(107,114,128,.15)',
-        color: online ? 'rgb(5, 150, 105)' : 'rgb(107,114,128)',
-        border: `1px solid ${online ? 'rgba(16,185,129,.35)' : 'rgba(107,114,128,.35)'}`,
+        background: 'rgba(107,114,128,.15)',
+        color: 'rgb(107,114,128)',
+        border: '1px solid rgba(107,114,128,.35)',
         backdropFilter: 'saturate(120%) blur(4px)'
       }}>
         <span style={{
           width: 8,
           height: 8,
           borderRadius: 999,
-          background: online ? 'rgb(16,185,129)' : 'rgb(107,114,128)'
+          background: 'rgb(107,114,128)'
         }} />
-        <span>{online ? (syncing ? 'Online • Syncing…' : 'Online') : 'Offline mode'}</span>
+        <span>Offline mode</span>
       </div>
     </div>
   )
 }
+
