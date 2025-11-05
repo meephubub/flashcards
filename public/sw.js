@@ -48,7 +48,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  // Navigation requests: try network, then offline fallback
+  // Navigation requests: try network, then fall back to cached app shell ('/') so SPA can render routes offline
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req)
@@ -60,7 +60,9 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(async () => {
           const cached = await caches.match(req);
-          return cached || caches.match('/offline.html');
+          if (cached) return cached;
+          const appShell = await caches.match('/');
+          return appShell || caches.match('/offline.html');
         })
     );
     return;

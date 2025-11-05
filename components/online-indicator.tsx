@@ -10,12 +10,30 @@ export default function OnlineIndicator() {
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
-    const update = () => setOnline(navigator.onLine)
-    window.addEventListener('online', update)
-    window.addEventListener('offline', update)
+    let cancelled = false
+    const updateFromNavigator = () => setOnline(navigator.onLine)
+    const probe = async () => {
+      try {
+        // Probe a local asset to avoid CORS/ DNS issues; treat 200 as online
+        const resp = await fetch('/manifest.json', { cache: 'no-store' })
+        if (!cancelled) setOnline(resp.ok)
+      } catch {
+        if (!cancelled) setOnline(false)
+      }
+    }
+    const onOnline = () => { updateFromNavigator(); void probe() }
+    const onVisibility = () => { if (document.visibilityState === 'visible') void probe() }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', updateFromNavigator)
+    document.addEventListener('visibilitychange', onVisibility)
+    void probe()
+    const id = window.setInterval(probe, 15000)
     return () => {
-      window.removeEventListener('online', update)
-      window.removeEventListener('offline', update)
+      cancelled = true
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', updateFromNavigator)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.clearInterval(id)
     }
   }, [])
 
