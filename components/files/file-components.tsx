@@ -260,6 +260,9 @@ export function NoteCard({
   onVerifyClick,
   previewSnippet,
   onHoverStart,
+  selectionMode,
+  selected,
+  onSelectToggle,
 }: { 
   note: any;
   onClick: () => void;
@@ -268,6 +271,9 @@ export function NoteCard({
   onVerifyClick?: (e: React.MouseEvent) => void;
   previewSnippet?: string;
   onHoverStart?: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onSelectToggle?: (checked: boolean) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [showBelow, setShowBelow] = useState(false)
@@ -289,8 +295,25 @@ export function NoteCard({
     showTimerRef.current = window.setTimeout(() => setShowPreview(true), 1000)
   }
   const handleMouseLeave = () => { scheduleHide(); clearShowTimer() }
+  const handleCardClick = () => {
+    if (selectionMode && onSelectToggle) {
+      onSelectToggle(!selected)
+      return
+    }
+    onClick()
+  }
   return (
-    <Card ref={rootRef} className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <Card ref={rootRef} className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={handleCardClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      {selectionMode && (
+        <div className="absolute top-2 left-2 z-10">
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={(e) => onSelectToggle?.(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       {/* Hover preview bubble for note content */}
       {previewSnippet && !showBelow && showPreview && (
         <div
@@ -382,7 +405,10 @@ export function NoteRow({
   onDeleteClick,
   onVerifyClick,
   previewSnippet,
-  onHoverStart
+  onHoverStart,
+  selectionMode,
+  selected,
+  onSelectToggle
 }: { 
   note: any;
   onClick: () => void;
@@ -391,6 +417,9 @@ export function NoteRow({
   onVerifyClick?: (e: React.MouseEvent) => void;
   previewSnippet?: string;
   onHoverStart?: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onSelectToggle?: (checked: boolean) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [showBelow, setShowBelow] = useState(false)
@@ -411,8 +440,25 @@ export function NoteRow({
     showTimerRef.current = window.setTimeout(() => setShowPreview(true), 200)
   }
   const handleMouseLeave = () => { scheduleHide(); clearShowTimer() }
+  const handleRowClick = () => {
+    if (selectionMode && onSelectToggle) {
+      onSelectToggle(!selected)
+      return
+    }
+    onClick()
+  }
   return (
-    <div ref={rootRef} className="group relative flex items-center p-3 hover:bg-accent/50 cursor-pointer" onClick={onClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div ref={rootRef} className="group relative flex items-center p-3 hover:bg-accent/50 cursor-pointer" onClick={handleRowClick} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      {selectionMode && (
+        <div className="absolute left-2 z-10">
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={(e) => onSelectToggle?.(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       {previewSnippet && !showBelow && showPreview && (
         <div
           className="pointer-events-auto absolute left-1/2 -top-2 z-50 -translate-x-1/2 -translate-y-full rounded-md border bg-background p-2 shadow-lg w-[32rem] max-w-[85vw] max-h-80 overflow-auto no-scroll"
@@ -592,6 +638,9 @@ export function StorageFileCard({
   onVerifyClick,
   onConvertToMd,
   onDownload,
+  selectionMode,
+  selected,
+  onSelectToggle,
 }: {
   file: { name: string; updated_at?: string | null };
   onGetUrl: (e: React.MouseEvent) => void;
@@ -607,9 +656,29 @@ export function StorageFileCard({
   onVerifyClick?: (e: React.MouseEvent) => void;
   onConvertToMd?: (e: React.MouseEvent) => void;
   onDownload?: (e: React.MouseEvent) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onSelectToggle?: (checked: boolean) => void;
 }) {
+  const handleCardClick = () => {
+    if (selectionMode && onSelectToggle) {
+      onSelectToggle(!selected)
+      return
+    }
+    onClick?.()
+  }
   return (
-    <Card className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
+    <Card className="group relative cursor-pointer transition-colors hover:bg-accent/50" onClick={handleCardClick} onMouseEnter={onHoverStart}>
+      {selectionMode && (
+        <div className="absolute top-2 left-2 z-10">
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={(e) => onSelectToggle?.(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       {/* Hover preview bubble for images */}
       {previewUrl && (
         <div className="pointer-events-none absolute left-1/2 -top-2 z-50 hidden -translate-x-1/2 -translate-y-full rounded-md border bg-background p-1 shadow-lg group-hover:block">
@@ -725,6 +794,9 @@ export function StorageFileRow({
   onVerifyClick,
   onConvertToMd,
   onDownload,
+  selectionMode,
+  selected,
+  onSelectToggle,
 }: {
   file: { name: string; updated_at?: string | null };
   onGetUrl: (e: React.MouseEvent) => void;
@@ -740,9 +812,29 @@ export function StorageFileRow({
   onVerifyClick?: (e: React.MouseEvent) => void;
   onConvertToMd?: (e: React.MouseEvent) => void;
   onDownload?: (e: React.MouseEvent) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onSelectToggle?: (checked: boolean) => void;
 }) {
+  const handleRowClick = () => {
+    if (selectionMode && onSelectToggle) {
+      onSelectToggle(!selected)
+      return
+    }
+    onClick?.()
+  }
   return (
-    <div className="group relative flex items-center p-3 hover:bg-accent/50" onClick={onClick} onMouseEnter={onHoverStart}>
+    <div className="group relative flex items-center p-3 hover:bg-accent/50" onClick={handleRowClick} onMouseEnter={onHoverStart}>
+      {selectionMode && (
+        <div className="absolute left-2 z-10">
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={(e) => onSelectToggle?.(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       {previewUrl && (
         <div className="pointer-events-none absolute left-1/2 -top-2 z-50 hidden -translate-x-1/2 -translate-y-full rounded-md border bg-background p-1 shadow-lg group-hover:block">
           {/* eslint-disable-next-line @next/next/no-img-element */}

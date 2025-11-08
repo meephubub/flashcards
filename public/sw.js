@@ -7,7 +7,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // --- Simple but more robust offline-first service worker ---
-const SW_VERSION = 'v1.0.0';
+const SW_VERSION = 'v1.0.1';
 const PRECACHE = `precache-${SW_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -52,16 +52,18 @@ self.addEventListener('fetch', (event) => {
   if (req.mode === 'navigate') {
     event.respondWith(
       (async () => {
-        const cachedNav = await caches.match(req)
-        if (cachedNav) return cachedNav
-        const appShell = await caches.match('/')
-        if (appShell) return appShell
+        // Network-first to ensure correct route content when online
         try {
           const resp = await fetch(req)
           const copy = resp.clone()
           caches.open(PRECACHE).then((c) => c.put(req, copy)).catch(() => {})
           return resp
         } catch {
+          // Fallbacks when offline or network fails
+          const cachedNav = await caches.match(req)
+          if (cachedNav) return cachedNav
+          const appShell = await caches.match('/')
+          if (appShell) return appShell
           return (await caches.match('/offline.html')) || Response.error()
         }
       })()

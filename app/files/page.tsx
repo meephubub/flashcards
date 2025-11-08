@@ -95,6 +95,7 @@ function FolderIconPreview({ icon, color }: { icon?: string; color?: string }) {
     if (parts.length === 0) return name
     return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join("")
   }
+
   return (
     <div className="flex items-center justify-center p-4 border rounded-lg bg-muted/50">
       <div className="flex flex-col items-center text-center">
@@ -217,6 +218,28 @@ export default function FilesPage() {
   const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false)
   const [selectedMoveFolderId, setSelectedMoveFolderId] = useState<string | null>(null)
   const [storageFileToMove, setStorageFileToMove] = useState<{ fullPath: string; name: string } | null>(null)
+  // Selection mode for bulk actions
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set())
+  const [selectedStoragePaths, setSelectedStoragePaths] = useState<Set<string>>(new Set())
+  const toggleSelectNote = (id: string, checked?: boolean) => {
+    setSelectedNoteIds((prev) => {
+      const next = new Set(prev)
+      const willCheck = typeof checked === 'boolean' ? checked : !next.has(id)
+      if (willCheck) next.add(id); else next.delete(id)
+      return next
+    })
+  }
+  const toggleSelectStorage = (fullPath: string, checked?: boolean) => {
+    setSelectedStoragePaths((prev) => {
+      const next = new Set(prev)
+      const willCheck = typeof checked === 'boolean' ? checked : !next.has(fullPath)
+      if (willCheck) next.add(fullPath); else next.delete(fullPath)
+      return next
+    })
+  }
+  const clearSelection = () => { setSelectedNoteIds(new Set()); setSelectedStoragePaths(new Set()); setSelectionMode(false) }
+  const anySelected = selectedNoteIds.size + selectedStoragePaths.size
   // Delete dialog state (reuse NoteDeleteDialog)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -509,7 +532,31 @@ export default function FilesPage() {
   // Confirm move action (note or storage file)
   const handleConfirmMove = async (folderId: string | null) => {
     try {
-      // Move note case
+      // Bulk selection move: notes and storage files
+      if (selectionMode && (selectedNoteIds.size > 0 || selectedStoragePaths.size > 0)) {
+        // Move notes
+        for (const id of Array.from(selectedNoteIds)) {
+          await moveNoteToFolder(id, folderId)
+        }
+        // Move storage files
+        if (user?.id) {
+          const base = user.id
+          for (const from of Array.from(selectedStoragePaths)) {
+            const name = from.split('/').pop() as string
+            const newPath = folderId ? `${base}/${folderId}/${name}` : `${base}/${name}`
+            const copyRes = await supabase.storage.from('userFiles').copy(from, newPath)
+            if (copyRes.error) throw copyRes.error
+            const remRes = await supabase.storage.from('userFiles').remove([from])
+            if (remRes.error) throw remRes.error
+          }
+        }
+        setIsMoveDialogOpen(false)
+        toast.success('Moved selected items')
+        clearSelection()
+        void refreshStorageFiles()
+        return
+      }
+      // Single move cases
       if (moveNoteId) {
         await moveNoteToFolder(moveNoteId, folderId)
         setMoveNoteId(null)
@@ -571,6 +618,42 @@ export default function FilesPage() {
       toast.success("Note deleted")
     }
     setDeleting(false)
+  }
+
+  // Bulk delete state and handler
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null)
+  const confirmBulkDelete = async () => {
+    if (!user?.id) return
+    setBulkDeleting(true)
+    setBulkDeleteError(null)
+    try {
+      // Delete selected notes
+      const noteIds = Array.from(selectedNoteIds)
+      if (noteIds.length > 0) {
+        const { error } = await supabase
+          .from('notes')
+          .delete()
+          .in('id', noteIds)
+          .eq('user_id', user.id)
+        if (error) throw error
+        setNotes((prev) => prev.filter((n) => !selectedNoteIds.has(n.id)))
+      }
+      // Delete selected storage files
+      const paths = Array.from(selectedStoragePaths)
+      if (paths.length > 0) {
+        const { error } = await supabase.storage.from('userFiles').remove(paths)
+        if (error) throw error
+        setStorageFiles((prev) => prev.filter((f) => !selectedStoragePaths.has(f.fullPath)))
+      }
+      toast.success('Deleted selected items')
+      setIsBulkDeleteOpen(false)
+      clearSelection()
+    } catch (e: any) {
+      setBulkDeleteError(e?.message || 'Failed to delete selected items')
+    }
+    setBulkDeleting(false)
   }
 
   // Filter notes by search query
@@ -938,6 +1021,26 @@ export default function FilesPage() {
                 />
               </div>
               <div className="ml-auto flex items-center gap-2">
+                {!selectionMode && (
+                  <Button size="sm" variant="outline" onClick={() => setSelectionMode(true)}>
+                    Edit
+                  </Button>
+                )}
+                {selectionMode && (
+                  <>
+                    <span className="text-sm text-muted-foreground hidden sm:inline">{anySelected} selected</span>
+                    <Button size="sm" variant="outline" onClick={() => { setSelectedNoteIds(new Set(notes.map(n=>n.id))); setSelectedStoragePaths(new Set(storageFiles.map(f=>f.fullPath))) }}>
+                      Select All
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={anySelected === 0} onClick={() => { setSelectedMoveFolderId(currentFolder ?? null); setIsMoveDialogOpen(true) }}>
+                      Move
+                    </Button>
+                    <Button size="sm" variant="destructive" disabled={anySelected === 0} onClick={() => setIsBulkDeleteOpen(true)}>
+                      Delete
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={clearSelection}>Cancel</Button>
+                  </>
+                )}
                 {currentFolder && (
                   <>
                     <Button size="sm" variant="outline" onClick={openEditFolder}>
@@ -1196,7 +1299,7 @@ export default function FilesPage() {
                         fileType={getFileType(f.name).label}
                         previewUrl={storagePreviewUrls[f.fullPath]}
                         onHoverStart={() => { void onHoverStartFile({ fullPath: f.fullPath, name: f.name }) }}
-                        onClick={() => void onPreviewFile({ fullPath: f.fullPath, name: f.name })}
+                        onClick={() => void onPreviewFile({ fullPath: f.fullPath, name: f.name }) }
                         onPreview={(e) => { e.stopPropagation(); void onPreviewFile({ fullPath: f.fullPath, name: f.name }) }}
                         onConvertToMd={(e) => { e.stopPropagation(); void openOcrForFile({ fullPath: f.fullPath, name: f.name }) }}
                         onGetUrl={(e) => { e.stopPropagation(); void onGetFileUrl(f) }}
@@ -1205,6 +1308,9 @@ export default function FilesPage() {
                         onRenameClick={(e) => { e.stopPropagation(); setRenameTarget({ fullPath: f.fullPath, name: f.name }); setRenameNewName(f.name); setIsRenameOpen(true) }}
                         onVerifyClick={(e) => { e.stopPropagation(); void verifyStorageFile({ fullPath: f.fullPath, name: f.name }) }}
                         ownedByYou={ownedByPath[f.fullPath] ?? null}
+                        selectionMode={selectionMode}
+                        selected={selectedStoragePaths.has(f.fullPath)}
+                        onSelectToggle={(checked) => toggleSelectStorage(f.fullPath, checked)}
                       />
                     ))}
                   </Grid>
@@ -1228,6 +1334,9 @@ export default function FilesPage() {
                           e.stopPropagation()
                           openDeleteDialogFor({ id: n.id, title: n.title })
                         }}
+                        selectionMode={selectionMode}
+                        selected={selectedNoteIds.has(n.id)}
+                        onSelectToggle={(checked) => toggleSelectNote(n.id, checked)}
                         onVerifyClick={async (e) => {
                           e.stopPropagation()
                           try {
@@ -1295,6 +1404,9 @@ export default function FilesPage() {
                       onRenameClick={(e) => { e.stopPropagation(); setRenameTarget({ fullPath: f.fullPath, name: f.name }); setRenameNewName(f.name); setIsRenameOpen(true) }}
                       onVerifyClick={(e) => { e.stopPropagation(); void verifyStorageFile({ fullPath: f.fullPath, name: f.name }) }}
                       ownedByYou={ownedByPath[f.fullPath] ?? null}
+                      selectionMode={selectionMode}
+                      selected={selectedStoragePaths.has(f.fullPath)}
+                      onSelectToggle={(checked) => toggleSelectStorage(f.fullPath, checked)}
                     />
                   ))}
                   {filteredNotes.map((n) => (
@@ -1314,6 +1426,9 @@ export default function FilesPage() {
                         e.stopPropagation()
                         openDeleteDialogFor({ id: n.id, title: n.title })
                       }}
+                      selectionMode={selectionMode}
+                      selected={selectedNoteIds.has(n.id)}
+                      onSelectToggle={(checked) => toggleSelectNote(n.id, checked)}
                       onVerifyClick={async (e) => {
                         e.stopPropagation()
                         try {
@@ -1513,6 +1628,25 @@ export default function FilesPage() {
               isDeleting={deleting}
               error={deleteError}
             />
+
+            {/* Bulk Delete Dialog */}
+            <Dialog open={isBulkDeleteOpen} onOpenChange={(o) => setIsBulkDeleteOpen(o)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete selected</DialogTitle>
+                  <DialogDescription>
+                    This will permanently delete {selectedNoteIds.size} notes and {selectedStoragePaths.size} files.
+                  </DialogDescription>
+                </DialogHeader>
+                {bulkDeleteError && <div className="text-sm text-red-600">{bulkDeleteError}</div>}
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setIsBulkDeleteOpen(false)}>Cancel</Button>
+                  <Button variant="destructive" onClick={() => void confirmBulkDelete()} disabled={bulkDeleting}>
+                    {bulkDeleting ? 'Deleting…' : 'Delete'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </SidebarInset>
