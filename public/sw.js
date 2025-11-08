@@ -48,28 +48,44 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  // Navigation requests: try network, then fall back to cached app shell ('/') so SPA can render routes offline
+  // Navigation requests: cache-first app shell for reliable offline open; then try network; finally offline.html
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
-        .then((resp) => {
-          // Optionally cache successful navigations
-          const copy = resp.clone();
-          caches.open(PRECACHE).then((c) => c.put(req, copy)).catch(() => {});
-          return resp;
-        })
-        .catch(async () => {
-          const cached = await caches.match(req);
-          if (cached) return cached;
-          const appShell = await caches.match('/');
-          return appShell || caches.match('/offline.html');
-        })
+      (async () => {
+        const cachedNav = await caches.match(req)
+        if (cachedNav) return cachedNav
+        const appShell = await caches.match('/')
+        if (appShell) return appShell
+        try {
+          const resp = await fetch(req)
+          const copy = resp.clone()
+          caches.open(PRECACHE).then((c) => c.put(req, copy)).catch(() => {})
+          return resp
+        } catch {
+          return (await caches.match('/offline.html')) || Response.error()
+        }
+      })()
     );
     return;
   }
 
-  // Same-origin assets: cache-first
+  // Same-origin assets: cache-first; aggressively cache Next.js static assets
   if (url.origin === self.location.origin) {
+    if (url.pathname.startsWith('/_next/')) {
+      event.respondWith(
+        caches.match(req).then((cached) => {
+          if (cached) return cached
+          return fetch(req)
+            .then((resp) => {
+              const copy = resp.clone();
+              caches.open(PRECACHE).then((c) => c.put(req, copy)).catch(() => {});
+              return resp;
+            })
+            .catch(() => caches.match('/offline.html'))
+        })
+      )
+      return
+    }
     event.respondWith(
       caches.match(req).then((cached) => {
         if (cached) return cached;
