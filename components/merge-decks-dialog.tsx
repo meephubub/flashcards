@@ -99,8 +99,11 @@ export function MergeDecksDialog({ isOpen, onOpenChange, onMergeSuccess }: Merge
         if (onMergeSuccess) {
           onMergeSuccess()
         } else {
-          // Force a complete refresh to ensure we get updated data
-          window.location.reload()
+          // Trigger app data refresh without a full page reload
+          try {
+            const e = new Event('app-sync')
+            window.dispatchEvent(e)
+          } catch {}
         }
       } else {
         toast.error("Failed to merge decks. Please try again.", { id: toastId })

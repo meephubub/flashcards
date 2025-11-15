@@ -656,35 +656,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                         )}
                       </div>
                     </>
-                  ) : (
-                    <div className="flex flex-col items-center">
-                      <div className="text-sm text-neutral-600 mb-3">Did you know this card?</div>
-                      <div className="flex justify-center gap-4">
-                        <Button
-                          variant="default"
-                          className="px-5 py-6 bg-black text-white hover:bg-neutral-800 hover:scale-105 transition-all duration-150"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCardKnown()
-                          }}
-                        >
-                          <Check className="h-5 w-5 mr-2" />
-                          Yes (Press 1)
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="px-5 py-6 border border-black/20 hover:bg-black hover:text-white hover:scale-105 transition-all duration-150"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCardNeedsReview()
-                          }}
-                        >
-                          <X className="h-5 w-5 mr-2" />
-                          No (Press 2)
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
