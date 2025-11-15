@@ -7,6 +7,7 @@ import { StudyMode } from "@/components/study-mode";
 import { AppSidebar } from "@/components/notes/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { isOnline, loadDecksMeta } from "@/lib/offline";
 import {
@@ -34,6 +35,7 @@ export default function StudyPage({ params }: { params: { id: string } }) {
     correct: number
     wrong: number
   } | null>(null);
+  const [initialSide, setInitialSide] = useState<"front" | "back" | "mixed">("front");
 
   useEffect(() => {
     if (!isLoading && !session) {
@@ -150,6 +152,16 @@ export default function StudyPage({ params }: { params: { id: string } }) {
                     Wrong: {progressInfo.wrong}
                   </div>
                 )}
+                <Select value={initialSide} onValueChange={(v) => setInitialSide(v as any)}>
+                  <SelectTrigger className="h-8 w-[150px] rounded-md border-black/10 text-xs">
+                    <SelectValue placeholder="Card side" />
+                  </SelectTrigger>
+                  <SelectContent className="text-sm">
+                    <SelectItem value="front">Front first</SelectItem>
+                    <SelectItem value="back">Back first</SelectItem>
+                    <SelectItem value="mixed">Mixed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </header>
@@ -160,7 +172,7 @@ export default function StudyPage({ params }: { params: { id: string } }) {
               </div>
               <div className="rounded-lg border border-black/10 shadow-sm">
                 <div className="p-4 md:p-8">
-                  <StudyMode deckId={deckId} onProgressInfo={setProgressInfo} />
+                  <StudyMode deckId={deckId} onProgressInfo={setProgressInfo} initialSide={initialSide} />
                 </div>
               </div>
             </div>

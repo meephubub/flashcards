@@ -28,9 +28,10 @@ interface StudyModeProps {
     correct: number
     wrong: number
   }) => void
+  initialSide?: "front" | "back" | "mixed"
 }
 
-export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
+export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: StudyModeProps) {
   const { getDeck, loading, getDueCards } = useDecks()
   const { settings } = useSettings()
   const router = useRouter()
@@ -42,6 +43,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
   const [cards, setCards] = useState<any[]>([])
   const [currentCardIndex, setCurrentCardIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
+  const [initialSides, setInitialSides] = useState<boolean[]>([])
   const [progress, setProgress] = useState(0)
   const [studyComplete, setStudyComplete] = useState(false)
   const [cardsToReview, setCardsToReview] = useState<number[]>([])
@@ -77,6 +79,17 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
     return shuffled;
   };
 
+  const computeInitialSides = (len: number, mode: "front" | "back" | "mixed"): boolean[] => {
+    if (len <= 0) return []
+    if (mode === "front") return Array(len).fill(false)
+    if (mode === "back") return Array(len).fill(true)
+    const arr: boolean[] = []
+    for (let i = 0; i < len; i++) {
+      arr.push(Math.random() < 0.5)
+    }
+    return arr
+  }
+
   // Initialize cards based on spaced repetition setting
   useEffect(() => {
     const initializeCards = async () => {
@@ -96,6 +109,9 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
         // Then take the configured number of cards for the session
         const sessionCards = allShuffledCards.slice(0, settings.studySettings.cardsPerSession);
         setCards(sessionCards);
+        const sides = computeInitialSides(sessionCards.length, initialSide)
+        setInitialSides(sides)
+        setIsFlipped(sides[0] ?? false)
         
         // Initialize statistics
         setStats(prev => ({
@@ -113,7 +129,22 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
     };
 
     initializeCards();
-  }, [deck, deckId, isSpacedRepetitionEnabled, settings.studySettings.cardsPerSession, getDueCards])
+  }, [deck, deckId, isSpacedRepetitionEnabled, settings.studySettings.cardsPerSession, getDueCards, initialSide])
+
+  useEffect(() => {
+    if (cards.length === 0) return
+    const sides = computeInitialSides(cards.length, initialSide)
+    setInitialSides(sides)
+    const displayIndex = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
+    setIsFlipped(sides[displayIndex] ?? false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSide])
+
+  useEffect(() => {
+    if (cards.length === 0) return
+    const displayIndex = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
+    setIsFlipped(initialSides[displayIndex] ?? false)
+  }, [currentCardIndex, reviewMode, reviewCurrent])
 
   useEffect(() => {
     if (cards.length > 0) {
@@ -149,7 +180,6 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
   const handlePrevious = () => {
     if (currentCardIndex > 0) {
       setCurrentCardIndex((prev) => prev - 1)
-      setIsFlipped(false)
     }
   }
 
@@ -181,10 +211,8 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
       }
       if (reviewCurrent < reviewIndices.length - 1) {
         setReviewCurrent((prev) => prev + 1)
-        setIsFlipped(false)
       } else {
         setReviewCurrent(0)
-        setIsFlipped(false)
       }
       return
     }
@@ -205,13 +233,11 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
     } else {
       if (currentCardIndex < cards.length - 1) {
         setCurrentCardIndex((prev) => prev + 1)
-        setIsFlipped(false)
       } else if (!reviewMode && cardsToReview.length > 0) {
         setReviewMode(true)
         const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
         setReviewIndices(sortedReviewIndices)
         setReviewCurrent(0)
-        setIsFlipped(false)
         setStudyComplete(false)
         toast({
           title: "Review Mode",
@@ -353,9 +379,7 @@ export function StudyMode({ deckId, onProgressInfo }: StudyModeProps) {
             description: `Reviewing ${cardsToReview.length} cards that need attention`,
           })
         } else {
-          // Go to the next card index
           setCurrentCardIndex(pendingCardIndex)
-          setIsFlipped(false)
         }
         setPendingCardIndex(null)
       }, FLIP_ANIMATION_DURATION)
