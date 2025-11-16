@@ -360,6 +360,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         ease_factor: progress.easeFactor,
         due_date: new Date(progress.dueDate).toISOString(),
         last_reviewed: new Date(progress.lastReviewed).toISOString(),
+        fsrs_state: (progress.fsrsState as any) ?? null,
       };
       const success = await dataService.updateCardProgress(supabase, deckId, cardId, cardProgressInput);
       if (!success) {

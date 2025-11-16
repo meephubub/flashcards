@@ -32,7 +32,7 @@ interface StudyModeProps {
 }
 
 export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: StudyModeProps) {
-  const { getDeck, loading, getDueCards } = useDecks()
+  const { getDeck, loading, getDueCards, updateCardProgress } = useDecks()
   const { settings } = useSettings()
   const router = useRouter()
   const { toast } = useToast()
@@ -485,17 +485,8 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       const currentCard = cards[currentCardIndex]
       const currentProgress = currentCard.progress || DEFAULT_CARD_PROGRESS
       const newProgress = calculateNextReview(currentProgress, rating)
-
-      // Update the card progress via API
-      const response = await fetch(`/api/decks/${deckId}/cards/${currentCard.id}/progress`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newProgress),
-      })
-
-      if (!response.ok) {
+      const success = await updateCardProgress(deckId, currentCard.id, newProgress)
+      if (!success) {
         throw new Error("Failed to update card progress")
       }
 

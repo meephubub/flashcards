@@ -974,6 +974,7 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
           last_reviewed: record.last_reviewed,
           created_at: record.created_at,
           updated_at: record.updated_at,
+          fsrs_state: record.fsrs_state,
         } as SupabaseCardProgress); 
       }
     }

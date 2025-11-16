@@ -15,6 +15,7 @@ export type Database = {
           created_at: string | null
           due_date: string | null
           ease_factor: number
+          fsrs_state: Json | null
           id: number
           interval: number
           last_reviewed: string | null
@@ -27,6 +28,7 @@ export type Database = {
           created_at?: string | null
           due_date?: string | null
           ease_factor?: number
+          fsrs_state?: Json | null
           id?: number
           interval?: number
           last_reviewed?: string | null
@@ -39,6 +41,7 @@ export type Database = {
           created_at?: string | null
           due_date?: string | null
           ease_factor?: number
+          fsrs_state?: Json | null
           id?: number
           interval?: number
           last_reviewed?: string | null

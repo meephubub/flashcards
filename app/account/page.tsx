@@ -17,14 +17,21 @@ import {
 } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Slider } from "@/components/ui/slider"
 import { useAuth } from "@/context/auth-context"
+import { useSettings } from "@/context/settings-context"
+import type { StudySettings } from "@/lib/settings"
 import { createClient } from "@/lib/supabase/client"
 import { AppSidebar } from "@/components/notes/app-sidebar"
-import { Link } from "lucide-react"
 
 export default function AccountPage() {
   const { user, isLoading, error, signOut } = useAuth()
+  const { settings, updateStudySettings } = useSettings()
   const supabase = createClient()
+
+  const [localStudy, setLocalStudy] = useState<StudySettings | null>(null)
 
   // Editable profile fields (monochrome, minimal)
   const [fullName, setFullName] = useState<string>(() => String(user?.user_metadata?.full_name ?? ""))
@@ -38,6 +45,43 @@ export default function AccountPage() {
   const email = user?.email || ""
   const userId = user?.id || ""
   const created = user?.created_at ? new Date(user.created_at).toLocaleString() : ""
+
+  useEffect(() => {
+    const currentStudy = settings?.studySettings as StudySettings | undefined
+    if (!currentStudy) return
+
+    try {
+      const stored = typeof window !== "undefined" ? window.localStorage.getItem("accountStudyPrefs") : null
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<StudySettings>
+        const merged: StudySettings = {
+          ...currentStudy,
+          ...parsed,
+        }
+        setLocalStudy(merged)
+      } else {
+        setLocalStudy(currentStudy)
+      }
+    } catch {
+      setLocalStudy(currentStudy)
+    }
+  }, [settings])
+
+  const persistStudySettings = (updated: StudySettings) => {
+    setLocalStudy(updated)
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem("accountStudyPrefs", JSON.stringify({
+          enableSpacedRepetition: updated.enableSpacedRepetition,
+          cardsPerSession: updated.cardsPerSession,
+          languageSimilarityThreshold: updated.languageSimilarityThreshold,
+        }))
+      } catch {
+        // ignore localStorage errors
+      }
+    }
+    void updateStudySettings(updated)
+  }
 
   // Wallet state
   const [walletAddress, setWalletAddress] = useState<string>("")
@@ -203,6 +247,95 @@ export default function AccountPage() {
                       >
                         {updatingProfile ? "Saving…" : "Save changes"}
                       </Button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="mb-6 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950">
+                <div className="p-4 md:p-5">
+                  <div className="space-y-3">
+                    <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Study preferences</h2>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">Control spaced repetition and language study behavior for your account.</p>
+
+                    <div className="mt-2 flex items-center justify-between gap-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="account-spaced-repetition" className="text-sm text-neutral-700 dark:text-neutral-300">Enable spaced repetition</Label>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">When enabled, study sessions use FSRS scheduling instead of simple review.</p>
+                      </div>
+                      <Switch
+                        id="account-spaced-repetition"
+                        checked={Boolean((localStudy ?? (settings?.studySettings as StudySettings | undefined))?.enableSpacedRepetition)}
+                        onCheckedChange={(checked) => {
+                          const base = (localStudy ?? (settings?.studySettings as StudySettings | undefined))
+                          if (!base) return
+                          const updated: StudySettings = {
+                            ...base,
+                            enableSpacedRepetition: checked,
+                          }
+                          persistStudySettings(updated)
+                        }}
+                      />
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <Label htmlFor="account-cards-per-session" className="text-sm text-neutral-700 dark:text-neutral-300">
+                        Cards per session
+                      </Label>
+                      <div className="flex items-center gap-3">
+                        <Slider
+                          id="account-cards-per-session"
+                          min={5}
+                          max={50}
+                          step={5}
+                          value={[ (localStudy ?? (settings?.studySettings as StudySettings | undefined))?.cardsPerSession ?? 20 ]}
+                          onValueChange={(value) => {
+                            const base = (localStudy ?? (settings?.studySettings as StudySettings | undefined))
+                            if (!base) return
+                            const updated: StudySettings = {
+                              ...base,
+                              cardsPerSession: value[0],
+                            }
+                            persistStudySettings(updated)
+                          }}
+                          className="flex-1"
+                        />
+                        <div className="w-12 text-right text-sm text-neutral-700 dark:text-neutral-300">
+                          {(localStudy ?? (settings?.studySettings as StudySettings | undefined))?.cardsPerSession ?? 20}
+                        </div>
+                      </div>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">Maximum number of cards to study in a single session.</p>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      <Label htmlFor="account-similarity-threshold" className="text-sm text-neutral-700 dark:text-neutral-300">
+                        Language study similarity threshold
+                      </Label>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        Set how similar a typed answer must be to be counted as correct when using language study.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <Slider
+                          id="account-similarity-threshold"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={[ (localStudy ?? (settings?.studySettings as StudySettings | undefined))?.languageSimilarityThreshold ?? 0.75 ]}
+                          onValueChange={(value) => {
+                            const base = (localStudy ?? (settings?.studySettings as StudySettings | undefined))
+                            if (!base) return
+                            const updated: StudySettings = {
+                              ...base,
+                              languageSimilarityThreshold: value[0],
+                            }
+                            persistStudySettings(updated)
+                          }}
+                          className="flex-1"
+                        />
+                        <div className="w-12 text-right text-sm text-neutral-700 dark:text-neutral-300">
+                          {Math.round(((localStudy ?? (settings?.studySettings as StudySettings | undefined))?.languageSimilarityThreshold ?? 0.75) * 100)}%
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

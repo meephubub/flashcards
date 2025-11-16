@@ -1,6 +1,6 @@
 //supabase.ts
 import { createBrowserClient } from '@supabase/ssr'
-import type { Database } from "@/types/supabase"
+import type { Database, Json } from "@/types/supabase"
 import type { CookieOptions } from '@supabase/ssr'
 
 // For client-side only
@@ -84,6 +84,7 @@ export type CardProgress = {
   last_reviewed: string; // Should be ISO string format
   created_at: string; // Should be ISO string format
   updated_at: string; // Should be ISO string format
+  fsrs_state: Json | null;
 };
 
 // Type for the input payload when updating/creating card progress
@@ -93,6 +94,7 @@ export type CardProgressInput = {
   repetitions: number;
   due_date: string;      // ISO string e.g., new Date().toISOString()
   last_reviewed: string; // ISO string e.g., new Date().toISOString()
+  fsrs_state?: Json | null;
 };
 
 // Structure for data imported from Markdown

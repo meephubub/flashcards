@@ -221,6 +221,17 @@ export function DeckGrid() {
           Collections
         </h1>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="rounded-full border-gray-200/50 hover:border-gray-300/70 hover:bg-white/70 dark:border-gray-700/50 dark:hover:border-gray-600/70 dark:hover:bg-gray-800/70 transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] backdrop-blur-sm"
+         >
+            <Link href="/study/all-due">
+              <Clock className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
+              Study all due
+            </Link>
+          </Button>
           <Button 
             variant="outline" 
             size="sm"
