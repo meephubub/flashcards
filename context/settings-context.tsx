@@ -21,7 +21,7 @@ const defaultSettings: AppSettings = {
   studySettings: {
     cardsPerSession: 20,
     showProgressBar: true,
-    enableSpacedRepetition: false,
+    enableSpacedRepetition: true,
     autoFlip: false,
     autoFlipDelay: 5,
     languageSimilarityThreshold: 0.75, // Default value
@@ -39,22 +39,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const fetchSettings = async () => {
       try {
         setLoading(true)
-        
-        // First try to get settings from the API
-        try {
-          const response = await fetch("/api/settings")
-          if (response.ok) {
-            const data = await response.json()
-            setSettings(data)
-            return
-          }
-        } catch (apiError) {
-          console.warn("API route not available, falling back to direct function call:", apiError)
-        }
-        
-        // Fallback: Get settings directly using the supabase client
-        const settings = await getSettings(supabase)
-        setSettings(settings)
+        // Load settings directly using the browser Supabase client
+        const loaded = await getSettings(supabase)
+        setSettings(loaded)
       } catch (error) {
         console.error("Error fetching settings:", error)
       } finally {
@@ -82,25 +69,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = async (newSettings: AppSettings) => {
     try {
-      // First try to update settings via the API
-      try {
-        const response = await fetch("/api/settings", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(newSettings),
-        })
-
-        if (response.ok) {
-          setSettings(newSettings)
-          return
-        }
-      } catch (apiError) {
-        console.warn("API route not available, falling back to direct function call:", apiError)
-      }
-      
-      // Fallback: Update settings directly using the supabase client
+      // Update settings directly using the browser Supabase client
       await saveSettings(supabase, newSettings)
       setSettings(newSettings)
     } catch (error) {
@@ -120,26 +89,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const resetSettings = async () => {
     try {
-      // First try to reset settings via the API
-      try {
-        const response = await fetch("/api/settings", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ action: "reset" }),
-        })
-
-        if (response.ok) {
-          const defaultSettings = await response.json()
-          setSettings(defaultSettings)
-          return
-        }
-      } catch (apiError) {
-        console.warn("API route not available, falling back to direct function call:", apiError)
-      }
-      
-      // Fallback: Reset settings directly using the supabase client
+      // Reset settings directly using the browser Supabase client
       const defaults = await resetSettingsApi(supabase)
       setSettings(defaults)
     } catch (error) {

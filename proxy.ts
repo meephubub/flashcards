@@ -8,8 +8,6 @@ export const config = {
   ],
 }
 
-export const runtime = 'experimental-edge' // 👈 important
-
 // Rate limiting configuration
 const RATE_LIMIT_CONFIG = {
   '/api/wallet/fund': {
@@ -114,7 +112,7 @@ function isRateLimited(endpoint: string, ip: string, ja4: string): { limited: bo
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   
   // Skip middleware for static assets by extension

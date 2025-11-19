@@ -38,7 +38,18 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
   const { toast } = useToast()
 
   const deck = getDeck(deckId)
-  const isSpacedRepetitionEnabled = settings.studySettings.enableSpacedRepetition
+  const rawStudy: any = settings?.studySettings ?? {}
+  const normalizedStudy = {
+    cardsPerSession:
+      typeof rawStudy.cardsPerSession === "number" ? rawStudy.cardsPerSession : 20,
+    showProgressBar:
+      typeof rawStudy.showProgressBar === "boolean" ? rawStudy.showProgressBar : true,
+    enableSpacedRepetition:
+      typeof rawStudy.enableSpacedRepetition === "boolean"
+        ? rawStudy.enableSpacedRepetition
+        : true,
+  }
+  const isSpacedRepetitionEnabled = normalizedStudy.enableSpacedRepetition
 
   const [cards, setCards] = useState<any[]>([])
   const [currentCardIndex, setCurrentCardIndex] = useState(0)
@@ -107,7 +118,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
         // Shuffle all available cards first
         const allShuffledCards = shuffleArray(cardsToConsider);
         // Then take the configured number of cards for the session
-        const sessionCards = allShuffledCards.slice(0, settings.studySettings.cardsPerSession);
+        const sessionCards = allShuffledCards.slice(0, normalizedStudy.cardsPerSession);
         setCards(sessionCards);
         const sides = computeInitialSides(sessionCards.length, initialSide)
         setInitialSides(sides)
@@ -129,7 +140,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     };
 
     initializeCards();
-  }, [deck, deckId, isSpacedRepetitionEnabled, settings.studySettings.cardsPerSession, getDueCards, initialSide])
+  }, [deck, deckId, isSpacedRepetitionEnabled, normalizedStudy.cardsPerSession, getDueCards, initialSide])
 
   useEffect(() => {
     if (cards.length === 0) return
@@ -552,14 +563,10 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
             <div className="text-[11px] uppercase tracking-wider text-neutral-500">Review mode</div>
           )}
         </div>
-        {isSpacedRepetitionEnabled && (
-          <div className="text-[11px] uppercase tracking-wider text-neutral-500 flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5" /> SR enabled
-          </div>
-        )}
+        {/* SR status indicator removed per request */}
       </div>
 
-      {settings.studySettings.showProgressBar && (
+      {normalizedStudy.showProgressBar && (
         <div className="mb-2">
           <div className="flex justify-between text-[11px] text-neutral-500 mb-1">
             <span>Progress</span>

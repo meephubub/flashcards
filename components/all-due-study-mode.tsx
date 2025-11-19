@@ -20,7 +20,7 @@ interface DueCardWithDeck {
 
 export function AllDueStudyMode() {
   const { decks, loading, getDueCards, updateCardProgress } = useDecks()
-  const { settings } = useSettings()
+  const { settings, loading: settingsLoading } = useSettings()
   const { toast } = useToast()
 
   const [cards, setCards] = useState<DueCardWithDeck[]>([])
@@ -29,7 +29,11 @@ export function AllDueStudyMode() {
   const [progress, setProgress] = useState(0)
   const [studyComplete, setStudyComplete] = useState(false)
 
-  const isSpacedRepetitionEnabled = settings.studySettings.enableSpacedRepetition
+  const studySettings: any = settings?.studySettings ?? {}
+  const isSpacedRepetitionEnabled: boolean =
+    typeof studySettings.enableSpacedRepetition === "boolean"
+      ? studySettings.enableSpacedRepetition
+      : true
 
   useEffect(() => {
     const loadDue = async () => {
@@ -117,22 +121,10 @@ export function AllDueStudyMode() {
   const currentEntry = cards[currentIndex]
   const currentCard = currentEntry?.card
 
-  if (loading) {
+  if (loading || settingsLoading) {
     return (
       <div className="text-center py-12">
         <p className="text-sm text-neutral-600">Loading decks and due cards...</p>
-      </div>
-    )
-  }
-
-  if (!isSpacedRepetitionEnabled) {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold mb-2">Spaced repetition is disabled</h2>
-        <p className="text-gray-500 mb-6">Enable spaced repetition in settings to use this view.</p>
-        <Button asChild>
-          <Link href="/">Back to decks</Link>
-        </Button>
       </div>
     )
   }

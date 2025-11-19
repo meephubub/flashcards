@@ -26,7 +26,7 @@ const defaultSettings: AppSettings = {
   studySettings: {
     cardsPerSession: 20,
     showProgressBar: true,
-    enableSpacedRepetition: false,
+    enableSpacedRepetition: true,
     autoFlip: false,
     autoFlipDelay: 5,
     languageSimilarityThreshold: 0.75,
@@ -110,12 +110,22 @@ export async function getSettings(supabase: any): Promise<AppSettings> {
       }
     }
     
+    let studySettings: StudySettings
+    try {
+      studySettings =
+        typeof data.study_settings === "string"
+          ? JSON.parse(data.study_settings)
+          : data.study_settings
+    } catch {
+      studySettings = defaultSettings.studySettings
+    }
+
     return {
       theme: data.theme,
       enableAnimations: data.enable_animations,
       enableSounds: data.enable_sounds,
       enableTTS: ttsEnabled,
-      studySettings: data.study_settings
+      studySettings,
     }
   } catch (error) {
     console.error("Error in getSettings:", error)
@@ -147,9 +157,6 @@ export async function saveSettings(supabase: any, settings: AppSettings): Promis
       localStorage.setItem(`flashcards_enable_tts_${user.id}`, settings.enableTTS ? 'true' : 'false');
     }
     
-    // Convert study settings to a JSON-compatible format
-    const studySettingsJson = JSON.stringify(settings.studySettings);
-    
     const { error } = await supabase
       .from("settings")
       .upsert({
@@ -158,7 +165,7 @@ export async function saveSettings(supabase: any, settings: AppSettings): Promis
         enable_animations: settings.enableAnimations,
         enable_sounds: settings.enableSounds,
         // Don't save enable_tts to database until schema is updated
-        study_settings: studySettingsJson
+        study_settings: settings.studySettings
       }, { onConflict: 'user_id' })
       .select()
 
@@ -196,9 +203,6 @@ export async function resetSettings(supabase: any): Promise<AppSettings> {
       localStorage.setItem(`flashcards_enable_tts_${user.id}`, defaultSettings.enableTTS ? 'true' : 'false');
     }
     
-    // Convert study settings to a JSON-compatible format
-    const studySettingsJson = JSON.stringify(defaultSettings.studySettings);
-    
     const { error } = await supabase
       .from("settings")
       .upsert({
@@ -207,7 +211,7 @@ export async function resetSettings(supabase: any): Promise<AppSettings> {
         enable_animations: defaultSettings.enableAnimations,
         enable_sounds: defaultSettings.enableSounds,
         // Don't save enable_tts to database until schema is updated
-        study_settings: studySettingsJson
+        study_settings: defaultSettings.studySettings
       }, { onConflict: 'user_id' })
       .select()
 
