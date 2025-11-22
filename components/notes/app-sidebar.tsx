@@ -86,6 +86,10 @@ const data = {
           url: "/stream",
         },
         {
+          title: "Statistics",
+          url: "/study/stats",
+        },
+        {
           title: "Account",
           url: "/account",
         },
@@ -312,42 +316,42 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <div className="w-full px-2 pt-2 border-t group-data-[collapsible=icon]:hidden">
             <NextLink href="/tasks" className="block">
               <div className="rounded-lg border bg-muted/30 backdrop-blur p-3 hover:bg-muted/40 transition-colors">
-              <div className="flex items-start justify-between">
-                <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[10px] font-medium">
-                  {weekday}
-                </span>
-              </div>
-              <div className="mt-1 text-2xl font-semibold tracking-tight leading-snug">
-                {dateStr}
-              </div>
+                <div className="flex items-start justify-between">
+                  <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[10px] font-medium">
+                    {weekday}
+                  </span>
+                </div>
+                <div className="mt-1 text-2xl font-semibold tracking-tight leading-snug">
+                  {dateStr}
+                </div>
 
-              <div className="mt-3">
-                <div className="text-xs font-medium text-foreground/90">Upcoming</div>
-                <ul className="mt-1 max-h-28 overflow-auto divide-y divide-border rounded-md">
-                  {upcomingTasks.length === 0 ? (
-                    <li className="py-2 px-2 text-xs text-muted-foreground">No upcoming tasks</li>
-                  ) : (
-                    upcomingTasks.map((t) => (
-                      <li
-                        key={t.id}
-                        className="py-2 px-2 text-xs hover:bg-muted/50 transition-colors"
-                        title={t.subject || undefined}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate">{t.subject || 'Homework'}</span>
-                          {t.due_date ? (() => {
-                            const d = new Date(t.due_date)
-                            const overdue = d.getTime() < Date.now()
-                            return (
-                              <span className={"shrink-0 text-[10px] " + (overdue ? "text-red-600" : "text-muted-foreground")}>{d.toLocaleDateString()}</span>
-                            )
-                          })() : null}
-                        </div>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-foreground/90">Upcoming</div>
+                  <ul className="mt-1 max-h-28 overflow-auto divide-y divide-border rounded-md">
+                    {upcomingTasks.length === 0 ? (
+                      <li className="py-2 px-2 text-xs text-muted-foreground">No upcoming tasks</li>
+                    ) : (
+                      upcomingTasks.map((t) => (
+                        <li
+                          key={t.id}
+                          className="py-2 px-2 text-xs hover:bg-muted/50 transition-colors"
+                          title={t.subject || undefined}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate">{t.subject || 'Homework'}</span>
+                            {t.due_date ? (() => {
+                              const d = new Date(t.due_date)
+                              const overdue = d.getTime() < Date.now()
+                              return (
+                                <span className={"shrink-0 text-[10px] " + (overdue ? "text-red-600" : "text-muted-foreground")}>{d.toLocaleDateString()}</span>
+                              )
+                            })() : null}
+                          </div>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
               </div>
             </NextLink>
           </div>

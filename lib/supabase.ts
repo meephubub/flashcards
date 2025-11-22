@@ -10,7 +10,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUB_API;
 // Validate the environment variables
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase environment variables');
-  
+
   // Fallback for development
   if (typeof window !== 'undefined') {
     console.warn('Using fallback Supabase configuration for development');
@@ -71,6 +71,7 @@ export type Card = {
   back_img_url: string | null
   created_at: string
   updated_at: string
+  exclude_from_srs: boolean
 }
 
 export type CardProgress = {

@@ -24,7 +24,13 @@ export const DEFAULT_CARD_PROGRESS: CardProgress = {
 }
 
 /**
- * Calculate the next review date based on the SM-2 algorithm
+ * Calculate the next review date based on the FSRS algorithm
+ * 
+ * Rating system (0-5):
+ * - 0-1: Again (complete failure, incorrect response)
+ * - 2: Hard (correct but difficult)
+ * - 3-4: Good (correct with reasonable effort)
+ * - 5: Easy (perfect recall)
  */
 export function calculateNextReview(currentProgress: CardProgress, rating: ConfidenceRating): CardProgress {
   // Use FSRS (ts-fsrs) under the hood while preserving the existing
@@ -32,11 +38,12 @@ export function calculateNextReview(currentProgress: CardProgress, rating: Confi
 
   const now = new Date()
 
+  // Map our 0-5 rating scale to FSRS's 4-grade system
   const ratingToGrade = (value: ConfidenceRating): Grade => {
-    if (value <= 1) return "Again" as unknown as Grade
-    if (value <= 3) return "Hard" as unknown as Grade
-    if (value === 4) return "Good" as unknown as Grade
-    return "Easy" as unknown as Grade
+    if (value <= 1) return 1 as Grade  // Again
+    if (value === 2) return 2 as Grade  // Hard
+    if (value <= 4) return 3 as Grade  // Good
+    return 4 as Grade  // Easy
   }
 
   const fsrsInstance = fsrs()
@@ -101,17 +108,17 @@ export function getNextReviewText(progress: CardProgress): string {
 export function getRatingDescription(rating: ConfidenceRating): string {
   switch (rating) {
     case 0:
-      return "Complete blackout"
+      return "Complete blackout (Again)"
     case 1:
-      return "Incorrect response; the correct answer remembered"
+      return "Incorrect response (Again)"
     case 2:
-      return "Incorrect response; the correct answer seemed familiar"
+      return "Correct response with difficulty (Hard)"
     case 3:
-      return "Correct response, but required significant effort to recall"
+      return "Correct response with some effort (Good)"
     case 4:
-      return "Correct response, after some hesitation"
+      return "Correct response with hesitation (Good)"
     case 5:
-      return "Perfect response"
+      return "Perfect recall (Easy)"
     default:
       return ""
   }

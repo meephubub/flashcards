@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { ArrowLeft, Plus, Save, Trash2, GripVertical, Image as ImageIcon } from "lucide-react"
 import Link from "next/link"
 import { useDecks } from "@/context/deck-context"
@@ -172,6 +174,7 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
       front_img_url: "",
       back_img_url: "",
       deck_id: deckId,
+      exclude_from_srs: false,
       created_at: null,
       updated_at: null,
       user_id: null,
@@ -191,8 +194,8 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
 
   const handleCardChange = (
     id: number,
-    field: "front" | "back" | "front_img_url" | "back_img_url",
-    value: string | null,
+    field: "front" | "back" | "front_img_url" | "back_img_url" | "exclude_from_srs",
+    value: string | null | boolean,
   ) => {
     setDeck({
       ...deck,
@@ -264,7 +267,8 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
           const backChanged = (orig.back ?? "") !== (c.back ?? "")
           const frontImgChanged = (orig.front_img_url ?? null) !== ((c as any).front_img_url ?? null)
           const backImgChanged = (orig.back_img_url ?? null) !== ((c as any).back_img_url ?? null)
-          if (frontChanged || backChanged || frontImgChanged || backImgChanged) {
+          const excludeChanged = (orig.exclude_from_srs ?? false) !== ((c as any).exclude_from_srs ?? false)
+          if (frontChanged || backChanged || frontImgChanged || backImgChanged || excludeChanged) {
             try {
               // eslint-disable-next-line no-await-in-loop
               await updateCard(
@@ -274,6 +278,7 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
                 c.back,
                 (c as any).front_img_url ?? null,
                 (c as any).back_img_url ?? null,
+                (c as any).exclude_from_srs ?? false,
               )
             } catch (e) {
               toast({ title: "Error", description: `Failed to update card ${c.id}.`, variant: "destructive" })
@@ -483,6 +488,16 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
                             <ImageIcon className="h-4 w-4 mr-1" />
                             {expandedImages[`${card.id}-back`] ? "Hide definition image" : (card as any).back_img_url ? "Change definition image" : "Add definition image"}
                           </Button>
+                          <div className="flex items-center gap-2 ml-4 pl-4 border-l border-black/10 dark:border-white/10">
+                            <Switch
+                              id={`exclude-srs-${card.id}`}
+                              checked={(card as any).exclude_from_srs ?? false}
+                              onCheckedChange={(checked) => handleCardChange(card.id, "exclude_from_srs", checked)}
+                            />
+                            <Label htmlFor={`exclude-srs-${card.id}`} className="text-xs cursor-pointer">
+                              Exclude from SRS
+                            </Label>
+                          </div>
                         </div>
                         <div>
                           <Button

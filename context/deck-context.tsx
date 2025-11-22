@@ -43,6 +43,7 @@ interface DeckContextType {
     back: string,
     front_img_url?: string | null,
     back_img_url?: string | null,
+    exclude_from_srs?: boolean,
   ) => Promise<Card>
   deleteCard: (deckId: number, cardId: number) => Promise<boolean>
   getDeck: (id: number) => Deck | undefined
@@ -91,7 +92,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
       console.log("Fetching decks for user:", user.id)
       const fetchedSupabaseDecks = await dataService.getDecks(supabase, user.id) // Pass user.id
       console.log("Fetched decks count:", fetchedSupabaseDecks.length)
-      
+
       // First create deck objects with empty card arrays to show something to the user quickly
       const initialDecks: Deck[] = fetchedSupabaseDecks.map(supabaseDeck => {
         // Ensure the deck has valid user_id, which it should if RLS is working correctly
@@ -99,7 +100,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
           console.warn(`Deck ${supabaseDeck.id} has no user_id, skipping. This might indicate an issue with data or RLS.`)
           return null;
         }
-        
+
         // The check for supabaseDeck.user_id !== user.id is now redundant 
         // as the dataService.getDecks should only return decks for the current user.
         // We keep the null check for user_id as a basic data integrity check.
@@ -115,11 +116,11 @@ export function DeckProvider({ children }: { children: ReactNode }) {
           updated_at: supabaseDeck.updated_at ?? undefined,
         };
       }).filter(Boolean) as Deck[];
-      
+
       // Set initial decks to show something quickly
       setDecks(initialDecks)
       console.log("Set initial decks:", initialDecks.length)
-      
+
       // Then fetch cards separately for each deck
       // This avoids issues with the progress relationship
       const completedDecks = await Promise.all(
@@ -127,7 +128,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
           try {
             console.log(`Fetching full deck data for deck ${deck.id}`)
             const fullDeck = await dataService.getDeck(supabase, deck.id, user.id);
-            
+
             if (fullDeck) {
               // Use optional chaining with type assertion since we know the structure
               console.log(`Successfully fetched deck ${deck.id} with ${(fullDeck as any).cards?.length || 0} cards`)
@@ -147,19 +148,19 @@ export function DeckProvider({ children }: { children: ReactNode }) {
           }
         })
       );
-      
+
       // Filter out any null results and update state with completed decks
       const validCompletedDecks = completedDecks.filter(Boolean) as Deck[];
       console.log("Setting completed decks:", validCompletedDecks.length)
-      
+
       // Update with complete deck data including cards
       setDecks(validCompletedDecks)
       try {
         await saveDecksMeta(user.id, validCompletedDecks.map((d) => ({ id: d.id, name: d.name, description: d.description || null })))
         for (const d of validCompletedDecks) {
-          try { await saveDeckCards(user.id, d.id, (d.cards || []) as any) } catch {}
+          try { await saveDeckCards(user.id, d.id, (d.cards || []) as any) } catch { }
         }
-      } catch {}
+      } catch { }
       setDueCardsCache({})
     } catch (error) {
       console.error("Error refreshing decks:", error);
@@ -176,7 +177,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
       // This is the default SSR state, don't do anything yet
       return;
     }
-    
+
     // Refresh decks when the user state from AuthContext changes and auth is no longer loading.
     if (!authIsLoading && user && session) {
       console.log("DeckProvider: Auth state confirmed (user present), refreshing decks.");
@@ -226,10 +227,10 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     if (!user) throw new Error("User not authenticated");
     if (updatedDeck.user_id !== user.id) throw new Error("User not authorized to update this deck");
     const returnedSupabaseDeck = await dataService.updateDeck(supabase, {
-        id: updatedDeck.id,
-        name: updatedDeck.name,
-        description: updatedDeck.description,
-        tag: updatedDeck.tag
+      id: updatedDeck.id,
+      name: updatedDeck.name,
+      description: updatedDeck.description,
+      tag: updatedDeck.tag
     });
     if (!returnedSupabaseDeck || !returnedSupabaseDeck.user_id) {
       throw new Error("Failed to update deck or user_id missing")
@@ -237,14 +238,14 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     // Preserve cards from current context state to avoid leaking temporary editor IDs
     const currentDeck = decks.find((d) => d.id === updatedDeck.id)
     const newAppContextDeck: Deck = {
-        ...returnedSupabaseDeck,
-        user_id: returnedSupabaseDeck.user_id,
-        cards: currentDeck?.cards ?? [],
-        last_studied: returnedSupabaseDeck.last_studied || currentDeck?.last_studied || 'Never',
-        description: returnedSupabaseDeck.description || currentDeck?.description || "",
-        card_count: returnedSupabaseDeck.card_count || currentDeck?.card_count || 0,
-        created_at: returnedSupabaseDeck.created_at ?? currentDeck?.created_at ?? undefined,
-        updated_at: returnedSupabaseDeck.updated_at ?? undefined,
+      ...returnedSupabaseDeck,
+      user_id: returnedSupabaseDeck.user_id,
+      cards: currentDeck?.cards ?? [],
+      last_studied: returnedSupabaseDeck.last_studied || currentDeck?.last_studied || 'Never',
+      description: returnedSupabaseDeck.description || currentDeck?.description || "",
+      card_count: returnedSupabaseDeck.card_count || currentDeck?.card_count || 0,
+      created_at: returnedSupabaseDeck.created_at ?? currentDeck?.created_at ?? undefined,
+      updated_at: returnedSupabaseDeck.updated_at ?? undefined,
     };
     setDecks((prev) =>
       prev.map((deck) => (deck.id === newAppContextDeck.id ? newAppContextDeck : deck)),
@@ -299,9 +300,10 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     back: string,
     front_img_url?: string | null,
     back_img_url?: string | null,
+    exclude_from_srs?: boolean,
   ): Promise<Card> => {
     if (!user) throw new Error("User not authenticated");
-    const updatedCard = await dataService.updateCard(supabase, deckId, cardId, front, back, front_img_url, back_img_url)
+    const updatedCard = await dataService.updateCard(supabase, deckId, cardId, front, back, front_img_url, back_img_url, exclude_from_srs)
     if (!updatedCard) {
       throw new Error("Failed to update card")
     }
@@ -435,13 +437,13 @@ export function useDecks() {
       decks: [],
       loading: true,
       user: null,
-      refreshDecks: async () => {},
-      addDeck: async () => {},
-      updateDeck: async () => {},
-      deleteDeck: async () => {},
-      addCard: async () => {},
-      updateCard: async () => {},
-      deleteCard: async () => {},
+      refreshDecks: async () => { },
+      addDeck: async () => { },
+      updateDeck: async () => { },
+      deleteDeck: async () => { },
+      addCard: async () => { },
+      updateCard: async () => { },
+      deleteCard: async () => { },
       getDeck: () => undefined,
       updateCardProgress: async () => true,
       getDueCards: async () => [],
