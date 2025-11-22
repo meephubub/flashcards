@@ -10,6 +10,7 @@ export interface CardProgress {
   dueDate: string // Next review date
   lastReviewed: string // Last review date
   fsrsState?: FsrsCard // Serialized FSRS card state for this card
+  fsrsParams?: any // FSRS parameters used for this card
 }
 
 export type ConfidenceRating = 0 | 1 | 2 | 3 | 4 | 5
@@ -27,31 +28,6 @@ export const DEFAULT_CARD_PROGRESS: CardProgress = {
  * Calculate the next review date based on the FSRS algorithm
  * 
  * Rating system (0-5):
- * - 0-1: Again (complete failure, incorrect response)
- * - 2: Hard (correct but difficult)
- * - 3-4: Good (correct with reasonable effort)
- * - 5: Easy (perfect recall)
- */
-export function calculateNextReview(currentProgress: CardProgress, rating: ConfidenceRating): CardProgress {
-  // Use FSRS (ts-fsrs) under the hood while preserving the existing
-  // CardProgress shape for the rest of the app.
-
-  const now = new Date()
-
-  // Map our 0-5 rating scale to FSRS's 4-grade system
-  const ratingToGrade = (value: ConfidenceRating): Grade => {
-    if (value <= 1) return 1 as Grade  // Again
-    if (value === 2) return 2 as Grade  // Hard
-    if (value <= 4) return 3 as Grade  // Good
-    return 4 as Grade  // Easy
-  }
-
-  const fsrsInstance = fsrs()
-
-  // Start from existing FSRS state if present, otherwise create an empty card
-  const baseCard: FsrsCard = currentProgress.fsrsState
-    ? { ...currentProgress.fsrsState }
-    : createEmptyCard(now)
 
   const record = fsrsInstance.next(baseCard, now, ratingToGrade(rating))
   const nextCard = record.card as FsrsCard
@@ -65,6 +41,7 @@ export function calculateNextReview(currentProgress: CardProgress, rating: Confi
     dueDate: new Date(due).toISOString(),
     lastReviewed: now.toISOString(),
     fsrsState: nextCard,
+    fsrsParams: params, // Persist params used for this review
   }
 
   return nextProgress

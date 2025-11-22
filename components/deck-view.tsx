@@ -27,7 +27,7 @@ export function DeckView({ deckId }: DeckViewProps) {
   const deck = getDeck(deckId)
   const isSpacedRepetitionEnabled = settings.studySettings.enableSpacedRepetition
   const [dueCards, setDueCards] = useState<Card[]>([])
-  
+
   // Fetch due cards when needed
   useEffect(() => {
     if (isSpacedRepetitionEnabled && deckId) {
@@ -157,20 +157,54 @@ export function DeckView({ deckId }: DeckViewProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {deck.cards?.map((card) => (
-          <UICard key={card.id} className="overflow-hidden hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="font-medium mb-4">{card.front}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-300 pt-4 border-t">{card.back}</div>
-              {isSpacedRepetitionEnabled && (card as any).progress && (
-                <div className="mt-2 pt-2 border-t text-xs text-gray-500 flex justify-between">
-                  <span>Next review: {new Date((card as any).progress.due_date).toLocaleDateString()}</span>
-                  <span>Ease: {(card as any).progress.ease_factor.toFixed(2)}</span>
+        {deck.cards?.map((card) => {
+          const progress = (card as any).progress
+          let borderColor = ""
+          let stateLabel = ""
+
+          if (isSpacedRepetitionEnabled && progress?.fsrs_state) {
+            const state = progress.fsrs_state.state
+            // 0=New, 1=Learning, 2=Review, 3=Relearning
+            if (state === 0) {
+              borderColor = "border-blue-400 dark:border-blue-600"
+              stateLabel = "New"
+            } else if (state === 1 || state === 3) {
+              borderColor = "border-orange-400 dark:border-orange-600"
+              stateLabel = state === 1 ? "Learning" : "Relearning"
+            } else if (state === 2) {
+              borderColor = "border-green-400 dark:border-green-600"
+              stateLabel = "Review"
+            }
+          }
+
+          return (
+            <UICard
+              key={card.id}
+              className={`overflow-hidden hover:shadow-md transition-shadow ${borderColor ? `border-2 ${borderColor}` : ""}`}
+            >
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="font-medium">{card.front}</div>
+                  {stateLabel && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${stateLabel === "New" ? "bg-blue-50 text-blue-600 border-blue-200" :
+                        stateLabel === "Review" ? "bg-green-50 text-green-600 border-green-200" :
+                          "bg-orange-50 text-orange-600 border-orange-200"
+                      }`}>
+                      {stateLabel}
+                    </span>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </UICard>
-        )) || []}
+                <div className="text-sm text-gray-600 dark:text-gray-300 pt-4 border-t">{card.back}</div>
+                {isSpacedRepetitionEnabled && progress && (
+                  <div className="mt-2 pt-2 border-t text-xs text-gray-500 flex justify-between">
+                    <span>Next: {new Date(progress.due_date).toLocaleDateString()}</span>
+                    <span>Ease: {progress.ease_factor?.toFixed(2) || "2.50"}</span>
+                  </div>
+                )}
+              </CardContent>
+            </UICard>
+          )
+        }) || []}
       </div>
 
       <CreateCardDialog open={isCreateCardOpen} onOpenChange={setIsCreateCardOpen} deckId={deckId} />

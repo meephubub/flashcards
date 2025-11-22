@@ -51,6 +51,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       typeof rawStudy.enableSpacedRepetition === "boolean"
         ? rawStudy.enableSpacedRepetition
         : true,
+    fsrsParams: rawStudy.fsrsParams,
   }
   // Check both global setting AND deck-specific exclusion
   const isSpacedRepetitionEnabled = normalizedStudy.enableSpacedRepetition && !(deck?.exclude_from_srs)
@@ -588,7 +589,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       haptics.rating(rating)
       const currentCard = cards[currentCardIndex]
       const currentProgress = currentCard.progress || DEFAULT_CARD_PROGRESS
-      const newProgress = calculateNextReview(currentProgress, rating)
+      const newProgress = calculateNextReview(currentProgress, rating, normalizedStudy.fsrsParams)
       const success = await updateCardProgress(deckId, currentCard.id, newProgress)
       if (!success) {
         throw new Error("Failed to update card progress")

@@ -7,6 +7,11 @@ export interface StudySettings {
   autoFlip: boolean
   autoFlipDelay: number // in seconds
   languageSimilarityThreshold: number // for language study mode, 0.0 to 1.0
+  fsrsParams?: {
+    request_retention: number
+    maximum_interval: number
+    w?: number[]
+  }
 }
 
 export interface AppSettings {
@@ -30,6 +35,10 @@ const defaultSettings: AppSettings = {
     autoFlip: false,
     autoFlipDelay: 5,
     languageSimilarityThreshold: 0.75,
+    fsrsParams: {
+      request_retention: 0.9,
+      maximum_interval: 36500,
+    },
   },
 }
 
@@ -44,7 +53,7 @@ export async function getSettings(supabase: any): Promise<AppSettings> {
 
     // Get the current user
     const { data: userData, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError || !userData || !userData.user) {
       console.error("Error fetching user or no user logged in for getSettings:", authError)
       return defaultSettings
@@ -87,7 +96,7 @@ export async function getSettings(supabase: any): Promise<AppSettings> {
             ttsEnabled = storedTTS === 'true';
           }
         }
-        
+
         return {
           theme: newSettings.theme,
           enableAnimations: newSettings.enable_animations,
@@ -109,7 +118,7 @@ export async function getSettings(supabase: any): Promise<AppSettings> {
         ttsEnabled = storedTTS === 'true';
       }
     }
-    
+
     let studySettings: StudySettings
     try {
       studySettings =
@@ -144,7 +153,7 @@ export async function saveSettings(supabase: any, settings: AppSettings): Promis
 
     // Get the current user
     const { data: userData, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError || !userData || !userData.user) {
       console.error("Error fetching user or no user logged in for saveSettings:", authError)
       throw new Error("Failed to save settings: User not authenticated")
@@ -156,7 +165,7 @@ export async function saveSettings(supabase: any, settings: AppSettings): Promis
     if (typeof window !== 'undefined') {
       localStorage.setItem(`flashcards_enable_tts_${user.id}`, settings.enableTTS ? 'true' : 'false');
     }
-    
+
     const { error } = await supabase
       .from("settings")
       .upsert({
@@ -190,19 +199,19 @@ export async function resetSettings(supabase: any): Promise<AppSettings> {
 
     // Get the current user
     const { data: userData, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError || !userData || !userData.user) {
       console.error("Error fetching user or no user logged in for resetSettings:", authError)
       throw new Error("Failed to reset settings: User not authenticated")
     }
 
     const user = userData.user
-    
+
     // Store TTS setting in local storage until database schema is updated
     if (typeof window !== 'undefined') {
       localStorage.setItem(`flashcards_enable_tts_${user.id}`, defaultSettings.enableTTS ? 'true' : 'false');
     }
-    
+
     const { error } = await supabase
       .from("settings")
       .upsert({
