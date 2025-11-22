@@ -298,7 +298,7 @@ export async function getDeck(supabase: SupabaseClient, deckId: number, userId: 
   }
 }
 // Create a new deck
-export async function createDeck(supabase: SupabaseClient, name: string, description: string | null, tag: string | null = null): Promise<Deck | undefined> {
+export async function createDeck(supabase: SupabaseClient, name: string, description: string | null, tag: string | null = null, exclude_from_srs: boolean = false): Promise<Deck | undefined> {
   try {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
@@ -318,6 +318,7 @@ export async function createDeck(supabase: SupabaseClient, name: string, descrip
           tag,
           user_id: user.id, // Add the user_id here
           card_count: 0, // Initialize card count for a new deck
+          exclude_from_srs,
           // last_studied can be null or omitted if DB allows/handles it
         },
       ])
@@ -339,7 +340,7 @@ export async function createDeck(supabase: SupabaseClient, name: string, descrip
 // Update an existing deck
 export async function updateDeck(
   supabase: SupabaseClient,
-  payload: { id: number; name?: string; description?: string | null; tag?: string | null }
+  payload: { id: number; name?: string; description?: string | null; tag?: string | null; exclude_from_srs?: boolean }
 ): Promise<Deck | undefined> {
   try {
     const {
@@ -383,6 +384,7 @@ export async function updateDeck(
       description?: string | null;
       tag?: string | null;
       updated_at?: string;
+      exclude_from_srs?: boolean;
     } = {};
 
     let hasChanges = false;
@@ -396,6 +398,10 @@ export async function updateDeck(
     }
     if (payload.tag !== undefined) { // Allows setting tag to null or a new string
       updateData.tag = payload.tag;
+      hasChanges = true;
+    }
+    if (payload.exclude_from_srs !== undefined) {
+      updateData.exclude_from_srs = payload.exclude_from_srs;
       hasChanges = true;
     }
 
@@ -926,9 +932,10 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
     // Fetch all cards from the deck, excluding those opted out of SRS
     const { data: cards, error: cardsError } = await supabase
       .from("cards")
-      .select("*")
+      .select("*, decks!inner(exclude_from_srs)")
       .eq("deck_id", deckId)
-      .eq("exclude_from_srs", false); // Only get cards that are NOT excluded from SRS
+      .eq("exclude_from_srs", false) // Only get cards that are NOT excluded from SRS
+      .eq("decks.exclude_from_srs", false); // And deck is not excluded
 
     if (cardsError) {
       console.error(`Error fetching cards for deck ${deckId} (user ${user.id}):`, cardsError);

@@ -209,11 +209,11 @@ export default function TasksPage() {
       // Normalize due_date to noon UTC to avoid local->UTC day shifting
       const dueIso = dueDate
         ? (() => {
-            const y = dueDate.getUTCFullYear()
-            const m = dueDate.getUTCMonth()
-            const d = dueDate.getUTCDate()
-            return new Date(Date.UTC(y, m, d, 12, 0, 0, 0)).toISOString()
-          })()
+          const y = dueDate.getUTCFullYear()
+          const m = dueDate.getUTCMonth()
+          const d = dueDate.getUTCDate()
+          return new Date(Date.UTC(y, m, d, 12, 0, 0, 0)).toISOString()
+        })()
         : null
 
       // If requested, create a note first and capture its id
@@ -236,9 +236,9 @@ export default function TasksPage() {
         // intentionally omit 'done' to avoid column mismatch if schema differs
         metadata: (linkUrl || noteIdToAttach)
           ? {
-              ...(linkUrl ? { link_url: linkUrl } : {}),
-              ...(noteIdToAttach ? { note_id: noteIdToAttach } : {}),
-            }
+            ...(linkUrl ? { link_url: linkUrl } : {}),
+            ...(noteIdToAttach ? { note_id: noteIdToAttach } : {}),
+          }
           : null,
       }
       const { error } = await supabase.from("homework").insert(payload)
@@ -279,11 +279,27 @@ export default function TasksPage() {
   }
 
   // Sort tasks so incomplete appear first, completed at the bottom
+  // Sort tasks so incomplete appear first, completed at the bottom
+  // Then sort by due date (earliest first), then by priority (highest first)
   const sortedTasks = React.useMemo(() => {
     return [...tasks].sort((a, b) => {
       const ad = !!a.done
       const bd = !!b.done
       if (ad !== bd) return ad ? 1 : -1
+
+      // Sort by due date (earliest first)
+      // Treat null due dates as "later" than any set date (bottom of the list)
+      if (a.due_date && !b.due_date) return -1
+      if (!a.due_date && b.due_date) return 1
+      if (a.due_date && b.due_date && a.due_date !== b.due_date) {
+        return a.due_date < b.due_date ? -1 : 1
+      }
+
+      // Sort by priority (highest first)
+      const ap = a.priority || 0
+      const bp = b.priority || 0
+      if (ap !== bp) return bp - ap
+
       return 0
     })
   }, [tasks])
@@ -363,11 +379,11 @@ export default function TasksPage() {
       setSavingEdit(true)
       const dueIso = editDueDate
         ? (() => {
-            const y = editDueDate.getUTCFullYear()
-            const m = editDueDate.getUTCMonth()
-            const d = editDueDate.getUTCDate()
-            return new Date(Date.UTC(y, m, d, 12, 0, 0, 0)).toISOString()
-          })()
+          const y = editDueDate.getUTCFullYear()
+          const m = editDueDate.getUTCMonth()
+          const d = editDueDate.getUTCDate()
+          return new Date(Date.UTC(y, m, d, 12, 0, 0, 0)).toISOString()
+        })()
         : null
       const payload: any = {
         subject: editSubject || null,
@@ -375,9 +391,9 @@ export default function TasksPage() {
         priority: editPriority,
         metadata: (editLinkUrl || editSelectedNoteId)
           ? {
-              ...(editLinkUrl ? { link_url: editLinkUrl } : {}),
-              ...(editSelectedNoteId ? { note_id: editSelectedNoteId } : {}),
-            }
+            ...(editLinkUrl ? { link_url: editLinkUrl } : {}),
+            ...(editSelectedNoteId ? { note_id: editSelectedNoteId } : {}),
+          }
           : null,
       }
       const { error } = await supabase.from('homework').update(payload).eq('id', editing.id)
@@ -564,61 +580,61 @@ export default function TasksPage() {
                       )}
                       <div className="divide-y border-x border-t rounded-t-md">
                         {sortedTasks.map((t, index) => {
-                        const urlGuess = taskExplicitOrGuessedLink(t)
-                        const dueStatus = !t.done ? getDueStatus(t) : null
-                        const dueLabel = t.due_date ? `Due ${format(new Date(t.due_date), "dd/MM/yy")}` : "No due date"
-                        const dueBadgeCls = !t.due_date
-                          ? "bg-muted text-foreground/80 dark:text-foreground/70"
-                          : dueStatus === 'overdue'
+                          const urlGuess = taskExplicitOrGuessedLink(t)
+                          const dueStatus = !t.done ? getDueStatus(t) : null
+                          const dueLabel = t.due_date ? `Due ${format(new Date(t.due_date), "dd/MM/yy")}` : "No due date"
+                          const dueBadgeCls = !t.due_date
+                            ? "bg-muted text-foreground/80 dark:text-foreground/70"
+                            : dueStatus === 'overdue'
+                              ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                              : dueStatus === 'soon'
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+                                : "bg-muted text-foreground/80 dark:text-foreground/70"
+                          const priorityLabel = t.priority === 3 ? 'High' : t.priority === 2 ? 'Medium' : t.priority === 1 ? 'Low' : null
+                          const priorityCls = t.priority === 3
                             ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                            : dueStatus === 'soon'
+                            : t.priority === 2
                               ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
-                              : "bg-muted text-foreground/80 dark:text-foreground/70"
-                        const priorityLabel = t.priority === 3 ? 'High' : t.priority === 2 ? 'Medium' : t.priority === 1 ? 'Low' : null
-                        const priorityCls = t.priority === 3
-                          ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
-                          : t.priority === 2
-                            ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
-                            : t.priority === 1
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
-                              : ""
-                        return (
-                          <div key={t.id} className={cn(
-                            "p-3 md:p-3.5 flex items-center gap-3 transition-colors",
-                            !t.done ? getUrgencyClass(t) : "",
-                            !t.done && dueStatus === 'overdue' 
-                              ? "hover:bg-red-100/70 dark:hover:bg-red-950/30" 
-                              : !t.done && dueStatus === 'soon' 
-                                ? "hover:bg-amber-100/70 dark:hover:bg-amber-950/30"
-                                : "hover:bg-muted/50 dark:hover:bg-muted/50",
-                            index === sortedTasks.length - 1 ? "rounded-b-md" : ""
-                          )}>
-                            <Checkbox checked={!!t.done} onCheckedChange={(v) => updateDone(t.id, !!v)} />
-                            <div className="flex-1 min-w-0">
-                              <div className={cn("text-sm font-medium", t.done ? "line-through text-muted-foreground" : "")}>{t.subject || "Homework"}</div>
-                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                                <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", dueBadgeCls)}>{dueLabel}</span>
-                                {priorityLabel && (
-                                  <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", priorityCls)}>
-                                    {priorityLabel} priority
-                                  </span>
-                                )}
+                              : t.priority === 1
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                                : ""
+                          return (
+                            <div key={t.id} className={cn(
+                              "p-3 md:p-3.5 flex items-center gap-3 transition-colors",
+                              !t.done ? getUrgencyClass(t) : "",
+                              !t.done && dueStatus === 'overdue'
+                                ? "hover:bg-red-100/70 dark:hover:bg-red-950/30"
+                                : !t.done && dueStatus === 'soon'
+                                  ? "hover:bg-amber-100/70 dark:hover:bg-amber-950/30"
+                                  : "hover:bg-muted/50 dark:hover:bg-muted/50",
+                              index === sortedTasks.length - 1 ? "rounded-b-md" : ""
+                            )}>
+                              <Checkbox checked={!!t.done} onCheckedChange={(v) => updateDone(t.id, !!v)} />
+                              <div className="flex-1 min-w-0">
+                                <div className={cn("text-sm font-medium", t.done ? "line-through text-muted-foreground" : "")}>{t.subject || "Homework"}</div>
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                  <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", dueBadgeCls)}>{dueLabel}</span>
+                                  {priorityLabel && (
+                                    <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", priorityCls)}>
+                                      {priorityLabel} priority
+                                    </span>
+                                  )}
+                                </div>
                               </div>
+                              {urlGuess && (
+                                <Link href={urlGuess} className="inline-flex items-center text-xs text-foreground hover:underline">
+                                  <LinkIcon className="h-3.5 w-3.5 mr-1" /> Open
+                                </Link>
+                              )}
+                              <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => removeTask(t.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
-                            {urlGuess && (
-                              <Link href={urlGuess} className="inline-flex items-center text-xs text-foreground hover:underline">
-                                <LinkIcon className="h-3.5 w-3.5 mr-1" /> Open
-                              </Link>
-                            )}
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => removeTask(t.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
                       </div>
                     </div>
                   </div>

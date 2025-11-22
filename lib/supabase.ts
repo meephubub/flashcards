@@ -60,6 +60,7 @@ export type Deck = {
   last_studied: string | null;
   created_at: string | null;
   updated_at: string | null;
+  exclude_from_srs: boolean;
 }
 
 export type Card = {

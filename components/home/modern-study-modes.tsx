@@ -66,7 +66,9 @@ export function ModernStudyModes() {
                       <span>Review scheduling</span>
                     </div>
                   </div>
-                  <Link href="/signup" passHref legacyBehavior>
+                  <Link href="/signup">
+                    {/* @next-codemod-error This Link previously used the now removed `legacyBehavior` prop, and has a child that might not be an anchor. The codemod bailed out of lifting the child props to the Link. Check that the child component does not render an anchor, and potentially move the props manually to Link. */
+                    }
                     <Button className="w-full bg-black hover:bg-gray-800 group">
                       Start Regular Study
                       <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -116,7 +118,9 @@ export function ModernStudyModes() {
                   </span>
                 </div>
               </div>
-              <Link href="/signup" passHref legacyBehavior>
+              <Link href="/signup">
+                {/* @next-codemod-error This Link previously used the now removed `legacyBehavior` prop, and has a child that might not be an anchor. The codemod bailed out of lifting the child props to the Link. Check that the child component does not render an anchor, and potentially move the props manually to Link. */
+                }
                 <Button
                   variant="secondary"
                   className="w-full bg-white text-black hover:bg-gray-200"
@@ -179,7 +183,9 @@ export function ModernStudyModes() {
                       </span>
                     </div>
                   </div>
-                  <Link href="/signup" passHref legacyBehavior>
+                  <Link href="/signup">
+                    {/* @next-codemod-error This Link previously used the now removed `legacyBehavior` prop, and has a child that might not be an anchor. The codemod bailed out of lifting the child props to the Link. Check that the child component does not render an anchor, and potentially move the props manually to Link. */
+                    }
                     <Button className="bg-black hover:bg-gray-800 group">
                       Explore Language Mode
                       <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />

@@ -219,7 +219,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         pending.sort((a, b) => {
           const da = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER
           const db = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER
-          return da - db
+          if (da !== db) return da - db
+
+          const pa = a.priority || 0
+          const pb = b.priority || 0
+          return pb - pa
         })
         if (!mounted) return
         setUpcomingTasks(pending.slice(0, 5).map(m => ({ id: Number(m.id), subject: m.subject, due_date: m.due_date })))
@@ -227,11 +231,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
       const { data, error } = await supabase
         .from('homework')
-        .select('id, subject, due_date, done')
+        .select('id, subject, due_date, done, priority')
         .eq('user_id', user.id)
         .eq('done', false)
         // include overdue items as well; show soonest first
         .order('due_date', { ascending: true, nullsFirst: false })
+        .order('priority', { ascending: false, nullsFirst: false })
         .limit(5)
       if (!mounted) return
       if (error) {

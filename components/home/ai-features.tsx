@@ -74,7 +74,9 @@ export function AIFeatures() {
                     </p>
                   </div>
                 </div>
-                <Link href="/signup" passHref legacyBehavior>
+                <Link href="/signup">
+                  {/* @next-codemod-error This Link previously used the now removed `legacyBehavior` prop, and has a child that might not be an anchor. The codemod bailed out of lifting the child props to the Link. Check that the child component does not render an anchor, and potentially move the props manually to Link. */
+                  }
                   <Button className="w-full sm:w-auto bg-black hover:bg-gray-800">
                     Try AI Generation
                     <ArrowRight className="ml-2 h-4 w-4" />

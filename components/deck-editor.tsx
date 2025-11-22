@@ -369,6 +369,14 @@ export function DeckEditor({ deckId }: DeckEditorProps) {
           </label>
           <Textarea id="deckDescription" value={deck.description} onChange={handleDeckDescriptionChange} rows={3} placeholder="Optional description" />
         </div>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="deck-exclude-srs"
+            checked={(deck as any).exclude_from_srs ?? false}
+            onCheckedChange={(checked) => setDeck({ ...deck, exclude_from_srs: checked } as any)}
+          />
+          <Label htmlFor="deck-exclude-srs">Exclude entire deck from Spaced Repetition</Label>
+        </div>
       </div>
 
       {/* Cards header */}

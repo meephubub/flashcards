@@ -2,10 +2,11 @@ import { NextResponse } from "next/server"
 import * as dataService from "@/lib/data"
 import { createClient } from "@/lib/supabase/server"
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient()
-    const deckId = Number.parseInt(params.id)
+    const { id } = await params
+    const deckId = Number.parseInt(id)
     const { front, back, front_img_url, back_img_url } = await request.json()
 
     if (!front || !back) {

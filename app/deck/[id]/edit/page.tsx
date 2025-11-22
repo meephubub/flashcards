@@ -18,8 +18,12 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 
-export default function EditDeckPage({ params }: { params: { id: string } }) {
-  const deckId = Number.parseInt(params.id);
+import { useParams } from 'next/navigation';
+
+export default function EditDeckPage() {
+  const params = useParams();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const deckId = Number.parseInt(id || "");
   const { session, isLoading, user } = useAuth();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);

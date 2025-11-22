@@ -2,11 +2,12 @@ import { NextResponse } from "next/server"
 import * as dataService from "@/lib/data"
 import { createClient } from "@/lib/supabase/server"
 
-export async function PUT(request: Request, { params }: { params: { id: string; cardId: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string; cardId: string }> }) {
   try {
     const supabase = await createClient()
-    const deckId = Number.parseInt(params.id)
-    const cardId = Number.parseInt(params.cardId)
+    const { id, cardId: cardIdString } = await params
+    const deckId = Number.parseInt(id)
+    const cardId = Number.parseInt(cardIdString)
     const { front, back, front_img_url, back_img_url } = await request.json()
 
     if (!front || !back) {
@@ -25,11 +26,12 @@ export async function PUT(request: Request, { params }: { params: { id: string; 
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string; cardId: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string; cardId: string }> }) {
   try {
     const supabase = await createClient()
-    const deckId = Number.parseInt(params.id)
-    const cardId = Number.parseInt(params.cardId)
+    const { id, cardId: cardIdString } = await params
+    const deckId = Number.parseInt(id)
+    const cardId = Number.parseInt(cardIdString)
 
     const success = await dataService.deleteCard(supabase, deckId, cardId)
 

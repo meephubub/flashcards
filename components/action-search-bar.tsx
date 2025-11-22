@@ -34,14 +34,14 @@ interface Action {
   keepOpen?: boolean
   // Category for grouping/filtering in the left rail
   category?:
-    | "basic"
-    | "ai"
-    | "notes"
-    | "decks"
-    | "models"
-    | "nav"
-    | "device"
-    | "todos"
+  | "basic"
+  | "ai"
+  | "notes"
+  | "decks"
+  | "models"
+  | "nav"
+  | "device"
+  | "todos"
   // Higher appears earlier when searching (in addition to matching score)
   priority?: number
 }
@@ -148,7 +148,7 @@ const allActions: Action[] = [
     id: "go-home",
     label: "Go to Home",
     description: "/",
-    icon: <Globe className="h-4 w-4 text-blue-500"/> ,
+    icon: <Globe className="h-4 w-4 text-blue-500" />,
     short: "Enter",
     end: "⌘K",
     href: "/",
@@ -159,7 +159,7 @@ const allActions: Action[] = [
     id: "go-notes",
     label: "Go to Notes",
     description: "/notes",
-    icon: <BarChart2 className="h-4 w-4 text-orange-500"/>,
+    icon: <BarChart2 className="h-4 w-4 text-orange-500" />,
     short: "Enter",
     end: "⌘K",
     href: "/notes",
@@ -186,7 +186,7 @@ const allActions: Action[] = [
     short: "Enter",
     end: "Decks",
     run: () => {
-      try { window.dispatchEvent(new Event('open-create-deck')) } catch {}
+      try { window.dispatchEvent(new Event('open-create-deck')) } catch { }
     },
     category: "decks",
     priority: 80,
@@ -199,7 +199,7 @@ const allActions: Action[] = [
     short: "Enter",
     end: "Decks",
     run: () => {
-      try { window.dispatchEvent(new Event('open-import-markdown')) } catch {}
+      try { window.dispatchEvent(new Event('open-import-markdown')) } catch { }
     },
     category: "decks",
     priority: 70,
@@ -212,7 +212,7 @@ const allActions: Action[] = [
     short: "Enter",
     end: "AI",
     run: () => {
-      try { window.dispatchEvent(new Event('open-generate-flashcards')) } catch {}
+      try { window.dispatchEvent(new Event('open-generate-flashcards')) } catch { }
     },
     category: "ai",
     priority: 85,
@@ -225,7 +225,7 @@ const allActions: Action[] = [
     short: "Enter",
     end: "Decks",
     run: () => {
-      try { window.dispatchEvent(new Event('open-merge-decks')) } catch {}
+      try { window.dispatchEvent(new Event('open-merge-decks')) } catch { }
     },
     category: "decks",
     priority: 60,
@@ -238,7 +238,7 @@ const allActions: Action[] = [
     short: "Enter",
     end: "Models",
     run: () => {
-      try { window.dispatchEvent(new Event('open-create-model')) } catch {}
+      try { window.dispatchEvent(new Event('open-create-model')) } catch { }
     },
     category: "models",
     priority: 70,
@@ -334,7 +334,7 @@ const allActions: Action[] = [
               // Best-effort set current note id if store is available
               const store = useNoteContextStore.getState?.()
               store?.setCurrentNoteId?.(newId)
-            } catch {}
+            } catch { }
           }
           // Navigate to notes
           const clickToNotes = document.createElement('a')
@@ -520,6 +520,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
           .eq('user_id', uid)
           .eq('done', false)
           .order('due_date', { ascending: true, nullsFirst: false })
+          .order('priority', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
         if (error) throw error
         setTodos(((data as unknown) as HomeworkRow[]) || [])
@@ -587,7 +588,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
 
   // Remove addTodo and removeTodo functions
   // ...
-  
+
 
   // Allow external triggers (e.g., mobile button) to open the palette
   useEffect(() => {
@@ -638,7 +639,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
     try {
       // Persist for middleware via cookie (1 year), path=/, SameSite=Lax
       document.cookie = `ENVIRONMENT=${env}; Path=/; Max-Age=31536000; SameSite=Lax`
-    } catch {}
+    } catch { }
     // close palette after setting
     setOpen(false)
     // minor visual feedback could be added later
@@ -661,104 +662,104 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
     let base = actions
     // Global quick actions (were notes-only; now available universally)
     const prepend: Action[] = [
-        {
-          id: "create-note-from-content",
-          label: "Create note from content",
-          description: "Paste text or upload a file",
-          icon: <PlusCircle className="h-4 w-4 text-emerald-600" />,
-          short: "Enter",
-          end: "Notes",
-          run: () => setOpenNoteFromContent(true),
-          category: "notes",
-          priority: 92,
+      {
+        id: "create-note-from-content",
+        label: "Create note from content",
+        description: "Paste text or upload a file",
+        icon: <PlusCircle className="h-4 w-4 text-emerald-600" />,
+        short: "Enter",
+        end: "Notes",
+        run: () => setOpenNoteFromContent(true),
+        category: "notes",
+        priority: 92,
+      },
+      {
+        id: "create-note-from-image",
+        label: "Create note from image",
+        description: "Upload image → process → create note",
+        icon: <ImageIcon className="h-4 w-4 text-purple-500" />,
+        short: "Enter",
+        end: "Image → Note",
+        keepOpen: true,
+        run: () => {
+          // Open inline sub-UI instead of closing palette
+          setImageNoteOpen(true)
+          setTimeout(() => {
+            try {
+              const el = document.querySelector('input[type="file"]') as HTMLInputElement | null
+              el?.focus()
+            } catch { }
+          }, 0)
         },
-        {
-          id: "create-note-from-image",
-          label: "Create note from image",
-          description: "Upload image → process → create note",
-          icon: <ImageIcon className="h-4 w-4 text-purple-500" />,
-          short: "Enter",
-          end: "Image → Note",
-          keepOpen: true,
-          run: () => {
-            // Open inline sub-UI instead of closing palette
-            setImageNoteOpen(true)
-            setTimeout(() => {
-              try {
-                const el = document.querySelector('input[type="file"]') as HTMLInputElement | null
-                el?.focus()
-              } catch {}
-            }, 0)
-          },
-          category: "notes",
-          priority: 90,
+        category: "notes",
+        priority: 90,
+      },
+      {
+        id: "edit-with-ai",
+        label: "Edit with AI…",
+        description: currentNoteId ? "Enter custom instruction, preview, then save" : "Select a note first",
+        icon: <Pencil className="h-4 w-4 text-blue-500" />,
+        short: "Enter",
+        end: "AI",
+        keepOpen: true,
+        run: () => {
+          if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
+            if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
+            return
+          }
+          setEditAiError(null)
+          setEditAiPreview(null)
+          setEditAiOpen(true)
+          // focus later on textarea
+          setTimeout(() => {
+            try {
+              const el = document.getElementById('edit-ai-textarea') as HTMLTextAreaElement | null
+              el?.focus()
+            } catch { }
+          }, 0)
         },
-        {
-          id: "edit-with-ai",
-          label: "Edit with AI…",
-          description: currentNoteId ? "Enter custom instruction, preview, then save" : "Select a note first",
-          icon: <Pencil className="h-4 w-4 text-blue-500" />,
-          short: "Enter",
-          end: "AI",
-          keepOpen: true,
-          run: () => {
+        category: "ai",
+        priority: 88,
+      },
+      {
+        id: "fix-note-content",
+        label: "Fix note content (AI)",
+        description: currentNoteId ? "Send content + guidelines to Groq, create revised note" : "Select a note first",
+        icon: <Pencil className="h-4 w-4 text-blue-600" />,
+        short: "Enter",
+        end: "AI",
+        keepOpen: true,
+        run: async () => {
+          try {
             if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
               if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
               return
             }
-            setEditAiError(null)
-            setEditAiPreview(null)
-            setEditAiOpen(true)
-            // focus later on textarea
-            setTimeout(() => {
-              try {
-                const el = document.getElementById('edit-ai-textarea') as HTMLTextAreaElement | null
-                el?.focus()
-              } catch {}
-            }, 0)
-          },
-          category: "ai",
-          priority: 88,
-        },
-        {
-          id: "fix-note-content",
-          label: "Fix note content (AI)",
-          description: currentNoteId ? "Send content + guidelines to Groq, create revised note" : "Select a note first",
-          icon: <Pencil className="h-4 w-4 text-blue-600" />,
-          short: "Enter",
-          end: "AI",
-          keepOpen: true,
-          run: async () => {
-            try {
-              if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
-                if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
-                return
-              }
-              const data = getCurrentNoteForExam()
-              if (!data || !data.content?.trim()) {
-                alert('No content found for the current note.')
-                return
-              }
-              setFixError(null)
-              setFixOpen(true)
-              setFixWorking(true)
-              setFixProgress(0)
-              // 2 minute timeline
-              const start = Date.now()
-              const total = 120000
-              const timer = setInterval(() => {
-                const elapsed = Date.now() - start
-                const pct = Math.min(100, (elapsed / total) * 100)
-                setFixProgress(pct)
-              }, 200)
-              let msgIdx = 0
+            const data = getCurrentNoteForExam()
+            if (!data || !data.content?.trim()) {
+              alert('No content found for the current note.')
+              return
+            }
+            setFixError(null)
+            setFixOpen(true)
+            setFixWorking(true)
+            setFixProgress(0)
+            // 2 minute timeline
+            const start = Date.now()
+            const total = 120000
+            const timer = setInterval(() => {
+              const elapsed = Date.now() - start
+              const pct = Math.min(100, (elapsed / total) * 100)
+              setFixProgress(pct)
+            }, 200)
+            let msgIdx = 0
+            setFixMessage(fixMessages[msgIdx])
+            const msgTimer = setInterval(() => {
+              msgIdx = (msgIdx + 1) % fixMessages.length
               setFixMessage(fixMessages[msgIdx])
-              const msgTimer = setInterval(() => {
-                msgIdx = (msgIdx + 1) % fixMessages.length
-                setFixMessage(fixMessages[msgIdx])
-              }, 9000)
-              const originalTitle = data.title || 'Note'
-              const guidelines = `
+            }, 9000)
+            const originalTitle = data.title || 'Note'
+            const guidelines = `
 You are an expert technical editor. Fix all errors and improve clarity without changing meaning.
 Formatting rules:
 - replace any <br> with a line break
@@ -771,224 +772,224 @@ Formatting rules:
 - Keep important equations, examples, and tables; render in Markdown.
 - Do not add a preface or summary unless the note already contains one (then improve it).
 `
-              const systemMessage = 'You are a meticulous Markdown editor. Return ONLY the corrected Markdown. Do not include code fences or explanations.'
-              const userPrompt = `Please revise the following note according to the guidelines. Return ONLY the corrected Markdown content.\n\nGuidelines:\n${guidelines}\n\nNote Markdown:\n${data.content}`
-              // Call Groq
-              const revised = await makeGroqRequest(userPrompt, false, systemMessage)
-              const cleaned = (revised || '').trim()
-              if (!cleaned) {
-                alert('AI returned empty content. Please try again.')
-                throw new Error('AI returned empty content')
-              }
-              // Update current note with revised content (in-place)
-              const { error } = await supabase
-                .from('notes')
-                .update({ content: cleaned })
-                .eq('id', currentNoteId)
-                .single()
-              if (error) throw new Error(error.message)
-              // Push refreshed content into the current view immediately
-              try { updateCurrentNoteContent?.(cleaned) } catch {}
-              // Broadcast a global event so any listeners can refetch
-              try { window.dispatchEvent(new CustomEvent('note-updated', { detail: { id: currentNoteId } })) } catch {}
-              // Done: fast-forward progress and close
-              setFixProgress(100)
-              clearInterval(timer)
-              clearInterval(msgTimer)
-              setOpen(false)
-              setFixOpen(false)
-              setFixWorking(false)
-            } catch (e: any) {
-              console.error('Fix note failed', e)
-              setFixError(e?.message || 'Failed to fix note content')
-              setFixWorking(false)
+            const systemMessage = 'You are a meticulous Markdown editor. Return ONLY the corrected Markdown. Do not include code fences or explanations.'
+            const userPrompt = `Please revise the following note according to the guidelines. Return ONLY the corrected Markdown content.\n\nGuidelines:\n${guidelines}\n\nNote Markdown:\n${data.content}`
+            // Call Groq
+            const revised = await makeGroqRequest(userPrompt, false, systemMessage)
+            const cleaned = (revised || '').trim()
+            if (!cleaned) {
+              alert('AI returned empty content. Please try again.')
+              throw new Error('AI returned empty content')
             }
-          },
-          category: "ai",
-          priority: 86,
+            // Update current note with revised content (in-place)
+            const { error } = await supabase
+              .from('notes')
+              .update({ content: cleaned })
+              .eq('id', currentNoteId)
+              .single()
+            if (error) throw new Error(error.message)
+            // Push refreshed content into the current view immediately
+            try { updateCurrentNoteContent?.(cleaned) } catch { }
+            // Broadcast a global event so any listeners can refetch
+            try { window.dispatchEvent(new CustomEvent('note-updated', { detail: { id: currentNoteId } })) } catch { }
+            // Done: fast-forward progress and close
+            setFixProgress(100)
+            clearInterval(timer)
+            clearInterval(msgTimer)
+            setOpen(false)
+            setFixOpen(false)
+            setFixWorking(false)
+          } catch (e: any) {
+            console.error('Fix note failed', e)
+            setFixError(e?.message || 'Failed to fix note content')
+            setFixWorking(false)
+          }
         },
-        {
-          id: "move-note-project",
-          label: "Move note to project",
-          description: currentNoteId ? "Change this note's project" : "Select a note first",
-          icon: <Pencil className="h-4 w-4 text-violet-600" />,
-          short: "Enter",
-          end: "Notes",
-          run: () => {
-            if (!currentNoteId) {
+        category: "ai",
+        priority: 86,
+      },
+      {
+        id: "move-note-project",
+        label: "Move note to project",
+        description: currentNoteId ? "Change this note's project" : "Select a note first",
+        icon: <Pencil className="h-4 w-4 text-violet-600" />,
+        short: "Enter",
+        end: "Notes",
+        run: () => {
+          if (!currentNoteId) {
+            if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
+            else alert('Select a note first')
+            return
+          }
+          setOpenMoveProject(true)
+        },
+        category: "notes",
+        priority: 75,
+      },
+      {
+        id: "exam-from-note",
+        label: "Start exam from note",
+        description: currentNoteId ? "Generate questions from the current note" : "Select a note first",
+        icon: <BarChart2 className="h-4 w-4 text-indigo-600" />,
+        short: "Enter",
+        end: "Exam",
+        run: async () => {
+          try {
+            if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
               if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
-              else alert('Select a note first')
               return
             }
-            setOpenMoveProject(true)
-          },
-          category: "notes",
-          priority: 75,
-        },
-        {
-          id: "exam-from-note",
-          label: "Start exam from note",
-          description: currentNoteId ? "Generate questions from the current note" : "Select a note first",
-          icon: <BarChart2 className="h-4 w-4 text-indigo-600" />,
-          short: "Enter",
-          end: "Exam",
-          run: async () => {
-            try {
-              if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
-                if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
-                return
-              }
-              const data = getCurrentNoteForExam()
-              if (!data || !data.content.trim()) {
-                alert('No content found for the current note.')
-                return
-              }
-              const examName = `Exam from: ${data.title || 'Note'}`
-              const questionCount = 8
-              const difficulty = 'medium'
-              // Ask AI to produce ExamQuestion[] JSON
-              const systemMsg = 'You are an educational content generator. Always output strict JSON parsable by JSON.parse, representing an array of ExamQuestion objects.'
-              const userPrompt = `Create ${questionCount} diverse questions from the following note content. Mix types among: "multiple-choice", "true-false", "short-answer", and "matching". For MCQ include exactly 4 options and ensure correctAnswer is one of them. For matching, include 4-6 {left,right} pairs in matchingPairs. For short-answer, set correctAnswer to a concise expected answer. For true-false, set correctAnswer to "True" or "False". Schema keys: id (omit or set null), type, question, correctAnswer, options (for MCQ), matchingPairs (for matching), explanation (optional).
+            const data = getCurrentNoteForExam()
+            if (!data || !data.content.trim()) {
+              alert('No content found for the current note.')
+              return
+            }
+            const examName = `Exam from: ${data.title || 'Note'}`
+            const questionCount = 8
+            const difficulty = 'medium'
+            // Ask AI to produce ExamQuestion[] JSON
+            const systemMsg = 'You are an educational content generator. Always output strict JSON parsable by JSON.parse, representing an array of ExamQuestion objects.'
+            const userPrompt = `Create ${questionCount} diverse questions from the following note content. Mix types among: "multiple-choice", "true-false", "short-answer", and "matching". For MCQ include exactly 4 options and ensure correctAnswer is one of them. For matching, include 4-6 {left,right} pairs in matchingPairs. For short-answer, set correctAnswer to a concise expected answer. For true-false, set correctAnswer to "True" or "False". Schema keys: id (omit or set null), type, question, correctAnswer, options (for MCQ), matchingPairs (for matching), explanation (optional).
 
 Note content:\n\n${data.content}`
-              let questions: any[] = []
-              try {
-                const raw = await makeGroqRequest(userPrompt, false, systemMsg, true)
-                // Try to extract JSON array
-                const jsonMatch = raw.match(/\[([\s\S]*?)\]/)
-                const jsonText = jsonMatch ? `[${jsonMatch[1]}]` : raw
-                const parsed = JSON.parse(jsonText)
-                if (Array.isArray(parsed)) questions = parsed
-              } catch (e) {
-                console.warn('AI question generation failed, falling back', e)
-              }
-              // Fallback minimal questions if AI failed
-              if (!Array.isArray(questions) || questions.length === 0) {
-                const lines = data.content.split('\n').filter(l => l.trim())
-                const first = lines[0] || 'the main topic'
-                questions = [
-                  { type: 'short-answer', question: 'What is the main topic of the note?', correctAnswer: first },
-                  { type: 'true-false', question: 'The note contains factual information about the topic.', correctAnswer: 'True' },
-                  { type: 'multiple-choice', question: `Which best describes ${first}?`, options: ['Definition', 'Example', 'History', 'Unrelated concept'], correctAnswer: 'Definition' },
-                ]
-              }
-              // Normalize and add ids/difficulty
-              const normalized = questions.map((q, idx) => {
-                const t = q.type || 'short-answer'
-                const out: any = {
-                  id: idx + 1,
-                  type: t,
-                  question: q.question || 'Question',
-                  correctAnswer: q.correctAnswer || '',
-                  difficulty,
-                }
-                if (t === 'multiple-choice') {
-                  const opts = Array.isArray(q.options) ? q.options.slice(0, 4) : []
-                  if (opts.length < 4) {
-                    while (opts.length < 4) opts.push(`Option ${opts.length + 1}`)
-                  }
-                  // Ensure correctAnswer is one of options
-                  if (!opts.includes(q.correctAnswer)) out.correctAnswer = opts[0]
-                  out.options = opts
-                }
-                if (t === 'matching') {
-                  const mp = Array.isArray(q.matchingPairs) ? q.matchingPairs : []
-                  out.matchingPairs = mp
-                }
-                if (q.explanation) out.explanation = q.explanation
-                return out
-              })
-              const payload = {
-                examName,
-                questions: normalized,
+            let questions: any[] = []
+            try {
+              const raw = await makeGroqRequest(userPrompt, false, systemMsg, true)
+              // Try to extract JSON array
+              const jsonMatch = raw.match(/\[([\s\S]*?)\]/)
+              const jsonText = jsonMatch ? `[${jsonMatch[1]}]` : raw
+              const parsed = JSON.parse(jsonText)
+              if (Array.isArray(parsed)) questions = parsed
+            } catch (e) {
+              console.warn('AI question generation failed, falling back', e)
+            }
+            // Fallback minimal questions if AI failed
+            if (!Array.isArray(questions) || questions.length === 0) {
+              const lines = data.content.split('\n').filter(l => l.trim())
+              const first = lines[0] || 'the main topic'
+              questions = [
+                { type: 'short-answer', question: 'What is the main topic of the note?', correctAnswer: first },
+                { type: 'true-false', question: 'The note contains factual information about the topic.', correctAnswer: 'True' },
+                { type: 'multiple-choice', question: `Which best describes ${first}?`, options: ['Definition', 'Example', 'History', 'Unrelated concept'], correctAnswer: 'Definition' },
+              ]
+            }
+            // Normalize and add ids/difficulty
+            const normalized = questions.map((q, idx) => {
+              const t = q.type || 'short-answer'
+              const out: any = {
+                id: idx + 1,
+                type: t,
+                question: q.question || 'Question',
+                correctAnswer: q.correctAnswer || '',
                 difficulty,
-                questionCount: normalized.length,
-                source: 'notes' as const,
-                notesContent: data.content,
-                createdAt: new Date().toISOString(),
               }
-              try {
-                localStorage.setItem('notes_exam_data', JSON.stringify(payload))
-              } catch {}
-              // Embed the exam inside the current note view
-              try { setShowExamInNotes(true) } catch {}
-              setOpen(false)
-            } catch (err) {
-              console.error('Failed to start exam from note', err)
-              alert('Failed to start exam from this note.')
+              if (t === 'multiple-choice') {
+                const opts = Array.isArray(q.options) ? q.options.slice(0, 4) : []
+                if (opts.length < 4) {
+                  while (opts.length < 4) opts.push(`Option ${opts.length + 1}`)
+                }
+                // Ensure correctAnswer is one of options
+                if (!opts.includes(q.correctAnswer)) out.correctAnswer = opts[0]
+                out.options = opts
+              }
+              if (t === 'matching') {
+                const mp = Array.isArray(q.matchingPairs) ? q.matchingPairs : []
+                out.matchingPairs = mp
+              }
+              if (q.explanation) out.explanation = q.explanation
+              return out
+            })
+            const payload = {
+              examName,
+              questions: normalized,
+              difficulty,
+              questionCount: normalized.length,
+              source: 'notes' as const,
+              notesContent: data.content,
+              createdAt: new Date().toISOString(),
             }
-          },
-          category: "notes",
-          priority: 70,
+            try {
+              localStorage.setItem('notes_exam_data', JSON.stringify(payload))
+            } catch { }
+            // Embed the exam inside the current note view
+            try { setShowExamInNotes(true) } catch { }
+            setOpen(false)
+          } catch (err) {
+            console.error('Failed to start exam from note', err)
+            alert('Failed to start exam from this note.')
+          }
         },
-        {
-          id: "edit-note",
-          label: "Edit current note",
-          description:
-            currentNoteId
-              ? "Enter edit mode"
-              : "Select a note first to edit",
-          icon: <Pencil className="h-4 w-4" />,
-          short: "Enter",
-          end: "Ctrl+E",
-          run: () => {
-            if (!currentNoteId) {
-              if (typeof openSelectNoteDialog === "function") openSelectNoteDialog()
-              return
-            }
-            if (typeof startEditCurrentNote === "function") startEditCurrentNote()
-          },
-          category: "notes",
-          priority: 93,
+        category: "notes",
+        priority: 70,
+      },
+      {
+        id: "edit-note",
+        label: "Edit current note",
+        description:
+          currentNoteId
+            ? "Enter edit mode"
+            : "Select a note first to edit",
+        icon: <Pencil className="h-4 w-4" />,
+        short: "Enter",
+        end: "Ctrl+E",
+        run: () => {
+          if (!currentNoteId) {
+            if (typeof openSelectNoteDialog === "function") openSelectNoteDialog()
+            return
+          }
+          if (typeof startEditCurrentNote === "function") startEditCurrentNote()
         },
-        {
-          id: "delete-note",
-          label: "Delete note",
-          description:
-            currentNoteId && typeof deleteNoteById === "function"
-              ? `Delete current note (${currentNoteId.slice(0, 6)}…)`
-              : "Select a note first to delete",
-          icon: <Trash2 className="h-4 w-4" />,
-          short: "Enter",
-          end: "⌘K",
-          run: () => {
-            if (!currentNoteId || typeof deleteNoteById !== "function") {
-              if (typeof openSelectNoteDialog === "function") openSelectNoteDialog()
-              return
-            }
-            deleteNoteById(currentNoteId)
-          },
-          category: "notes",
-          priority: 40,
+        category: "notes",
+        priority: 93,
+      },
+      {
+        id: "delete-note",
+        label: "Delete note",
+        description:
+          currentNoteId && typeof deleteNoteById === "function"
+            ? `Delete current note (${currentNoteId.slice(0, 6)}…)`
+            : "Select a note first to delete",
+        icon: <Trash2 className="h-4 w-4" />,
+        short: "Enter",
+        end: "⌘K",
+        run: () => {
+          if (!currentNoteId || typeof deleteNoteById !== "function") {
+            if (typeof openSelectNoteDialog === "function") openSelectNoteDialog()
+            return
+          }
+          deleteNoteById(currentNoteId)
         },
-        {
-          id: "create-note",
-          label: "Create note",
-          description: "Open create note dialog",
-          icon: <PlusCircle className="h-4 w-4" />,
-          short: "Enter",
-          end: "⌘K",
-          run: () => openDialog(),
-          category: "basic",
-          priority: 96,
-        },
-      ]
+        category: "notes",
+        priority: 40,
+      },
+      {
+        id: "create-note",
+        label: "Create note",
+        description: "Open create note dialog",
+        icon: <PlusCircle className="h-4 w-4" />,
+        short: "Enter",
+        end: "⌘K",
+        run: () => openDialog(),
+        category: "basic",
+        priority: 96,
+      },
+    ]
     base = [...prepend, ...base]
     // Enhance the "Question" action to prime the input with '? '
     base = base.map(a => a.id === "question"
       ? {
-          ...a,
-          run: () => {
-            setQuery(prev => (prev.startsWith('? ') ? prev : '? '))
-            setAiAnswer(null)
-            setAiError(null)
-            // keep palette open and focus input
-            setTimeout(() => {
-              const el = document.getElementById("action-search-input") as HTMLInputElement | null
-              el?.focus()
-            }, 0)
-          },
-        }
+        ...a,
+        run: () => {
+          setQuery(prev => (prev.startsWith('? ') ? prev : '? '))
+          setAiAnswer(null)
+          setAiError(null)
+          // keep palette open and focus input
+          setTimeout(() => {
+            const el = document.getElementById("action-search-input") as HTMLInputElement | null
+            el?.focus()
+          }, 0)
+        },
+      }
       : a
     )
     return base
@@ -1042,13 +1043,13 @@ Note content:\n\n${data.content}`
 
     // Score actions
     const scored = scoped.map(a => {
-      if (!normalizedQuery) return { a, score: (a.priority ?? 0) + (['basic','notes','nav'].includes(a.category || '') ? 10 : 0) }
+      if (!normalizedQuery) return { a, score: (a.priority ?? 0) + (['basic', 'notes', 'nav'].includes(a.category || '') ? 10 : 0) }
       const hay = [a.label, a.description, a.id].filter(Boolean).join(' ').toLowerCase()
       let s = 0
       if (hay.includes(normalizedQuery)) s += 10
       if ((a.label || '').toLowerCase().startsWith(normalizedQuery)) s += 20
       if ((a.id || '').toLowerCase().startsWith(normalizedQuery)) s += 10
-      if ((a.category && ['basic','notes','nav'].includes(a.category)) ) s += 5
+      if ((a.category && ['basic', 'notes', 'nav'].includes(a.category))) s += 5
       s += (a.priority ?? 0)
       return { a, score: s }
     })
@@ -1247,813 +1248,813 @@ Note content:\n\n${data.content}`
         </div>
         <div className="flex-1 flex flex-col">
           <div className="w-full px-4 pt-4 pb-2 bg-transparent">
-          <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block" htmlFor="search">
-            Search Commands
-          </label>
-          <div className="relative">
-            {isAiUi && (
-              <div className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-blue-600">
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span className="text-[10px] leading-none font-semibold">?</span>
-              </div>
-            )}
-        
-            <Input
-              type="text"
-              placeholder="Ask a question with ? or search commands"
-              value={isAiUi ? query.slice(2) : query}
-              onChange={handleInputChange}
-              onFocus={handleFocus}
-              onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-              id="action-search-input"
-              className={`${isAiUi ? 'pl-16' : 'pl-3'} pr-9 py-1.5 h-10 text-sm rounded-lg focus-visible:ring-offset-0 bg-white dark:bg-neutral-800 border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400`}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  const q = (isAiUi ? query.slice(2) : query).trim()
-                  const lower = q.toLowerCase()
-                  // Route quick-nav: any input starting with '/' navigates
-                  if (q.startsWith('/')) {
-                    router.push(q)
-                    setOpen(false)
-                    return
-                  }
-                  if (lower.startsWith('generate image:')) {
-                    const prompt = q.slice('generate image:'.length).trim()
-                    if (prompt.length > 0) {
-                      // Trigger generation and keep palette open to preview and copy URL
-                      generateImageFromPrompt(prompt)
-                    }
-                  } else if (lower.startsWith('generate slow image:')) {
-                    const prompt = q.slice('generate slow image:'.length).trim()
-                    if (prompt.length > 0) {
-                      generateSlowImageFromPrompt(prompt, selectedModel)
-                    }
-                  } else if (isCalc) {
-                    // Copy calculator result instead of running an action
-                    copyCalc()
-                  } else if (isEnvDev) {
-                    applyEnv('dev')
-                  } else if (isEnvProd) {
-                    applyEnv('prod')
-                  } else if (isEnvShow) {
-                    // Just close or do nothing; here we close for a quick glance UX
-                    setOpen(false)
-                  } else if (isAi && aiQuestion.trim().length > 0) {
-                    // Ask AI instead of running an action
-                    askAI()
-                  } else {
-                    const target = selectedAction ?? result?.actions?.[0]
-                    if (target) runAction(target)
-                  }
-                }
-              }}
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <AnimatePresence mode="popLayout">
-                {isAiUi ? (
-                  <motion.button
-                    key="exit"
-                    type="button"
-                    aria-label="Exit question mode"
-                    title="Exit question mode"
-                    initial={{ y: -20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 20, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="inline-flex items-center justify-center w-5 h-5 rounded-md border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    onClick={() => {
-                      setQuery(aiQuestion)
-                      setAiAnswer(null)
-                      setAiError(null)
-                    }}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </motion.button>
-                ) : query.length > 0 ? (
-                  <motion.div
-                    key="send"
-                    initial={{ y: -20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 20, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Send className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="search"
-                    initial={{ y: -20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 20, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Search className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-        {/* AI Question UI */}
-        {isAi && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <HelpCircle className="w-4 h-4 text-blue-500" />
-                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Ask AI</div>
-              </div>
-              <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
-                {aiQuestion || 'Type your question after ?'}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={askAI}
-                  disabled={aiLoading || !aiQuestion.trim()}
-                  className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
-                >
-                  {aiLoading ? 'Thinking…' : 'Ask'}
-                </button>
-                {aiAnswer && (
-                  <button
-                    type="button"
-                    onClick={async () => { await navigator.clipboard.writeText(aiAnswer) }}
-                    className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                  >
-                    <Copy className="w-4 h-4" />
-                    Copy answer
-                  </button>
-                )}
-              </div>
-              {aiError && (
-                <div className="text-xs text-red-500">{aiError}</div>
-              )}
-              {aiAnswer && (
-                <div className="mt-1 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
-                  {aiAnswer}
+            <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block" htmlFor="search">
+              Search Commands
+            </label>
+            <div className="relative">
+              {isAiUi && (
+                <div className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-blue-600">
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span className="text-[10px] leading-none font-semibold">?</span>
                 </div>
               )}
+
+              <Input
+                type="text"
+                placeholder="Ask a question with ? or search commands"
+                value={isAiUi ? query.slice(2) : query}
+                onChange={handleInputChange}
+                onFocus={handleFocus}
+                onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+                id="action-search-input"
+                className={`${isAiUi ? 'pl-16' : 'pl-3'} pr-9 py-1.5 h-10 text-sm rounded-lg focus-visible:ring-offset-0 bg-white dark:bg-neutral-800 border border-black/10 dark:border-white/10 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    const q = (isAiUi ? query.slice(2) : query).trim()
+                    const lower = q.toLowerCase()
+                    // Route quick-nav: any input starting with '/' navigates
+                    if (q.startsWith('/')) {
+                      router.push(q)
+                      setOpen(false)
+                      return
+                    }
+                    if (lower.startsWith('generate image:')) {
+                      const prompt = q.slice('generate image:'.length).trim()
+                      if (prompt.length > 0) {
+                        // Trigger generation and keep palette open to preview and copy URL
+                        generateImageFromPrompt(prompt)
+                      }
+                    } else if (lower.startsWith('generate slow image:')) {
+                      const prompt = q.slice('generate slow image:'.length).trim()
+                      if (prompt.length > 0) {
+                        generateSlowImageFromPrompt(prompt, selectedModel)
+                      }
+                    } else if (isCalc) {
+                      // Copy calculator result instead of running an action
+                      copyCalc()
+                    } else if (isEnvDev) {
+                      applyEnv('dev')
+                    } else if (isEnvProd) {
+                      applyEnv('prod')
+                    } else if (isEnvShow) {
+                      // Just close or do nothing; here we close for a quick glance UX
+                      setOpen(false)
+                    } else if (isAi && aiQuestion.trim().length > 0) {
+                      // Ask AI instead of running an action
+                      askAI()
+                    } else {
+                      const target = selectedAction ?? result?.actions?.[0]
+                      if (target) runAction(target)
+                    }
+                  }
+                }}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <AnimatePresence mode="popLayout">
+                  {isAiUi ? (
+                    <motion.button
+                      key="exit"
+                      type="button"
+                      aria-label="Exit question mode"
+                      title="Exit question mode"
+                      initial={{ y: -20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: 20, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="inline-flex items-center justify-center w-5 h-5 rounded-md border border-black/10 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      onClick={() => {
+                        setQuery(aiQuestion)
+                        setAiAnswer(null)
+                        setAiError(null)
+                      }}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </motion.button>
+                  ) : query.length > 0 ? (
+                    <motion.div
+                      key="send"
+                      initial={{ y: -20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: 20, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Send className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="search"
+                      initial={{ y: -20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: 20, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Search className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
-        )}
-        {/* Edit with AI (custom instruction) inline UI */}
-        {(editAiOpen || editAiLoading || editAiPreview || editAiError) && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <Pencil className="w-4 h-4 text-blue-600" />
-                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Edit with AI</div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-gray-600 dark:text-gray-400" htmlFor="edit-ai-textarea">Instruction</label>
-                <textarea
-                  id="edit-ai-textarea"
-                  rows={3}
-                  value={editAiPrompt}
-                  onChange={(e) => setEditAiPrompt(e.target.value)}
-                  disabled={editAiLoading}
-                  placeholder="e.g., Rewrite concisely, fix grammar, keep code blocks, and preserve Markdown structure."
-                  className="w-full rounded-md border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
+          {/* AI Question UI */}
+          {isAi && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-blue-500" />
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Ask AI</div>
+                </div>
+                <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
+                  {aiQuestion || 'Type your question after ?'}
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={async () => {
-                      try {
-                        if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
-                          if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
-                          return
-                        }
-                        const data = getCurrentNoteForExam()
-                        if (!data || !data.content?.trim()) {
-                          alert('No content found for the current note.')
-                          return
-                        }
-                        const instruction = editAiPrompt.trim()
-                        if (!instruction) {
-                          setEditAiError('Please enter an instruction')
-                          return
-                        }
-                        setEditAiLoading(true)
-                        setEditAiError(null)
-                        setEditAiPreview(null)
-                        const systemMessage = 'You are a meticulous Markdown editor. Return ONLY the edited Markdown. No code fences or explanations.'
-                        const userPrompt = `Instruction:\n${instruction}\n\nEdit the following Markdown accordingly and return ONLY the final Markdown (no backticks, no fences):\n\n${data.content}`
-                        const revised = await makeGroqRequest(userPrompt, false, systemMessage)
-                        const cleaned = (revised || '').trim()
-                        if (!cleaned) {
-                          throw new Error('AI returned empty content')
-                        }
-                        setEditAiPreview(cleaned)
-                      } catch (e: any) {
-                        console.error('Edit with AI failed', e)
-                        setEditAiError(e?.message || 'Failed to edit with AI')
-                      } finally {
-                        setEditAiLoading(false)
-                      }
-                    }}
-                    disabled={editAiLoading || !editAiPrompt.trim()}
+                    onClick={askAI}
+                    disabled={aiLoading || !aiQuestion.trim()}
                     className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
                   >
-                    {editAiLoading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>) : 'Generate' }
+                    {aiLoading ? 'Thinking…' : 'Ask'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={resetEditAi}
-                    disabled={editAiLoading}
-                    className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                  >
-                    Cancel
-                  </button>
+                  {aiAnswer && (
+                    <button
+                      type="button"
+                      onClick={async () => { await navigator.clipboard.writeText(aiAnswer) }}
+                      className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy answer
+                    </button>
+                  )}
                 </div>
-              </div>
-              {editAiError && <div className="text-xs text-red-500">{editAiError}</div>}
-              {editAiPreview && (
-                <div className="space-y-2">
-                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Preview</div>
-                  <div className="max-h-64 overflow-auto rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 p-2 text-sm whitespace-pre-wrap break-words">
-                    {editAiPreview}
+                {aiError && (
+                  <div className="text-xs text-red-500">{aiError}</div>
+                )}
+                {aiAnswer && (
+                  <div className="mt-1 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
+                    {aiAnswer}
                   </div>
-                  <div className="flex items-center justify-end gap-2">
+                )}
+              </div>
+            </div>
+          )}
+          {/* Edit with AI (custom instruction) inline UI */}
+          {(editAiOpen || editAiLoading || editAiPreview || editAiError) && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-blue-600" />
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Edit with AI</div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs text-gray-600 dark:text-gray-400" htmlFor="edit-ai-textarea">Instruction</label>
+                  <textarea
+                    id="edit-ai-textarea"
+                    rows={3}
+                    value={editAiPrompt}
+                    onChange={(e) => setEditAiPrompt(e.target.value)}
+                    disabled={editAiLoading}
+                    placeholder="e.g., Rewrite concisely, fix grammar, keep code blocks, and preserve Markdown structure."
+                    className="w-full rounded-md border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 p-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/30"
+                  />
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={async () => {
                         try {
-                          if (!currentNoteId || !editAiPreview) return
-                          const { error } = await supabase
-                            .from('notes')
-                            .update({ content: editAiPreview })
-                            .eq('id', currentNoteId)
-                            .single()
-                          if (error) throw new Error(error.message)
-                          // Update UI immediately with the saved content
-                          try { updateCurrentNoteContent?.(editAiPreview) } catch {}
-                          // Broadcast a global event so any listeners can refetch
-                          try { window.dispatchEvent(new CustomEvent('note-updated', { detail: { id: currentNoteId } })) } catch {}
-                          setOpen(false)
-                          resetEditAi()
+                          if (!currentNoteId || typeof getCurrentNoteForExam !== 'function') {
+                            if (typeof openSelectNoteDialog === 'function') openSelectNoteDialog()
+                            return
+                          }
+                          const data = getCurrentNoteForExam()
+                          if (!data || !data.content?.trim()) {
+                            alert('No content found for the current note.')
+                            return
+                          }
+                          const instruction = editAiPrompt.trim()
+                          if (!instruction) {
+                            setEditAiError('Please enter an instruction')
+                            return
+                          }
+                          setEditAiLoading(true)
+                          setEditAiError(null)
+                          setEditAiPreview(null)
+                          const systemMessage = 'You are a meticulous Markdown editor. Return ONLY the edited Markdown. No code fences or explanations.'
+                          const userPrompt = `Instruction:\n${instruction}\n\nEdit the following Markdown accordingly and return ONLY the final Markdown (no backticks, no fences):\n\n${data.content}`
+                          const revised = await makeGroqRequest(userPrompt, false, systemMessage)
+                          const cleaned = (revised || '').trim()
+                          if (!cleaned) {
+                            throw new Error('AI returned empty content')
+                          }
+                          setEditAiPreview(cleaned)
                         } catch (e: any) {
-                          console.error('Save failed', e)
-                          setEditAiError(e?.message || 'Failed to save changes')
+                          console.error('Edit with AI failed', e)
+                          setEditAiError(e?.message || 'Failed to edit with AI')
+                        } finally {
+                          setEditAiLoading(false)
                         }
                       }}
-                      className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                      disabled={editAiLoading || !editAiPrompt.trim()}
+                      className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
                     >
-                      Save changes
+                      {editAiLoading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>) : 'Generate'}
                     </button>
                     <button
                       type="button"
                       onClick={resetEditAi}
-                      className="px-3 py-1.5 text-sm rounded-md border border-black/10 dark:border-white/10 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    >
-                      Discard
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        {/* Todos UI */}
-        {selectedCategory === 'todos' && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <ListTodo className="w-4 h-4 text-emerald-600" />
-                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Tasks</div>
-              </div>
-              {todoError && <div className="text-xs text-red-500">{todoError}</div>}
-              {todosLoading && (
-                <div className="p-2 text-xs text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                </div>
-              )}
-              {!todosLoading && todos.length === 0 && (
-                <div className="p-2 text-xs text-muted-foreground">No tasks</div>
-              )}
-              <div className="divide-y">
-                {todos.filter((t: HomeworkRow) => !t.done).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className="w-full text-left p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
-                    onClick={() => toggleTodo(t.id, true)}
-                    title="Mark as done"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{t.subject || 'Homework'}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {t.due_date ? `Due ${new Date(t.due_date).toLocaleDateString()}` : 'No due date'}
-                          {t.priority ? ` · Priority ${t.priority}` : ''}
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Done</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Minimal Notes Search UI */}
-        {selectedCategory === 'notes' && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Input
-                  placeholder="Category"
-                  value={noteSearchCategory}
-                  onChange={(e) => setNoteSearchCategory(e.target.value)}
-                  className="h-8"
-                />
-                <Input
-                  placeholder="Project"
-                  value={noteSearchProject}
-                  onChange={(e) => setNoteSearchProject(e.target.value)}
-                  className="h-8"
-                />
-              </div>
-              {noteError && <div className="text-xs text-red-500">{noteError}</div>}
-              {noteLoading && (
-                <div className="p-2 text-xs text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Searching…
-                </div>
-              )}
-              {!noteLoading && (
-                <div className="max-h-64 overflow-auto divide-y">
-                  {noteResults.length === 0 ? (
-                    <div className="p-2 text-xs text-muted-foreground">No notes</div>
-                  ) : (
-                    noteResults.map((n) => (
-                      <button
-                        key={n.id}
-                        type="button"
-                        className="w-full text-left p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
-                        onClick={() => {
-                          try { useNoteContextStore.getState?.()?.setCurrentNoteId?.(n.id) } catch {}
-                          router.push('/notes')
-                          setOpen(false)
-                        }}
-                        title={n.title || 'Open note'}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{n.title || 'Untitled'}</div>
-                            <div className="text-[11px] text-muted-foreground truncate">{[n.category, n.project].filter(Boolean).join(' · ') || '—'}</div>
-                          </div>
-                          {n.updated_at && (
-                            <div className="text-[10px] text-muted-foreground whitespace-nowrap">{new Date(n.updated_at).toLocaleDateString()}</div>
-                          )}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        {/* Slow Image Generation UI (below search bar) */}
-        {(isGenSlow || slowLoading || slowUrl || slowError) && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <ImageIcon />
-                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Generate Slow Image</div>
-              </div>
-              {isGenSlow && (
-                <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
-                  {genSlowPrompt || 'Type a prompt after “generate slow image:”'}
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-600 dark:text-gray-400">Model</label>
-                <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v as ImageModel)}>
-                  <SelectTrigger className="h-7 w-48">
-                    <SelectValue placeholder="Select model" />
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    {imageModels.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <button
-                  type="button"
-                  onClick={() => { const p = genSlowPrompt; if (p) generateSlowImageFromPrompt(p, selectedModel) }}
-                  disabled={slowLoading || !genSlowPrompt}
-                  className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
-                >
-                  {slowLoading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>) : 'Generate'}
-                </button>
-              </div>
-              {slowLoading && (
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <Loader2 className="w-4 h-4 animate-spin" /> This may take a while…
-                </div>
-              )}
-              {slowError && <div className="text-xs text-red-500">{slowError}</div>}
-              {slowUrl && (
-                <div className="flex flex-col gap-2">
-                  <div
-                    className={`relative w-full overflow-hidden rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 ${slowExpanded ? 'p-1' : 'p-2'}`}
-                    onWheel={(e) => {
-                      if (!slowExpanded) return
-                      e.preventDefault()
-                      const delta = -e.deltaY
-                      const factor = delta > 0 ? 1.1 : 0.9
-                      const next = Math.min(8, Math.max(1, slowScale * factor))
-                      setSlowScale(next)
-                    }}
-                    onMouseDown={(e) => {
-                      if (!slowExpanded) return
-                      e.preventDefault()
-                      setSlowDragging(true)
-                      setSlowLastPos({ x: e.clientX, y: e.clientY })
-                    }}
-                    onMouseMove={(e) => {
-                      if (!slowExpanded || !slowDragging || !slowLastPos) return
-                      e.preventDefault()
-                      const dx = e.clientX - slowLastPos.x
-                      const dy = e.clientY - slowLastPos.y
-                      setSlowTranslate((t) => ({ x: t.x + dx, y: t.y + dy }))
-                      setSlowLastPos({ x: e.clientX, y: e.clientY })
-                    }}
-                    onMouseUp={() => { if (slowDragging) { setSlowDragging(false); setSlowLastPos(null) } }}
-                    onMouseLeave={() => { if (slowDragging) { setSlowDragging(false); setSlowLastPos(null) } }}
-                  >
-                    {/* Expanded mode overlayed close button */}
-                    {slowExpanded && (
-                      <button
-                        type="button"
-                        aria-label="Close expanded image"
-                        className="absolute top-2 right-2 z-10 inline-flex items-center justify-center rounded-md border border-black/10 dark:border-white/10 bg-white/80 dark:bg-neutral-800/80 backdrop-blur px-1.5 py-1 hover:bg-white dark:hover:bg-neutral-800"
-                        onClick={() => setSlowExpanded(false)}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={slowUrl}
-                      alt="Generated"
-                      className={
-                        slowExpanded
-                          ? 'w-full h-auto max-h-[70vh] object-contain rounded'
-                          : 'max-h-64 mx-auto rounded cursor-zoom-in'
-                      }
-                      style={slowExpanded ? {
-                        transform: `translate(${slowTranslate.x}px, ${slowTranslate.y}px) scale(${slowScale})`,
-                        transformOrigin: 'center center',
-                        cursor: slowScale > 1 ? (slowDragging ? 'grabbing' : 'grab') : 'zoom-out',
-                        transition: slowDragging ? 'none' : 'transform 40ms linear'
-                      } : undefined}
-                      onClick={() => setSlowExpanded((v) => !v)}
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                      onClick={async () => {
-                        try {
-                          const filename = `image-${Date.now()}.png`
-                          const link = document.createElement('a')
-                          if (slowUrl.startsWith('data:')) {
-                            link.href = slowUrl
-                            link.download = filename
-                            document.body.appendChild(link)
-                            link.click()
-                            document.body.removeChild(link)
-                          } else {
-                            const resp = await fetch(slowUrl)
-                            const blob = await resp.blob()
-                            const url = URL.createObjectURL(blob)
-                            link.href = url
-                            link.download = filename
-                            document.body.appendChild(link)
-                            link.click()
-                            document.body.removeChild(link)
-                            URL.revokeObjectURL(url)
-                          }
-                        } catch (e) {
-                          console.error('Save failed', e)
-                        }
-                      }}
-                    >
-                      <Download className="w-4 h-4" />
-                      <span className="text-xs">Save</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        {/* Image Generation UI */}
-        {(isGenImage || imgLoading || imgUrl || imgError) && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <ImageIcon />
-                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Generate Image</div>
-              </div>
-              {isGenImage && (
-                <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
-                  {genImagePrompt || 'Type a prompt after “generate image:”'}
-                </div>
-              )}
-              {imgLoading && <div className="text-xs text-gray-600 dark:text-gray-400">Generating…</div>}
-              {imgError && <div className="text-xs text-red-500">{imgError}</div>}
-              {imgUrl && (
-                <div className="flex flex-col gap-2">
-                  <div className="w-full overflow-hidden rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 p-2">
-                    {/* Preview */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imgUrl} alt="Generated" className="max-h-64 mx-auto rounded" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <code className="text-[11px] break-all text-gray-700 dark:text-gray-300 bg-neutral-100 dark:bg-neutral-900 px-2 py-1 rounded border border-black/5 dark:border-white/10 flex-1">{imgUrl}</code>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (imgUrl) {
-                          await navigator.clipboard.writeText(imgUrl)
-                          setImgCopied(true)
-                          setTimeout(() => setImgCopied(false), 1000)
-                        }
-                      }}
+                      disabled={editAiLoading}
                       className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                     >
-                      <Copy className="w-4 h-4" />
-                      <span className="text-xs">{imgCopied ? 'Copied' : 'Copy URL'}</span>
+                      Cancel
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-        {isCalc && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Result</div>
-                <div className="text-gray-900 dark:text-gray-100 font-semibold text-base">
-                  {calcValue === null ? 'Invalid expression' : `${calcValue}`}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={copyCalc}
-                disabled={calcValue === null}
-                className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
-                aria-label="Copy result"
-                title={copied ? 'Copied!' : 'Copy'}
-              >
-                {copied ? <Check className="w-4 h-4 text-emerald-500"/> : <Copy className="w-4 h-4"/>}
-                <span className="text-xs">{copied ? 'Copied' : 'Copy'}</span>
-              </button>
-            </div>
-          </div>
-        )}
-        {(isEnvDev || isEnvProd) && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Environment</div>
-                <div className="text-gray-900 dark:text-gray-100 font-semibold text-base">
-                  Set ENVIRONMENT to {isEnvDev ? 'dev' : 'prod'}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => applyEnv(isEnvDev ? 'dev' : 'prod')}
-                className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                aria-label="Apply environment"
-                title="Apply"
-              >
-                <span className="text-xs">Apply</span>
-              </button>
-            </div>
-          </div>
-        )}
-        {isEnvShow && (
-          <div className="w-full px-4 pb-2 -mt-2">
-            <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Environment</div>
-                <div className="text-gray-900 dark:text-gray-100 font-semibold text-base">
-                  Current ENVIRONMENT: {currentEnv}
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 text-xs select-none">
-                {currentEnv}
-              </span>
-            </div>
-          </div>
-        )}
-        <div className="w-full px-2 pb-3">
-          <AnimatePresence>
-            {open && result && !selectedAction && (
-              <motion.div
-                className="w-full rounded-xl overflow-hidden bg-white dark:bg-neutral-900 border border-black/5 dark:border-white/10"
-                variants={container}
-                initial="hidden"
-                animate="show"
-                exit="exit"
-              >
-                {/* Empty state hint when no category chosen (All) and no query */}
-                {!debouncedQuery && selectedCategory === 'all' && (
-                  <div className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-400">
-                    Start typing to begin. Type '/' followed by a route (e.g., /login) to navigate.
-                  </div>
-                )}
-                <motion.ul>
-                  {!imageNoteOpen && selectedCategory !== 'notes' && result.actions.map((action) => (
-                    <motion.li
-                      key={action.id}
-                      className="px-3 py-2 flex items-center justify-between hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
-                      variants={item}
-                      layout
-                      onClick={() => runAction(action)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault()
-                          runAction(action)
-                        }
-                      }}
-                    >
-                      <div className="flex items-center gap-2 justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-black dark:text-white">
-                            {isValidElement(action.icon)
-                              ? cloneElement(action.icon as any, { className: "h-4 w-4 text-black dark:text-white" })
-                              : action.icon}
-                          </span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{action.label}</span>
-                          <span className="text-xs text-gray-600 dark:text-gray-400">{action.description}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">{action.short}</span>
-                        <span className="text-xs text-gray-600 dark:text-gray-400 text-right">{action.end}</span>
-                      </div>
-                    </motion.li>
-                  ))}
-                </motion.ul>
-                {/* Image→Note sub-UI */}
-                {imageNoteOpen && (
-                  <div className="p-3 space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium">Title</label>
-                        <Input
-                          placeholder="Note title"
-                          value={imageNoteTitle}
-                          onChange={(e) => setImageNoteTitle(e.target.value)}
-                          disabled={imageNoteWorking}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium">Project</label>
-                        <Input
-                          placeholder="Project (optional)"
-                          value={imageNoteProject}
-                          onChange={(e) => setImageNoteProject(e.target.value)}
-                          disabled={imageNoteWorking}
-                        />
-                      </div>
+                {editAiError && <div className="text-xs text-red-500">{editAiError}</div>}
+                {editAiPreview && (
+                  <div className="space-y-2">
+                    <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Preview</div>
+                    <div className="max-h-64 overflow-auto rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 p-2 text-sm whitespace-pre-wrap break-words">
+                      {editAiPreview}
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">Image</label>
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        disabled={imageNoteWorking}
-                        onChange={(e) => setImageNoteFile((e.target.files && e.target.files[0]) || null)}
-                      />
-                    </div>
-                    {imageNoteError && (
-                      <div className="text-xs text-red-600">{imageNoteError}</div>
-                    )}
-                    {imageNoteWorking && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-neutral-600 dark:text-neutral-400">
-                          <span>{imageNoteMessage}</span>
-                          <span>{Math.round(imageNoteProgress)}%</span>
-                        </div>
-                        <Progress value={imageNoteProgress} className="h-2" />
-                        <div className="text-[10px] text-neutral-500">Estimated ~2 minutes</div>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
-                        className="px-3 py-1.5 text-sm rounded-md border border-black/10 dark:border-white/10 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                        disabled={imageNoteWorking}
-                        onClick={() => {
-                          resetImageNote()
-                          setImageNoteOpen(false)
-                        }}
-                      >
-                        Back
-                      </button>
-                      <button
-                        type="button"
-                        className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-                        disabled={imageNoteWorking || !imageNoteFile}
                         onClick={async () => {
-                          setImageNoteError(null)
-                          if (!imageNoteFile) {
-                            setImageNoteError('Please select an image')
-                            return
-                          }
                           try {
-                            setImageNoteWorking(true)
-                            setImageNoteProgress(0)
-                            // 2 minute timeline
-                            const start = Date.now()
-                            const total = 120000
-                            const timer = setInterval(() => {
-                              const elapsed = Date.now() - start
-                              const pct = Math.min(100, (elapsed / total) * 100)
-                              setImageNoteProgress(pct)
-                            }, 200)
-                            let msgIdx = 0
-                            setImageNoteMessage(imageNoteMessages[msgIdx])
-                            const msgTimer = setInterval(() => {
-                              msgIdx = (msgIdx + 1) % imageNoteMessages.length
-                              setImageNoteMessage(imageNoteMessages[msgIdx])
-                            }, 9000)
-
-                            // Upload/process
-                            const fd = new FormData()
-                            fd.append('file', imageNoteFile)
-                            const res = await fetch('/api/note-from-image', { method: 'POST', body: fd })
-                            if (!res.ok) throw new Error((await res.json().catch(() => ({ error: res.statusText }))).error || 'Failed to process image')
-                            const j = await res.json()
-
-                            // Create note
-                            const { data: userRes } = await supabase.auth.getUser()
-                            const userId = userRes?.user?.id
-                            if (!userId) throw new Error('Not signed in')
-                            const title = imageNoteTitle.trim() || j.title || (imageNoteFile.name.replace(/\.[^.]+$/, '')) || 'Image Note'
-                            const project = imageNoteProject.trim()
-                            const content: string = j.content || ''
-                            if (!content) throw new Error('No markdown content returned')
-                            setImageNoteMessage('Saving note…')
-                            const { data, error } = await supabase
+                            if (!currentNoteId || !editAiPreview) return
+                            const { error } = await supabase
                               .from('notes')
-                              .insert([{ title, category: '', content, project, user_id: userId }])
-                              .select('id')
+                              .update({ content: editAiPreview })
+                              .eq('id', currentNoteId)
                               .single()
                             if (error) throw new Error(error.message)
-
-                            const newId = (data as { id?: string } | null)?.id
-                            if (newId) {
-                              try { useNoteContextStore.getState?.()?.setCurrentNoteId?.(newId) } catch {}
-                            }
-
-                            // Done: fast-forward progress and close
-                            setImageNoteProgress(100)
-                            clearInterval(timer)
-                            clearInterval(msgTimer)
-                            // Keep palette open feel but redirect to notes
-                            const a = document.createElement('a')
-                            a.href = '/notes'
-                            document.body.appendChild(a)
-                            a.click()
-                            a.remove()
-                            // Close palette after redirect
+                            // Update UI immediately with the saved content
+                            try { updateCurrentNoteContent?.(editAiPreview) } catch { }
+                            // Broadcast a global event so any listeners can refetch
+                            try { window.dispatchEvent(new CustomEvent('note-updated', { detail: { id: currentNoteId } })) } catch { }
                             setOpen(false)
-                            resetImageNote()
-                            setImageNoteOpen(false)
+                            resetEditAi()
                           } catch (e: any) {
-                            console.error(e)
-                            setImageNoteError(e?.message || 'Failed to create note from image')
-                          } finally {
-                            setImageNoteWorking(false)
+                            console.error('Save failed', e)
+                            setEditAiError(e?.message || 'Failed to save changes')
                           }
                         }}
+                        className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
                       >
-                        {imageNoteWorking ? 'Working…' : 'Create'}
+                        Save changes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetEditAi}
+                        className="px-3 py-1.5 text-sm rounded-md border border-black/10 dark:border-white/10 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      >
+                        Discard
                       </button>
                     </div>
                   </div>
                 )}
-                {/* Removed "Show more" - list size is now auto-limited by viewport height */}
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+            </div>
+          )}
+          {/* Todos UI */}
+          {selectedCategory === 'todos' && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <ListTodo className="w-4 h-4 text-emerald-600" />
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Tasks</div>
+                </div>
+                {todoError && <div className="text-xs text-red-500">{todoError}</div>}
+                {todosLoading && (
+                  <div className="p-2 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                  </div>
+                )}
+                {!todosLoading && todos.length === 0 && (
+                  <div className="p-2 text-xs text-muted-foreground">No tasks</div>
+                )}
+                <div className="divide-y">
+                  {todos.filter((t: HomeworkRow) => !t.done).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className="w-full text-left p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+                      onClick={() => toggleTodo(t.id, true)}
+                      title="Mark as done"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{t.subject || 'Homework'}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {t.due_date ? `Due ${new Date(t.due_date).toLocaleDateString()}` : 'No due date'}
+                            {t.priority ? ` · Priority ${t.priority}` : ''}
+                          </div>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Done</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Minimal Notes Search UI */}
+          {selectedCategory === 'notes' && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Category"
+                    value={noteSearchCategory}
+                    onChange={(e) => setNoteSearchCategory(e.target.value)}
+                    className="h-8"
+                  />
+                  <Input
+                    placeholder="Project"
+                    value={noteSearchProject}
+                    onChange={(e) => setNoteSearchProject(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+                {noteError && <div className="text-xs text-red-500">{noteError}</div>}
+                {noteLoading && (
+                  <div className="p-2 text-xs text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+                  </div>
+                )}
+                {!noteLoading && (
+                  <div className="max-h-64 overflow-auto divide-y">
+                    {noteResults.length === 0 ? (
+                      <div className="p-2 text-xs text-muted-foreground">No notes</div>
+                    ) : (
+                      noteResults.map((n) => (
+                        <button
+                          key={n.id}
+                          type="button"
+                          className="w-full text-left p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors"
+                          onClick={() => {
+                            try { useNoteContextStore.getState?.()?.setCurrentNoteId?.(n.id) } catch { }
+                            router.push('/notes')
+                            setOpen(false)
+                          }}
+                          title={n.title || 'Open note'}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm text-gray-900 dark:text-gray-100 truncate">{n.title || 'Untitled'}</div>
+                              <div className="text-[11px] text-muted-foreground truncate">{[n.category, n.project].filter(Boolean).join(' · ') || '—'}</div>
+                            </div>
+                            {n.updated_at && (
+                              <div className="text-[10px] text-muted-foreground whitespace-nowrap">{new Date(n.updated_at).toLocaleDateString()}</div>
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Slow Image Generation UI (below search bar) */}
+          {(isGenSlow || slowLoading || slowUrl || slowError) && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <ImageIcon />
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Generate Slow Image</div>
+                </div>
+                {isGenSlow && (
+                  <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
+                    {genSlowPrompt || 'Type a prompt after “generate slow image:”'}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-600 dark:text-gray-400">Model</label>
+                  <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v as ImageModel)}>
+                    <SelectTrigger className="h-7 w-48">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {imageModels.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => { const p = genSlowPrompt; if (p) generateSlowImageFromPrompt(p, selectedModel) }}
+                    disabled={slowLoading || !genSlowPrompt}
+                    className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    {slowLoading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>) : 'Generate'}
+                  </button>
+                </div>
+                {slowLoading && (
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" /> This may take a while…
+                  </div>
+                )}
+                {slowError && <div className="text-xs text-red-500">{slowError}</div>}
+                {slowUrl && (
+                  <div className="flex flex-col gap-2">
+                    <div
+                      className={`relative w-full overflow-hidden rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 ${slowExpanded ? 'p-1' : 'p-2'}`}
+                      onWheel={(e) => {
+                        if (!slowExpanded) return
+                        e.preventDefault()
+                        const delta = -e.deltaY
+                        const factor = delta > 0 ? 1.1 : 0.9
+                        const next = Math.min(8, Math.max(1, slowScale * factor))
+                        setSlowScale(next)
+                      }}
+                      onMouseDown={(e) => {
+                        if (!slowExpanded) return
+                        e.preventDefault()
+                        setSlowDragging(true)
+                        setSlowLastPos({ x: e.clientX, y: e.clientY })
+                      }}
+                      onMouseMove={(e) => {
+                        if (!slowExpanded || !slowDragging || !slowLastPos) return
+                        e.preventDefault()
+                        const dx = e.clientX - slowLastPos.x
+                        const dy = e.clientY - slowLastPos.y
+                        setSlowTranslate((t) => ({ x: t.x + dx, y: t.y + dy }))
+                        setSlowLastPos({ x: e.clientX, y: e.clientY })
+                      }}
+                      onMouseUp={() => { if (slowDragging) { setSlowDragging(false); setSlowLastPos(null) } }}
+                      onMouseLeave={() => { if (slowDragging) { setSlowDragging(false); setSlowLastPos(null) } }}
+                    >
+                      {/* Expanded mode overlayed close button */}
+                      {slowExpanded && (
+                        <button
+                          type="button"
+                          aria-label="Close expanded image"
+                          className="absolute top-2 right-2 z-10 inline-flex items-center justify-center rounded-md border border-black/10 dark:border-white/10 bg-white/80 dark:bg-neutral-800/80 backdrop-blur px-1.5 py-1 hover:bg-white dark:hover:bg-neutral-800"
+                          onClick={() => setSlowExpanded(false)}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={slowUrl}
+                        alt="Generated"
+                        className={
+                          slowExpanded
+                            ? 'w-full h-auto max-h-[70vh] object-contain rounded'
+                            : 'max-h-64 mx-auto rounded cursor-zoom-in'
+                        }
+                        style={slowExpanded ? {
+                          transform: `translate(${slowTranslate.x}px, ${slowTranslate.y}px) scale(${slowScale})`,
+                          transformOrigin: 'center center',
+                          cursor: slowScale > 1 ? (slowDragging ? 'grabbing' : 'grab') : 'zoom-out',
+                          transition: slowDragging ? 'none' : 'transform 40ms linear'
+                        } : undefined}
+                        onClick={() => setSlowExpanded((v) => !v)}
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                        onClick={async () => {
+                          try {
+                            const filename = `image-${Date.now()}.png`
+                            const link = document.createElement('a')
+                            if (slowUrl.startsWith('data:')) {
+                              link.href = slowUrl
+                              link.download = filename
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            } else {
+                              const resp = await fetch(slowUrl)
+                              const blob = await resp.blob()
+                              const url = URL.createObjectURL(blob)
+                              link.href = url
+                              link.download = filename
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                              URL.revokeObjectURL(url)
+                            }
+                          } catch (e) {
+                            console.error('Save failed', e)
+                          }
+                        }}
+                      >
+                        <Download className="w-4 h-4" />
+                        <span className="text-xs">Save</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Image Generation UI */}
+          {(isGenImage || imgLoading || imgUrl || imgError) && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <ImageIcon />
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Generate Image</div>
+                </div>
+                {isGenImage && (
+                  <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap break-words">
+                    {genImagePrompt || 'Type a prompt after “generate image:”'}
+                  </div>
+                )}
+                {imgLoading && <div className="text-xs text-gray-600 dark:text-gray-400">Generating…</div>}
+                {imgError && <div className="text-xs text-red-500">{imgError}</div>}
+                {imgUrl && (
+                  <div className="flex flex-col gap-2">
+                    <div className="w-full overflow-hidden rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 p-2">
+                      {/* Preview */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imgUrl} alt="Generated" className="max-h-64 mx-auto rounded" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-[11px] break-all text-gray-700 dark:text-gray-300 bg-neutral-100 dark:bg-neutral-900 px-2 py-1 rounded border border-black/5 dark:border-white/10 flex-1">{imgUrl}</code>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (imgUrl) {
+                            await navigator.clipboard.writeText(imgUrl)
+                            setImgCopied(true)
+                            setTimeout(() => setImgCopied(false), 1000)
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      >
+                        <Copy className="w-4 h-4" />
+                        <span className="text-xs">{imgCopied ? 'Copied' : 'Copy URL'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {isCalc && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Result</div>
+                  <div className="text-gray-900 dark:text-gray-100 font-semibold text-base">
+                    {calcValue === null ? 'Invalid expression' : `${calcValue}`}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={copyCalc}
+                  disabled={calcValue === null}
+                  className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+                  aria-label="Copy result"
+                  title={copied ? 'Copied!' : 'Copy'}
+                >
+                  {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                  <span className="text-xs">{copied ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+          {(isEnvDev || isEnvProd) && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Environment</div>
+                  <div className="text-gray-900 dark:text-gray-100 font-semibold text-base">
+                    Set ENVIRONMENT to {isEnvDev ? 'dev' : 'prod'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => applyEnv(isEnvDev ? 'dev' : 'prod')}
+                  className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  aria-label="Apply environment"
+                  title="Apply"
+                >
+                  <span className="text-xs">Apply</span>
+                </button>
+              </div>
+            </div>
+          )}
+          {isEnvShow && (
+            <div className="w-full px-4 pb-2 -mt-2">
+              <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white/90 dark:bg-neutral-800/90 px-3 py-2 text-sm flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Environment</div>
+                  <div className="text-gray-900 dark:text-gray-100 font-semibold text-base">
+                    Current ENVIRONMENT: {currentEnv}
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-black/5 dark:border-white/10 bg-neutral-50 dark:bg-neutral-900 text-gray-800 dark:text-gray-200 text-xs select-none">
+                  {currentEnv}
+                </span>
+              </div>
+            </div>
+          )}
+          <div className="w-full px-2 pb-3">
+            <AnimatePresence>
+              {open && result && !selectedAction && (
+                <motion.div
+                  className="w-full rounded-xl overflow-hidden bg-white dark:bg-neutral-900 border border-black/5 dark:border-white/10"
+                  variants={container}
+                  initial="hidden"
+                  animate="show"
+                  exit="exit"
+                >
+                  {/* Empty state hint when no category chosen (All) and no query */}
+                  {!debouncedQuery && selectedCategory === 'all' && (
+                    <div className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-400">
+                      Start typing to begin. Type '/' followed by a route (e.g., /login) to navigate.
+                    </div>
+                  )}
+                  <motion.ul>
+                    {!imageNoteOpen && selectedCategory !== 'notes' && result.actions.map((action) => (
+                      <motion.li
+                        key={action.id}
+                        className="px-3 py-2 flex items-center justify-between hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                        variants={item}
+                        layout
+                        onClick={() => runAction(action)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            runAction(action)
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2 justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-black dark:text-white">
+                              {isValidElement(action.icon)
+                                ? cloneElement(action.icon as any, { className: "h-4 w-4 text-black dark:text-white" })
+                                : action.icon}
+                            </span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{action.label}</span>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">{action.description}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">{action.short}</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400 text-right">{action.end}</span>
+                        </div>
+                      </motion.li>
+                    ))}
+                  </motion.ul>
+                  {/* Image→Note sub-UI */}
+                  {imageNoteOpen && (
+                    <div className="p-3 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">Title</label>
+                          <Input
+                            placeholder="Note title"
+                            value={imageNoteTitle}
+                            onChange={(e) => setImageNoteTitle(e.target.value)}
+                            disabled={imageNoteWorking}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">Project</label>
+                          <Input
+                            placeholder="Project (optional)"
+                            value={imageNoteProject}
+                            onChange={(e) => setImageNoteProject(e.target.value)}
+                            disabled={imageNoteWorking}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">Image</label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          disabled={imageNoteWorking}
+                          onChange={(e) => setImageNoteFile((e.target.files && e.target.files[0]) || null)}
+                        />
+                      </div>
+                      {imageNoteError && (
+                        <div className="text-xs text-red-600">{imageNoteError}</div>
+                      )}
+                      {imageNoteWorking && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-xs text-neutral-600 dark:text-neutral-400">
+                            <span>{imageNoteMessage}</span>
+                            <span>{Math.round(imageNoteProgress)}%</span>
+                          </div>
+                          <Progress value={imageNoteProgress} className="h-2" />
+                          <div className="text-[10px] text-neutral-500">Estimated ~2 minutes</div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 text-sm rounded-md border border-black/10 dark:border-white/10 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                          disabled={imageNoteWorking}
+                          onClick={() => {
+                            resetImageNote()
+                            setImageNoteOpen(false)
+                          }}
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                          disabled={imageNoteWorking || !imageNoteFile}
+                          onClick={async () => {
+                            setImageNoteError(null)
+                            if (!imageNoteFile) {
+                              setImageNoteError('Please select an image')
+                              return
+                            }
+                            try {
+                              setImageNoteWorking(true)
+                              setImageNoteProgress(0)
+                              // 2 minute timeline
+                              const start = Date.now()
+                              const total = 120000
+                              const timer = setInterval(() => {
+                                const elapsed = Date.now() - start
+                                const pct = Math.min(100, (elapsed / total) * 100)
+                                setImageNoteProgress(pct)
+                              }, 200)
+                              let msgIdx = 0
+                              setImageNoteMessage(imageNoteMessages[msgIdx])
+                              const msgTimer = setInterval(() => {
+                                msgIdx = (msgIdx + 1) % imageNoteMessages.length
+                                setImageNoteMessage(imageNoteMessages[msgIdx])
+                              }, 9000)
+
+                              // Upload/process
+                              const fd = new FormData()
+                              fd.append('file', imageNoteFile)
+                              const res = await fetch('/api/note-from-image', { method: 'POST', body: fd })
+                              if (!res.ok) throw new Error((await res.json().catch(() => ({ error: res.statusText }))).error || 'Failed to process image')
+                              const j = await res.json()
+
+                              // Create note
+                              const { data: userRes } = await supabase.auth.getUser()
+                              const userId = userRes?.user?.id
+                              if (!userId) throw new Error('Not signed in')
+                              const title = imageNoteTitle.trim() || j.title || (imageNoteFile.name.replace(/\.[^.]+$/, '')) || 'Image Note'
+                              const project = imageNoteProject.trim()
+                              const content: string = j.content || ''
+                              if (!content) throw new Error('No markdown content returned')
+                              setImageNoteMessage('Saving note…')
+                              const { data, error } = await supabase
+                                .from('notes')
+                                .insert([{ title, category: '', content, project, user_id: userId }])
+                                .select('id')
+                                .single()
+                              if (error) throw new Error(error.message)
+
+                              const newId = (data as { id?: string } | null)?.id
+                              if (newId) {
+                                try { useNoteContextStore.getState?.()?.setCurrentNoteId?.(newId) } catch { }
+                              }
+
+                              // Done: fast-forward progress and close
+                              setImageNoteProgress(100)
+                              clearInterval(timer)
+                              clearInterval(msgTimer)
+                              // Keep palette open feel but redirect to notes
+                              const a = document.createElement('a')
+                              a.href = '/notes'
+                              document.body.appendChild(a)
+                              a.click()
+                              a.remove()
+                              // Close palette after redirect
+                              setOpen(false)
+                              resetImageNote()
+                              setImageNoteOpen(false)
+                            } catch (e: any) {
+                              console.error(e)
+                              setImageNoteError(e?.message || 'Failed to create note from image')
+                            } finally {
+                              setImageNoteWorking(false)
+                            }
+                          }}
+                        >
+                          {imageNoteWorking ? 'Working…' : 'Create'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Removed "Show more" - list size is now auto-limited by viewport height */}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
-      </div>
       </div>
     </motion.div>
   )

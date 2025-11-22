@@ -20,6 +20,7 @@ export interface Deck {
   cards: Card[]
   created_at?: string
   updated_at?: string
+  exclude_from_srs?: boolean
 }
 
 interface DeckContextType {
@@ -230,7 +231,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
       id: updatedDeck.id,
       name: updatedDeck.name,
       description: updatedDeck.description,
-      tag: updatedDeck.tag
+      tag: updatedDeck.tag,
+      exclude_from_srs: updatedDeck.exclude_from_srs
     });
     if (!returnedSupabaseDeck || !returnedSupabaseDeck.user_id) {
       throw new Error("Failed to update deck or user_id missing")
@@ -246,6 +248,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
       card_count: returnedSupabaseDeck.card_count || currentDeck?.card_count || 0,
       created_at: returnedSupabaseDeck.created_at ?? currentDeck?.created_at ?? undefined,
       updated_at: returnedSupabaseDeck.updated_at ?? undefined,
+      exclude_from_srs: returnedSupabaseDeck.exclude_from_srs ?? currentDeck?.exclude_from_srs ?? false,
     };
     setDecks((prev) =>
       prev.map((deck) => (deck.id === newAppContextDeck.id ? newAppContextDeck : deck)),
