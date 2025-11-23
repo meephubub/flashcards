@@ -27,24 +27,68 @@ export const DEFAULT_CARD_PROGRESS: CardProgress = {
 /**
  * Calculate the next review date based on the FSRS algorithm
  * 
- * Rating system (0-5):
+ * 0: Complete blackout -> Again (1)
+ * 1: Incorrect response -> Again (1)
+ * 2: Correct with difficulty -> Hard (2)
+ * 3: Correct with effort -> Good (3)
+ * 4: Correct with hesitation -> Good (3)
+ * 5: Perfect recall -> Easy (4)
+ */
+export function calculateNextReview(
+  currentProgress: CardProgress,
+  rating: ConfidenceRating,
+  params?: any
+): CardProgress {
+  const f = fsrs(params)
+  const now = new Date()
 
-  const record = fsrsInstance.next(baseCard, now, ratingToGrade(rating))
+  // Convert our 0-5 rating to FSRS Grade (1-4)
+  const grade = ratingToGrade(rating)
+
+  // Reconstruct the FSRS card object from our saved state
+  const baseCard: FsrsCard = currentProgress.fsrsState
+    ? (currentProgress.fsrsState as FsrsCard)
+    : createEmptyCard(new Date(currentProgress.dueDate || now))
+
+  // If the card is new (no reps), ensure due date is now so it gets scheduled immediately
+  if (currentProgress.repetitions === 0) {
+    baseCard.due = now
+    baseCard.last_review = undefined
+  }
+
+  const record = f.next(baseCard, now, grade)
   const nextCard = record.card as FsrsCard
 
-  const due = nextCard.due ?? now
+  const due = nextCard.due
 
   const nextProgress: CardProgress = {
-    easeFactor: currentProgress.easeFactor,
+    easeFactor: currentProgress.easeFactor, // Keep legacy field for now
     interval: nextCard.scheduled_days,
     repetitions: nextCard.reps,
-    dueDate: new Date(due).toISOString(),
+    dueDate: due.toISOString(),
     lastReviewed: now.toISOString(),
     fsrsState: nextCard,
     fsrsParams: params, // Persist params used for this review
   }
 
   return nextProgress
+}
+
+function ratingToGrade(rating: ConfidenceRating): Grade {
+  switch (rating) {
+    case 0:
+    case 1:
+      return 1 // Again
+    case 2:
+      return 2 // Hard
+    case 3:
+    case 4:
+      return 3 // Good
+    case 5:
+      return 4 // Easy
+    default:
+      return 3 // Default to Good
+  }
 }
 
 /**
