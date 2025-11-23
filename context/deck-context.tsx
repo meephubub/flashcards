@@ -118,10 +118,6 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         };
       }).filter(Boolean) as Deck[];
 
-      // Set initial decks to show something quickly
-      setDecks(initialDecks)
-      console.log("Set initial decks:", initialDecks.length)
-
       // Then fetch cards separately for each deck
       // This avoids issues with the progress relationship
       const completedDecks = await Promise.all(

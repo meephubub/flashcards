@@ -145,7 +145,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     };
 
     initializeCards();
-  }, [deck, deckId, isSpacedRepetitionEnabled, normalizedStudy.cardsPerSession, getDueCards, initialSide])
+  }, [deck, deckId, isSpacedRepetitionEnabled, normalizedStudy.cardsPerSession, getDueCards])
 
   useEffect(() => {
     if (cards.length === 0) return
