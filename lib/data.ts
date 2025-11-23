@@ -246,12 +246,11 @@ export async function getDeck(supabase: SupabaseClient, deckId: number, userId: 
     deck.cards = []
 
     try {
-      // Fetch cards for this deck - without the progress relation first
+      // Fetch cards for this deck
       const { data: cards, error: cardsError } = await supabase
         .from("cards")
         .select("*")
         .eq("deck_id", deckId)
-      // .eq("user_id", userId) // Temporarily removed user_id filter as per user request, RLS should handle this
 
       if (cardsError) {
         console.error(`Error fetching cards for deck ${deckId} (user ${userId}):`, cardsError)
@@ -261,30 +260,43 @@ export async function getDeck(supabase: SupabaseClient, deckId: number, userId: 
         // Attach cards to the deck
         deck.cards = cards || []
 
-        // Optionally try to fetch progress data separately if needed
-        // This is commented out until we confirm the progress table is properly set up
-        /*
+        // Fetch progress data for each card
         if (cards && cards.length > 0) {
           try {
-            // For each card, try to fetch its progress
-            for (const card of cards) {
-              const { data: progressData } = await supabase
-                .from("progress")
-                .select("*")
-                .eq("card_id", card.id)
-                .maybeSingle()
-              
-              if (progressData) {
-                // @ts-ignore - Add progress data to the card
-                card.progress = progressData
-              }
+            // Fetch all progress records for this user and cards
+            const cardIds = cards.map(c => c.id)
+            const { data: progressData, error: progressError } = await supabase
+              .from("card_progress")
+              .select("*")
+              .in("card_id", cardIds)
+              .eq("user_id", userId)
+
+            if (progressError) {
+              console.warn(`Could not fetch progress data for deck ${deckId}:`, progressError)
+            } else if (progressData) {
+              // Create a map of card_id to progress
+              const progressMap = new Map()
+              progressData.forEach(progress => {
+                progressMap.set(progress.card_id, progress)
+              })
+
+              // Attach progress to each card
+              deck.cards = cards.map(card => {
+                const progress = progressMap.get(card.id)
+                if (progress) {
+                  return {
+                    ...card,
+                    progress: progress
+                  }
+                }
+                return card
+              })
             }
           } catch (progressError) {
             console.warn(`Could not fetch progress data for some cards in deck ${deckId}:`, progressError)
             // Continue without progress data
           }
         }
-        */
       }
     } catch (cardsError) {
       console.error(`Unexpected error fetching cards for deck ${deckId}:`, cardsError)

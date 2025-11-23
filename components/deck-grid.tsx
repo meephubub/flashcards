@@ -13,12 +13,13 @@ import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion } from "framer-motion"
+import { formatDate } from "@/lib/date-utils"
 
 // Card component with hover effect
 function DeckCard({ deck, index }: { deck: any, index: number }) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
-  
+
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setPosition({
@@ -26,7 +27,7 @@ function DeckCard({ deck, index }: { deck: any, index: number }) {
       y: e.clientY - rect.top
     });
   };
-  
+
   return (
     <motion.div
       key={deck.id}
@@ -35,7 +36,7 @@ function DeckCard({ deck, index }: { deck: any, index: number }) {
       transition={{ type: "spring", stiffness: 400, damping: 25, delay: index * 0.05 }}
       className="h-full"
     >
-      <div 
+      <div
         className={`relative h-full rounded-2xl group cursor-pointer overflow-hidden transition-all duration-300 ${isHovering ? 'transform -translate-y-1 scale-[1.02]' : ''}`}
         onMouseMove={handleMouseMove}
         onMouseEnter={() => setIsHovering(true)}
@@ -43,18 +44,18 @@ function DeckCard({ deck, index }: { deck: any, index: number }) {
       >
         {/* Background gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-white/80 to-white/30 dark:from-gray-800/80 dark:to-gray-900/30 rounded-2xl"></div>
-        
+
         {/* Animated highlight effect */}
-        <div 
+        <div
           className="absolute inset-0 rounded-2xl transition-opacity duration-300 pointer-events-none"
           style={{
             opacity: isHovering ? 0.7 : 0,
-            background: isHovering 
-              ? `radial-gradient(circle at ${position.x}px ${position.y}px, rgba(255,255,255,0.8) 0%, transparent 60%)` 
+            background: isHovering
+              ? `radial-gradient(circle at ${position.x}px ${position.y}px, rgba(255,255,255,0.8) 0%, transparent 60%)`
               : 'none',
           }}
         />
-        
+
         <Card className="overflow-hidden rounded-2xl bg-white/50 dark:bg-gray-900/50 backdrop-blur-xl h-full flex flex-col shadow-[0_10px_20px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_20px_-15px_rgba(0,0,0,0.3)] border border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300/70 dark:hover:border-gray-700/70 transition-colors">
           <Link href={`/deck/${deck.id}`} className="flex-1">
             <CardContent className="p-6 cursor-pointer">
@@ -74,22 +75,22 @@ function DeckCard({ deck, index }: { deck: any, index: number }) {
                 </div>
                 <div className="flex items-center">
                   <Clock className="h-4 w-4 mr-2 opacity-60" />
-                  <p>Last studied: {deck.last_studied || 'Never'}</p>
+                  <p>Last studied: {formatDate(deck.last_studied, 'relative')}</p>
                 </div>
               </div>
             </CardContent>
           </Link>
           <CardFooter className="border-t border-gray-200/30 dark:border-white/10 p-4 flex justify-between">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               asChild
               className="rounded-full text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-200"
             >
               <Link href={`/deck/${deck.id}/edit`}>Edit Cards</Link>
             </Button>
-            <Button 
-              size="sm" 
+            <Button
+              size="sm"
               asChild
               className="rounded-full bg-gray-900/90 hover:bg-black text-white dark:bg-white/90 dark:text-black dark:hover:bg-white transition-all duration-200"
             >
@@ -109,7 +110,7 @@ function DeckCard({ deck, index }: { deck: any, index: number }) {
 function CreateNewDeckCard({ onClick, index }: { onClick: () => void, index: number }) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
-  
+
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setPosition({
@@ -117,7 +118,7 @@ function CreateNewDeckCard({ onClick, index }: { onClick: () => void, index: num
       y: e.clientY - rect.top
     });
   };
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -134,19 +135,19 @@ function CreateNewDeckCard({ onClick, index }: { onClick: () => void, index: num
       >
         {/* Background gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-50/90 to-gray-100/70 dark:from-gray-800/90 dark:to-gray-900/70 rounded-2xl"></div>
-        
+
         {/* Cursor following glow effect */}
-        <div 
+        <div
           className="absolute inset-0 rounded-2xl transition-opacity duration-300 pointer-events-none"
           style={{
             opacity: isHovering ? 0.7 : 0,
-            background: isHovering 
-              ? `radial-gradient(circle at ${position.x}px ${position.y}px, rgba(255,255,255,0.8) 0%, transparent 60%)` 
+            background: isHovering
+              ? `radial-gradient(circle at ${position.x}px ${position.y}px, rgba(255,255,255,0.8) 0%, transparent 60%)`
               : 'none',
           }}
         />
-        
-                <div className="relative h-full rounded-xl bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300 dark:hover:border-gray-700 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-center min-h-[240px] group">
+
+        <div className="relative h-full rounded-xl bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300 dark:hover:border-gray-700 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-center min-h-[240px] group">
           <div className="text-center flex flex-col items-center justify-center">
             <div className="w-12 h-12 rounded-lg bg-gray-200/60 dark:bg-gray-800/60 flex items-center justify-center mb-3 group-hover:bg-gray-300/60 dark:group-hover:bg-gray-700/60 transition-colors duration-200">
               <PlusCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />
@@ -226,14 +227,14 @@ export function DeckGrid() {
             size="sm"
             asChild
             className="rounded-full border-gray-200/50 hover:border-gray-300/70 hover:bg-white/70 dark:border-gray-700/50 dark:hover:border-gray-600/70 dark:hover:bg-gray-800/70 transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] backdrop-blur-sm"
-         >
+          >
             <Link href="/study/all-due">
               <Clock className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
               Study all due
             </Link>
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setIsGenerateOpen(true)}
             className="rounded-full border-gray-200/50 hover:border-gray-300/70 hover:bg-white/70 dark:border-gray-700/50 dark:hover:border-gray-600/70 dark:hover:bg-gray-800/70 transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] backdrop-blur-sm"
@@ -241,8 +242,8 @@ export function DeckGrid() {
             <Sparkles className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
             AI Generate
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setIsImportOpen(true)}
             className="rounded-full border-gray-200/50 hover:border-gray-300/70 hover:bg-white/70 dark:border-gray-700/50 dark:hover:border-gray-600/70 dark:hover:bg-gray-800/70 transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] backdrop-blur-sm"
@@ -250,7 +251,7 @@ export function DeckGrid() {
             <FileUp className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
             Import
           </Button>
-          <Button 
+          <Button
             onClick={() => setIsCreateDeckOpen(true)}
             size="sm"
             className="rounded-full bg-gray-900/90 hover:bg-black text-white dark:bg-white/90 dark:text-black dark:hover:bg-white transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] dark:shadow-[0_2px_10px_-5px_rgba(255,255,255,0.2)]"
@@ -295,9 +296,9 @@ export function DeckGrid() {
           <DeckCard key={deck.id} deck={deck} index={index} />
         ))}
 
-        <CreateNewDeckCard 
-          onClick={() => setIsCreateDeckOpen(true)} 
-          index={filteredDecks.length} 
+        <CreateNewDeckCard
+          onClick={() => setIsCreateDeckOpen(true)}
+          index={filteredDecks.length}
         />
       </div>
 

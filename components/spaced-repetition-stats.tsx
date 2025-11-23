@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Calendar, Clock } from "lucide-react"
 import { useDecks } from "@/context/deck-context"
-import { isCardDue } from "@/lib/spaced-repetition"
+import { formatDate } from "@/lib/date-utils"
 
 interface SpacedRepetitionStatsProps {
   deckId: number
@@ -17,12 +17,15 @@ export function SpacedRepetitionStats({ deckId }: SpacedRepetitionStatsProps) {
 
   // Count cards with progress data
   const totalCards = deck.cards.length
-  const cardsWithProgress = deck.cards.filter((card) => card.progress).length
+  const cardsWithProgress = deck.cards.filter((card) => (card as any).progress).length
 
-  // Count due cards
+  // Count due cards - use database field names (snake_case)
+  const now = new Date()
   const dueCards = deck.cards.filter((card) => {
-    if (!card.progress) return true // If no progress, it's due
-    return isCardDue(card.progress)
+    const progress = (card as any).progress
+    if (!progress) return true // If no progress, it's due
+    const dueDate = new Date(progress.due_date)
+    return now >= dueDate
   }).length
 
   // Calculate percentage of cards in the system
@@ -54,7 +57,7 @@ export function SpacedRepetitionStats({ deckId }: SpacedRepetitionStatsProps) {
               <Clock className="h-3 w-3" />
               Last studied:
             </span>
-            <span className="font-medium">{deck.lastStudied}</span>
+            <span className="font-medium">{formatDate(deck.last_studied, 'relative')}</span>
           </div>
         </div>
       </CardContent>

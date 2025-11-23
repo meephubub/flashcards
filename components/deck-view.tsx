@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SpacedRepetitionStats } from "@/components/spaced-repetition-stats"
 import { getCachedExamData } from "@/lib/exam-cache"
 import type { Card } from "@/lib/supabase"
+import { formatDate } from "@/lib/date-utils"
 
 interface DeckViewProps {
   deckId: number
@@ -187,8 +188,8 @@ export function DeckView({ deckId }: DeckViewProps) {
                   <div className="font-medium">{card.front}</div>
                   {stateLabel && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${stateLabel === "New" ? "bg-blue-50 text-blue-600 border-blue-200" :
-                        stateLabel === "Review" ? "bg-green-50 text-green-600 border-green-200" :
-                          "bg-orange-50 text-orange-600 border-orange-200"
+                      stateLabel === "Review" ? "bg-green-50 text-green-600 border-green-200" :
+                        "bg-orange-50 text-orange-600 border-orange-200"
                       }`}>
                       {stateLabel}
                     </span>
@@ -197,7 +198,7 @@ export function DeckView({ deckId }: DeckViewProps) {
                 <div className="text-sm text-gray-600 dark:text-gray-300 pt-4 border-t">{card.back}</div>
                 {isSpacedRepetitionEnabled && progress && (
                   <div className="mt-2 pt-2 border-t text-xs text-gray-500 flex justify-between">
-                    <span>Next: {new Date(progress.due_date).toLocaleDateString()}</span>
+                    <span>Next: {formatDate(progress.due_date, 'short')}</span>
                     <span>Ease: {progress.ease_factor?.toFixed(2) || "2.50"}</span>
                   </div>
                 )}
