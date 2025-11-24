@@ -672,14 +672,16 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       {!studyComplete && (
         <>
           <div
-            className={`card-flip ${isFlipped ? "flipped" : ""} transition-all duration-300`}
-            onClick={handleFlip}
+            className={`card-flip ${isFlipped ? "flipped" : ""} transition-all duration-300 mb-6`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <div className="card-flip-inner relative h-[60vh] md:h-[420px] max-h-[520px] w-full transition-transform duration-300 ease-in-out">
-              <Card className="card-front absolute w-full h-full flex items-center justify-center p-4 md:p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300">
+            <div className="card-flip-inner relative h-[500px] md:h-[520px] w-full transition-transform duration-300 ease-in-out">
+              <Card
+                className="card-front absolute w-full h-full flex items-center justify-center p-4 md:p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300"
+                onClick={handleFlip}
+              >
                 <div className="text-center text-2xl space-y-6 max-w-[88%]">
                   {currentCard.front_img_url && (
                     <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
@@ -696,14 +698,17 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                   </div>
                 </div>
               </Card>
-              <Card className="card-back absolute w-full h-full flex items-center justify-center p-4 md:p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300">
-                <div className="text-center space-y-6 max-w-[88%]">
+              <Card
+                className="card-back absolute w-full h-full flex flex-col items-center justify-center p-4 md:p-8 bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300 overflow-y-auto cursor-pointer"
+                onClick={handleFlip}
+              >
+                <div className="text-center space-y-4 w-full max-w-[88%] flex-shrink-0">
                   {currentCard.back_img_url && (
                     <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
                       <img
                         src={currentCard.back_img_url}
                         alt="Back side image"
-                        className="max-h-[30vh] md:max-h-[240px] w-auto object-contain rounded-md"
+                        className="max-h-[200px] w-auto object-contain rounded-md"
                       />
                     </div>
                   )}
@@ -711,11 +716,11 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
 
                   {/* Show confidence rating buttons directly on the back of the card when using spaced repetition */}
                   {isFlipped && (
-                    <div className="mt-6 animate-fadeIn">
+                    <div className="mt-4 animate-fadeIn">
                       {isSpacedRepetitionEnabled ? (
                         <>
                           <div className="text-sm text-neutral-600 mb-3">How well did you know this? (Press 0-5)</div>
-                          <div className="flex justify-center gap-2">
+                          <div className="flex justify-center gap-3 flex-wrap">
                             {[0, 1, 2, 3, 4, 5].map((rating) => {
                               // Use different button variants based on rating
                               let variant = "outline"
@@ -731,10 +736,13 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                                 <Button
                                   key={rating}
                                   variant={variant as any}
-                                  className={`h-11 w-11 font-medium text-lg border border-black/20 ${extra} hover:scale-105 transition-all duration-150`}
+                                  className={`h-12 w-12 font-medium text-lg border border-black/20 ${extra} hover:scale-105 transition-all duration-150 flex-shrink-0`}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleRating(rating as ConfidenceRating)
+                                  }}
+                                  onTouchStart={(e) => {
+                                    e.stopPropagation()
                                   }}
                                   title={getRatingDescription(rating as ConfidenceRating)}
                                   onMouseEnter={() => setHoveredRating(rating as ConfidenceRating)}
@@ -745,7 +753,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                               )
                             })}
                           </div>
-                          <div className="mt-3 text-xs text-neutral-500">
+                          <div className="mt-3 text-xs text-neutral-500 min-h-[20px]">
                             {hoveredRating !== null && (
                               <div className="animate-fadeIn">{getRatingDescription(hoveredRating)}</div>
                             )}

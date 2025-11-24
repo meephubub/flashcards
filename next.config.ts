@@ -1,9 +1,6 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -11,6 +8,7 @@ const nextConfig: NextConfig = {
   async redirects() {
     return []
   },
+  turbopack: {},
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.module.rules.push({
