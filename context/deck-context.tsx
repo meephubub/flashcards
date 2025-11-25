@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { useAuth } from './auth-context'; // Assuming auth-context.tsx is in the same directory
 import { SupabaseClient, Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
@@ -61,6 +61,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   const [decks, setDecks] = useState<Deck[]>([])
   const [loading, setLoading] = useState(true) // This loading is for decks data
   const [dueCardsCache, setDueCardsCache] = useState<Record<number, Card[]>>({})
+  const dueCardsCacheRef = useRef<Record<number, Card[]>>({})
 
   const refreshDecks = useCallback(async () => {
     if (!user) {
@@ -159,6 +160,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         }
       } catch { }
       setDueCardsCache({})
+      dueCardsCacheRef.current = {}
     } catch (error) {
       console.error("Error refreshing decks:", error);
       setDecks([]);
@@ -286,9 +288,10 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         return deck
       }),
     )
-    const newDueCardsCache = { ...dueCardsCache };
+    const newDueCardsCache = { ...dueCardsCacheRef.current };
     delete newDueCardsCache[deckId];
     setDueCardsCache(newDueCardsCache);
+    dueCardsCacheRef.current = newDueCardsCache;
     return newCard
   }
 
@@ -317,9 +320,10 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         return deck
       }),
     )
-    const newDueCardsCache = { ...dueCardsCache };
+    const newDueCardsCache = { ...dueCardsCacheRef.current };
     delete newDueCardsCache[deckId];
     setDueCardsCache(newDueCardsCache);
+    dueCardsCacheRef.current = newDueCardsCache;
     return updatedCard
   }
 
@@ -342,9 +346,10 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         return deck
       }),
     )
-    const newDueCardsCache = { ...dueCardsCache };
+    const newDueCardsCache = { ...dueCardsCacheRef.current };
     delete newDueCardsCache[deckId];
     setDueCardsCache(newDueCardsCache);
+    dueCardsCacheRef.current = newDueCardsCache;
     return true
   }
 
@@ -382,9 +387,10 @@ export function DeckProvider({ children }: { children: ReactNode }) {
           return deck;
         }),
       );
-      const newCache = { ...dueCardsCache };
+      const newCache = { ...dueCardsCacheRef.current };
       delete newCache[deckId];
       setDueCardsCache(newCache);
+      dueCardsCacheRef.current = newCache;
       return true
     } catch (error) {
       return false
@@ -393,17 +399,19 @@ export function DeckProvider({ children }: { children: ReactNode }) {
 
   const getDueCards = useCallback(async (deckId: number): Promise<Card[]> => {
     if (!user) return [];
-    if (dueCardsCache[deckId]) {
-      return dueCardsCache[deckId];
+    if (dueCardsCacheRef.current[deckId]) {
+      return dueCardsCacheRef.current[deckId];
     }
     try {
       const fetchedDueCards = await dataService.getDueCards(supabase, deckId);
-      setDueCardsCache(prevCache => ({ ...prevCache, [deckId]: fetchedDueCards }));
+      const newCache = { ...dueCardsCacheRef.current, [deckId]: fetchedDueCards };
+      dueCardsCacheRef.current = newCache;
+      setDueCardsCache(newCache);
       return fetchedDueCards;
     } catch (error) {
       return [];
     }
-  }, [user, dueCardsCache, supabase]);
+  }, [user, supabase]);
 
   return (
     <DeckContext.Provider
