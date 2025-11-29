@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { Card as UICard } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -31,6 +31,7 @@ export function AllDueStudyMode() {
   const [progress, setProgress] = useState(0)
   const [studyComplete, setStudyComplete] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
+  const hasInitializedRef = useRef(false)
 
   const studySettings: any = settings?.studySettings ?? {}
   const isSpacedRepetitionEnabled: boolean =
@@ -39,6 +40,10 @@ export function AllDueStudyMode() {
       : true
 
   useEffect(() => {
+    // Only load cards once on mount, not when decks array changes
+    // (decks array changes when last_studied updates after rating a card)
+    if (hasInitializedRef.current) return
+
     const loadDue = async () => {
       if (!decks || decks.length === 0) {
         setCards([])
@@ -56,6 +61,7 @@ export function AllDueStudyMode() {
       setIsFlipped(false)
       setStudyComplete(results.length === 0)
       setProgress(results.length > 0 ? (0 / results.length) * 100 : 0)
+      hasInitializedRef.current = true
     }
     void loadDue()
   }, [decks, getDueCards])
@@ -69,7 +75,7 @@ export function AllDueStudyMode() {
   useEffect(() => {
     const header = document.querySelector('header') as HTMLElement
     const sidebar = document.querySelector('[data-sidebar="sidebar"]') as HTMLElement
-    
+
     if (focusMode) {
       // Hide header and sidebar on mobile
       if (window.innerWidth < 768) {
@@ -176,10 +182,10 @@ export function AllDueStudyMode() {
 
   const handleTouchEnd = () => {
     if (!touchStart || !touchEnd) return
-    
+
     const deltaX = touchStart.x - touchEnd.x
     const deltaY = Math.abs(touchStart.y - touchEnd.y)
-    
+
     // Only handle horizontal swipes (prevent accidental vertical swipes)
     if (Math.abs(deltaX) > minSwipeDistance && deltaY < 100) {
       if (deltaX > 0) {
@@ -195,6 +201,64 @@ export function AllDueStudyMode() {
       }
     }
   }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (studyComplete) return
+
+      switch (e.key) {
+        case " ": // Space
+        case "Enter":
+          e.preventDefault()
+          handleFlip()
+          break
+        case "0":
+          if (isFlipped) {
+            handleRating(0)
+          }
+          break
+        case "1":
+          if (isFlipped) {
+            handleRating(1)
+          }
+          break
+        case "2":
+          if (isFlipped) {
+            handleRating(2)
+          }
+          break
+        case "3":
+          if (isFlipped) {
+            handleRating(3)
+          }
+          break
+        case "4":
+          if (isFlipped) {
+            handleRating(4)
+          }
+          break
+        case "5":
+          if (isFlipped) {
+            handleRating(5)
+          }
+          break
+        case "ArrowLeft":
+        case "Left":
+          if (currentIndex > 0) {
+            handlePrevious()
+          }
+          break
+        case "ArrowRight":
+        case "Right":
+          // In spaced repetition mode, must rate the card (no skipping)
+          break
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isFlipped, currentIndex, studyComplete])
 
   const currentEntry = cards[currentIndex]
   const currentCard = currentEntry?.card
@@ -334,9 +398,9 @@ export function AllDueStudyMode() {
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={() => setFocusMode(!focusMode)}
                       className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150 h-11 w-11"
                     >
