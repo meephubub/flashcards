@@ -31,7 +31,9 @@ export function AllDueStudyMode() {
   const [progress, setProgress] = useState(0)
   const [studyComplete, setStudyComplete] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
+  const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null)
   const hasInitializedRef = useRef(false)
+  const FLIP_ANIMATION_DURATION = 600 // ms, matches CSS duration
 
   const studySettings: any = settings?.studySettings ?? {}
   const isSpacedRepetitionEnabled: boolean =
@@ -108,12 +110,22 @@ export function AllDueStudyMode() {
 
   const handleNext = () => {
     if (cards.length === 0) return
-    if (currentIndex < cards.length - 1) {
-      setCurrentIndex((prev) => prev + 1)
+
+    // If card is flipped, flip it back first, then navigate after animation
+    if (isFlipped) {
       setIsFlipped(false)
+      if (currentIndex < cards.length - 1) {
+        setPendingCardIndex(currentIndex + 1)
+      } else {
+        setPendingCardIndex(-1) // Sentinel for completion
+      }
     } else {
-      setStudyComplete(true)
-      setIsFlipped(false)
+      // Card already showing front, can navigate immediately
+      if (currentIndex < cards.length - 1) {
+        setCurrentIndex((prev) => prev + 1)
+      } else {
+        setStudyComplete(true)
+      }
     }
   }
 
@@ -157,6 +169,22 @@ export function AllDueStudyMode() {
       handleNext()
     }
   }
+
+  // Handle pending card index after flip animation completes
+  useEffect(() => {
+    if (pendingCardIndex !== null) {
+      const timer = setTimeout(() => {
+        if (pendingCardIndex === -1) {
+          setStudyComplete(true)
+        } else {
+          setCurrentIndex(pendingCardIndex)
+        }
+        setPendingCardIndex(null)
+      }, FLIP_ANIMATION_DURATION)
+      return () => clearTimeout(timer)
+    }
+  }, [pendingCardIndex])
+
 
   // Touch gesture state
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null)
