@@ -193,10 +193,10 @@ importers:
         version: 4.0.8(@types/react@19.1.9)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@vercel/analytics':
         specifier: ^1.5.0
-        version: 1.5.0(next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)
+        version: 1.5.0(next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)
       '@vercel/speed-insights':
         specifier: ^1.2.0
-        version: 1.2.0(next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)
+        version: 1.2.0(next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)
       '@xenova/transformers':
         specifier: ^2.17.2
         version: 2.17.2
@@ -238,7 +238,7 @@ importers:
         version: 1.0.16
       flags:
         specifier: ^4.0.1
-        version: 4.0.1(next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        version: 4.0.1(next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       framer-motion:
         specifier: ^12.14.0
         version: 12.23.12(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -403,7 +403,7 @@ importers:
         version: 0.9.9(@types/react-dom@19.1.7(@types/react@19.1.9))(@types/react@19.1.9)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       x402-next:
         specifier: ^0.6.5
-        version: 0.6.5(@solana/sysvars@2.3.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2))(@tanstack/query-core@5.90.2)(@tanstack/react-query@5.90.2(react@19.1.1))(@types/react@19.1.9)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(typescript@5.9.2)(utf-8-validate@5.0.10)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+        version: 0.6.5(@solana/sysvars@2.3.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2))(@tanstack/query-core@5.90.2)(@tanstack/react-query@5.90.2(react@19.1.1))(@types/react@19.1.9)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(typescript@5.9.2)(utf-8-validate@5.0.10)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       zod:
         specifier: ^3.25.28
         version: 3.25.76
@@ -424,8 +424,8 @@ importers:
         specifier: ^2.8.32
         version: 2.8.32
       next:
-        specifier: 16.0.2-canary.21
-        version: 16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        specifier: ^16.1.0-canary.12
+        version: 16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       patch-package:
         specifier: ^8.0.0
         version: 8.0.0
@@ -568,9 +568,6 @@ packages:
   '@edge-runtime/cookies@5.0.2':
     resolution: {integrity: sha512-Sd8LcWpZk/SWEeKGE8LT6gMm5MGfX/wm+GPnh1eBEtCpya3vYqn37wYknwAHw92ONoyyREl1hJwxV/Qx2DWNOg==}
     engines: {node: '>=16'}
-
-  '@emnapi/runtime@1.4.5':
-    resolution: {integrity: sha512-++LApOtY0pEEz1zrd9vy1/zXVaVJJ/EbAF3u0fXIzPJEDtnITsBGbbK0EkM72amhl/R5b+5xx0Y/QhcVOpuulg==}
 
   '@emnapi/runtime@1.7.1':
     resolution: {integrity: sha512-PVtJr5CmLwYAU9PZDMITZoR5iAOShYREoR45EyyLrbntV50mdePTgUn4AmOw90Ifcj+x2kRjdzr1HP3RrNiHGA==}
@@ -1797,53 +1794,53 @@ packages:
     resolution: {integrity: sha512-N9w2DkEKE1AXGp3q55GBOP6BEoFrqChDiFqJtKViTpQCWNOSVuMz7LkoGehbnpxtidppbsC36P0kCZNqJKs29w==}
     engines: {node: '>= 10'}
 
-  '@next/env@16.0.2-canary.21':
-    resolution: {integrity: sha512-dlAPU7JNj86pUFQRjFFgNCwrm+s+WIhN8S+tMcp4HjkQwrtfTLEK/K7QeWAxwQdg8yoQBWiYx6wCSnxqH09tZQ==}
+  '@next/env@16.1.0-canary.15':
+    resolution: {integrity: sha512-FbNbPWYYptPlN5XffCc1uLwf48DZz2okfo0NET3lY6bfb1DCPkLG5o8W84R6r/JVfENEArakAZgxB1xRrqLu7A==}
 
-  '@next/swc-darwin-arm64@16.0.2-canary.21':
-    resolution: {integrity: sha512-Y0OXHtaaODHNtJJnEZgh7S/pkPDc6N6C79vpY50YkahtiOcI9s8c0XMFLPgY6n8+HwR4Zcju4+ESCFzxegsLFw==}
+  '@next/swc-darwin-arm64@16.1.0-canary.15':
+    resolution: {integrity: sha512-Dgm5yEfpc3c3LqewZWu5PgAF5SwtdQn1z6DFnU14qvoJodbYIsc5iZshjn3QUJL8nTyl/TUysarOAN4CabcOVQ==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
 
-  '@next/swc-darwin-x64@16.0.2-canary.21':
-    resolution: {integrity: sha512-4SJaQczvxxkGriuAHrgB+idyLsptsr9agOVvf4ZX2SKXRu9BLwW9JE4GejKYVEil5PVuvCNtbJzVomu5dA/5UA==}
+  '@next/swc-darwin-x64@16.1.0-canary.15':
+    resolution: {integrity: sha512-Jfbvxx3tJ5UkapJYCAmxpsRDmkGyV/yOou8cJRrDKBV3PWhsX5kHjVAW3lmCQFPgWB6x/6omWxX16k5+fZRpDw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
 
-  '@next/swc-linux-arm64-gnu@16.0.2-canary.21':
-    resolution: {integrity: sha512-xF37ldaStivmlWxju8eg3zSTF4HZTCRJmB5JJrinyI19t83S3VervcQnub9y5oH54uhVSrXomM8eZE1Y5txQgA==}
+  '@next/swc-linux-arm64-gnu@16.1.0-canary.15':
+    resolution: {integrity: sha512-//L32/Y5G75CJglU7YieLgCPdUIkx65U6s8grKNeBpBm9tzdjMDlrMVEZSK6HDm/ScPZyfWoPxJ0pDdkdcngng==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
 
-  '@next/swc-linux-arm64-musl@16.0.2-canary.21':
-    resolution: {integrity: sha512-Lu2bEkOmjwNW6iKl5nUPw2+qIGqW4NKusvciscqLEuub3eQWaipW9Pm14RJh/qIcLpJte6wkTVGKBNbWuvHngg==}
+  '@next/swc-linux-arm64-musl@16.1.0-canary.15':
+    resolution: {integrity: sha512-DdUEejvxwf+HQjGa0SPl44q+FeYZEY4UHUswwxtFLHRlM/tNfEXsOaJ6EgIQSTN45U0x9OeLic+LM3VNc4vk0Q==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
 
-  '@next/swc-linux-x64-gnu@16.0.2-canary.21':
-    resolution: {integrity: sha512-1HbcbHxjZt27w2cbzNmI4pqshm0E7dks0mbVkkq0cGiRIlcRtt7nXdv8XCLTTtbvk6bK+JQv2b8CIenu0VdNdA==}
+  '@next/swc-linux-x64-gnu@16.1.0-canary.15':
+    resolution: {integrity: sha512-1Inr+RRJ4sNfnAcRDLzWqv6zmEwwfnKE1yru/SjBVyun4WuKZ1MhjK0JjFYzSM8Ci0OyP1ApjD5JoWCdq2Majw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
 
-  '@next/swc-linux-x64-musl@16.0.2-canary.21':
-    resolution: {integrity: sha512-Sy9HSYeIEYcv/MsRzWP/Zbitb0YA6Tq1gvTMG3TVbNfzxZrIG/AtQ6gBZ693Gs2wFrpZ916MJkD3C/xl/EeuzA==}
+  '@next/swc-linux-x64-musl@16.1.0-canary.15':
+    resolution: {integrity: sha512-GMPO7GYJKL9z6++7Bd7lB+7xTlsAhjmsJUV1yzcyUH3/8N0kPolF9wSwcjVbancrI5pI97V7kaSC4bf21NqOtg==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
 
-  '@next/swc-win32-arm64-msvc@16.0.2-canary.21':
-    resolution: {integrity: sha512-dHbogZ2n/JgqkanjNzqRwAg7kuOrMG7GRtofRUOVeyl0pHIKU6bzYGjUyGt2umbFsbjhK1xXp1mJNfwNM6MIjQ==}
+  '@next/swc-win32-arm64-msvc@16.1.0-canary.15':
+    resolution: {integrity: sha512-ymtGFnW0jtOzwv8+CKvkmBJHFV0fTluEAQzT5Tqj/GQYRL8ZMz+Td0xOBd3vKiJS3S6vS3+cJX9VB85DnuLj+Q==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [win32]
 
-  '@next/swc-win32-x64-msvc@16.0.2-canary.21':
-    resolution: {integrity: sha512-WbXTJH30spSMj9nzzwjG2dMT2izwB7MYr5AyR8gMEwFOT7Ixq/JsmVtqUT537SP/tGMS8E+ZAXmfGOm08PcOiQ==}
+  '@next/swc-win32-x64-msvc@16.1.0-canary.15':
+    resolution: {integrity: sha512-nbD4DDLpzjZmuExo24k72YOpUxLiLxP0BRTw6XmnNvscZQ6uknjaVVBEcJmTnTN0FYJQ3ETCa1iVCkNxa2fF3g==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
@@ -6340,8 +6337,8 @@ packages:
       react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
       react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
 
-  next@16.0.2-canary.21:
-    resolution: {integrity: sha512-5tnwaV64Yh5ZBb6J3r+70lgNJ2q1tvEvqL9PyEVpxGhsGzzbjNFlRGvA7/DpHat31Jzq5Wz9kadmcP94qUEfhA==}
+  next@16.1.0-canary.15:
+    resolution: {integrity: sha512-P+ng6/Q/T2b3xMvIe4rwNmK1M+Urc4c1X0mpK4CxG+VAmDiFwDZn09Wt0j4MOk4lBa63EZ5LAekBnOHADjx9lg==}
     engines: {node: '>=20.9.0'}
     hasBin: true
     peerDependencies:
@@ -8602,11 +8599,6 @@ snapshots:
 
   '@edge-runtime/cookies@5.0.2': {}
 
-  '@emnapi/runtime@1.4.5':
-    dependencies:
-      tslib: 2.8.1
-    optional: true
-
   '@emnapi/runtime@1.7.1':
     dependencies:
       tslib: 2.8.1
@@ -9018,12 +9010,12 @@ snapshots:
 
   '@img/sharp-wasm32@0.33.5':
     dependencies:
-      '@emnapi/runtime': 1.4.5
+      '@emnapi/runtime': 1.7.1
     optional: true
 
   '@img/sharp-wasm32@0.34.3':
     dependencies:
-      '@emnapi/runtime': 1.4.5
+      '@emnapi/runtime': 1.7.1
     optional: true
 
   '@img/sharp-wasm32@0.34.5':
@@ -9365,10 +9357,10 @@ snapshots:
       '@scure/base': 1.2.6
       '@types/debug': 4.1.12
       '@types/lodash': 4.17.20
-      debug: 4.4.1
+      debug: 4.4.3
       lodash: 4.17.21
       pony-cause: 2.1.11
-      semver: 7.7.2
+      semver: 7.7.3
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -9390,9 +9382,9 @@ snapshots:
       '@noble/hashes': 1.3.2
       '@scure/base': 1.2.6
       '@types/debug': 4.1.12
-      debug: 4.4.1
+      debug: 4.4.3
       pony-cause: 2.1.11
-      semver: 7.7.2
+      semver: 7.7.3
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -9401,12 +9393,12 @@ snapshots:
     dependencies:
       '@ethereumjs/tx': 4.2.0
       '@metamask/superstruct': 3.2.1
-      '@noble/hashes': 1.3.2
+      '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
       '@types/debug': 4.1.12
-      debug: 4.4.1
+      debug: 4.4.3
       pony-cause: 2.1.11
-      semver: 7.7.2
+      semver: 7.7.3
       uuid: 9.0.1
     transitivePeerDependencies:
       - supports-color
@@ -9460,30 +9452,30 @@ snapshots:
       '@napi-rs/canvas-win32-x64-msvc': 0.1.77
     optional: true
 
-  '@next/env@16.0.2-canary.21': {}
+  '@next/env@16.1.0-canary.15': {}
 
-  '@next/swc-darwin-arm64@16.0.2-canary.21':
+  '@next/swc-darwin-arm64@16.1.0-canary.15':
     optional: true
 
-  '@next/swc-darwin-x64@16.0.2-canary.21':
+  '@next/swc-darwin-x64@16.1.0-canary.15':
     optional: true
 
-  '@next/swc-linux-arm64-gnu@16.0.2-canary.21':
+  '@next/swc-linux-arm64-gnu@16.1.0-canary.15':
     optional: true
 
-  '@next/swc-linux-arm64-musl@16.0.2-canary.21':
+  '@next/swc-linux-arm64-musl@16.1.0-canary.15':
     optional: true
 
-  '@next/swc-linux-x64-gnu@16.0.2-canary.21':
+  '@next/swc-linux-x64-gnu@16.1.0-canary.15':
     optional: true
 
-  '@next/swc-linux-x64-musl@16.0.2-canary.21':
+  '@next/swc-linux-x64-musl@16.1.0-canary.15':
     optional: true
 
-  '@next/swc-win32-arm64-msvc@16.0.2-canary.21':
+  '@next/swc-win32-arm64-msvc@16.1.0-canary.15':
     optional: true
 
-  '@next/swc-win32-x64-msvc@16.0.2-canary.21':
+  '@next/swc-win32-x64-msvc@16.1.0-canary.15':
     optional: true
 
   '@noble/ciphers@1.2.1': {}
@@ -11967,9 +11959,9 @@ snapshots:
       '@use-gesture/core': 10.3.1
       react: 19.1.1
 
-  '@vercel/analytics@1.5.0(next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)':
+  '@vercel/analytics@1.5.0(next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)':
     optionalDependencies:
-      next: 16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
 
   '@vercel/edge-config-fs@0.1.0': {}
@@ -11980,9 +11972,9 @@ snapshots:
 
   '@vercel/functions@1.6.0': {}
 
-  '@vercel/speed-insights@1.2.0(next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)':
+  '@vercel/speed-insights@1.2.0(next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)':
     optionalDependencies:
-      next: 16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
 
   '@wagmi/connectors@5.11.2(@tanstack/react-query@5.90.2(react@19.1.1))(@types/react@19.1.9)(@wagmi/core@2.21.2(@tanstack/query-core@5.90.2)(@types/react@19.1.9)(react@19.1.1)(typescript@5.9.2)(use-sync-external-store@1.4.0(react@19.1.1))(viem@2.38.0(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@3.25.76)))(bufferutil@4.0.9)(react@19.1.1)(typescript@5.9.2)(use-sync-external-store@1.4.0(react@19.1.1))(utf-8-validate@5.0.10)(viem@2.38.0(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@3.25.76))(wagmi@2.17.5(@tanstack/query-core@5.90.2)(@tanstack/react-query@5.90.2(react@19.1.1))(@types/react@19.1.9)(bufferutil@4.0.9)(react@19.1.1)(typescript@5.9.2)(utf-8-validate@5.0.10)(viem@2.38.0(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76))(zod@3.25.76)':
@@ -13395,8 +13387,7 @@ snapshots:
 
   detect-libc@2.0.4: {}
 
-  detect-libc@2.1.2:
-    optional: true
+  detect-libc@2.1.2: {}
 
   detect-node-es@1.1.0: {}
 
@@ -13760,12 +13751,12 @@ snapshots:
     dependencies:
       micromatch: 4.0.8
 
-  flags@4.0.1(next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+  flags@4.0.1(next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
       '@edge-runtime/cookies': 5.0.2
       jose: 5.10.0
     optionalDependencies:
-      next: 16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
 
@@ -13930,7 +13921,7 @@ snapshots:
       es6-error: 4.1.1
       matcher: 3.0.0
       roarr: 2.15.4
-      semver: 7.7.2
+      semver: 7.7.3
       serialize-error: 7.0.1
 
   globalthis@1.0.4:
@@ -15367,24 +15358,25 @@ snapshots:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
 
-  next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+  next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
-      '@next/env': 16.0.2-canary.21
+      '@next/env': 16.1.0-canary.15
       '@swc/helpers': 0.5.15
+      baseline-browser-mapping: 2.8.32
       caniuse-lite: 1.0.30001731
       postcss: 8.4.31
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
       styled-jsx: 5.1.6(react@19.1.1)
     optionalDependencies:
-      '@next/swc-darwin-arm64': 16.0.2-canary.21
-      '@next/swc-darwin-x64': 16.0.2-canary.21
-      '@next/swc-linux-arm64-gnu': 16.0.2-canary.21
-      '@next/swc-linux-arm64-musl': 16.0.2-canary.21
-      '@next/swc-linux-x64-gnu': 16.0.2-canary.21
-      '@next/swc-linux-x64-musl': 16.0.2-canary.21
-      '@next/swc-win32-arm64-msvc': 16.0.2-canary.21
-      '@next/swc-win32-x64-msvc': 16.0.2-canary.21
+      '@next/swc-darwin-arm64': 16.1.0-canary.15
+      '@next/swc-darwin-x64': 16.1.0-canary.15
+      '@next/swc-linux-arm64-gnu': 16.1.0-canary.15
+      '@next/swc-linux-arm64-musl': 16.1.0-canary.15
+      '@next/swc-linux-x64-gnu': 16.1.0-canary.15
+      '@next/swc-linux-x64-musl': 16.1.0-canary.15
+      '@next/swc-win32-arm64-msvc': 16.1.0-canary.15
+      '@next/swc-win32-x64-msvc': 16.1.0-canary.15
       '@playwright/test': 1.54.2
       sharp: 0.34.5
     transitivePeerDependencies:
@@ -15408,7 +15400,7 @@ snapshots:
 
   node-abi@3.75.0:
     dependencies:
-      semver: 7.7.2
+      semver: 7.7.3
 
   node-addon-api@2.0.2: {}
 
@@ -15578,10 +15570,10 @@ snapshots:
   ox@0.6.7(typescript@5.9.2)(zod@3.25.76):
     dependencies:
       '@adraffy/ens-normalize': 1.10.1
-      '@noble/curves': 1.8.1
-      '@noble/hashes': 1.7.1
-      '@scure/bip32': 1.6.2
-      '@scure/bip39': 1.5.4
+      '@noble/curves': 1.9.7
+      '@noble/hashes': 1.8.0
+      '@scure/bip32': 1.7.0
+      '@scure/bip39': 1.6.0
       abitype: 1.0.8(typescript@5.9.2)(zod@3.25.76)
       eventemitter3: 5.0.1
     optionalDependencies:
@@ -15922,7 +15914,7 @@ snapshots:
 
   prebuild-install@7.1.3:
     dependencies:
-      detect-libc: 2.0.4
+      detect-libc: 2.1.2
       expand-template: 2.0.3
       github-from-package: 0.0.0
       minimist: 1.2.8
@@ -16674,10 +16666,10 @@ snapshots:
   sharp@0.32.6:
     dependencies:
       color: 4.2.3
-      detect-libc: 2.0.4
+      detect-libc: 2.1.2
       node-addon-api: 6.1.0
       prebuild-install: 7.1.3
-      semver: 7.7.2
+      semver: 7.7.3
       simple-get: 4.0.1
       tar-fs: 3.1.0
       tunnel-agent: 0.6.0
@@ -16687,8 +16679,8 @@ snapshots:
   sharp@0.33.5:
     dependencies:
       color: 4.2.3
-      detect-libc: 2.0.4
-      semver: 7.7.2
+      detect-libc: 2.1.2
+      semver: 7.7.3
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.33.5
       '@img/sharp-darwin-x64': 0.33.5
@@ -17635,11 +17627,11 @@ snapshots:
       bufferutil: 4.0.9
       utf-8-validate: 5.0.10
 
-  x402-next@0.6.5(@solana/sysvars@2.3.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2))(@tanstack/query-core@5.90.2)(@tanstack/react-query@5.90.2(react@19.1.1))(@types/react@19.1.9)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(next@16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(typescript@5.9.2)(utf-8-validate@5.0.10)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
+  x402-next@0.6.5(@solana/sysvars@2.3.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2))(@tanstack/query-core@5.90.2)(@tanstack/react-query@5.90.2(react@19.1.1))(@types/react@19.1.9)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(next@16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(typescript@5.9.2)(utf-8-validate@5.0.10)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
     dependencies:
       '@coinbase/cdp-sdk': 1.38.3(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@solana/kit': 2.3.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
-      next: 16.0.2-canary.21(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.1.0-canary.15(@playwright/test@1.54.2)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       viem: 2.38.0(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       x402: 0.6.6(@solana/sysvars@2.3.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.2))(@tanstack/query-core@5.90.2)(@tanstack/react-query@5.90.2(react@19.1.1))(@types/react@19.1.9)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(react@19.1.1)(typescript@5.9.2)(utf-8-validate@5.0.10)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       zod: 3.25.76

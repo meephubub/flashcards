@@ -153,7 +153,7 @@
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
     "baseline-browser-mapping": "^2.8.32",
-    "next": "16.0.2-canary.21",
+    "next": "^16.1.0-canary.12",
     "patch-package": "^8.0.0",
     "postcss": "^8.5.3",
     "postinstall-postinstall": "^2.1.0",
