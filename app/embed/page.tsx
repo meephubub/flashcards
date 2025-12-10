@@ -33,7 +33,7 @@ export default function Home() {
     router.replace(`?${params.toString()}`, { scroll: false });
   }, [url, proxy, spoof, hideCursor, router]);
 
-  const finalSrc = proxy && url ? `/api/proxy?url=${encodeURIComponent(url)}` : url;
+  const finalSrc = proxy && url ? `/api/embedproxy?url=${encodeURIComponent(url)}` : url;
 
   return (
     <main className="min-h-screen bg-black text-white flex flex-col">
