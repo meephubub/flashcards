@@ -2,23 +2,25 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const [url, setUrl] = useState('');
   const [proxy, setProxy] = useState(true);
   const [spoof, setSpoof] = useState(true);
   const [hideCursor, setHideCursor] = useState(true);
+  const [error, setError] = useState('');
 
   // Load from URL params on first visit
   useEffect(() => {
     const u = searchParams.get('url') || searchParams.get('u') || '';
     if (u) setUrl(decodeURIComponent(u));
     setProxy(searchParams.get('proxy') !== '0');
-    setSpoof(searchParams.get('spoof !== '0');
+    setSpoof(searchParams.get('spoof') !== '0'); // Fixed syntax error
     setHideCursor(searchParams.get('cursor') !== '0');
   }, [searchParams]);
 
@@ -33,7 +35,46 @@ export default function Home() {
     router.replace(`?${params.toString()}`, { scroll: false });
   }, [url, proxy, spoof, hideCursor, router]);
 
-  const finalSrc = proxy && url ? `/api/embedproxy?url=${encodeURIComponent(url)}` : url;
+  // Hide cursor functionality
+  useEffect(() => {
+    if (!hideCursor) return;
+
+    let timer: NodeJS.Timeout;
+    const hide = () => document.body.style.cursor = 'none';
+    const show = () => {
+      document.body.style.cursor = 'default';
+      clearTimeout(timer);
+      timer = setTimeout(hide, 3000);
+    };
+
+    document.addEventListener('mousemove', show);
+    document.addEventListener('touchstart', show);
+    hide();
+
+    return () => {
+      document.removeEventListener('mousemove', show);
+      document.removeEventListener('touchstart', show);
+      document.body.style.cursor = 'default';
+      clearTimeout(timer);
+    };
+  }, [hideCursor]);
+
+  // Auto fullscreen for TV
+  useEffect(() => {
+    if (!url) return;
+    const timer = setTimeout(() => {
+      document.documentElement.requestFullscreen?.().catch(() => {
+        // Fullscreen blocked, that's ok
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [url]);
+
+  const finalSrc = proxy && url ? `/api/embedproxy?url=${encodeURIComponent(url)}${spoof ? '&spoof=1' : ''}` : url;
+
+  const handleIframeError = () => {
+    setError('Failed to load stream. Try toggling proxy mode or checking the URL.');
+  };
 
   return (
     <main className="min-h-screen bg-black text-white flex flex-col">
@@ -42,11 +83,20 @@ export default function Home() {
         <input
           type="text"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste embed URL (EmbedSport, WeakStreams, etc.)"
+          onChange={(e) => {
+            setUrl(e.target.value);
+            setError('');
+          }}
+          placeholder="Paste embed URL (e.g., https://playembed.top/embed/...)"
           className="w-full px-6 py-5 text-lg bg-zinc-950 border border-zinc-700 rounded-xl focus:outline-none focus:border-zinc-400 transition"
           autoFocus
         />
+
+        {error && (
+          <div className="px-4 py-3 bg-red-900/30 border border-red-700 rounded-lg text-red-200">
+            {error}
+          </div>
+        )}
 
         {/* Toggles */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -60,46 +110,21 @@ export default function Home() {
       {finalSrc ? (
         <div className="flex-1 relative">
           <iframe
+            ref={iframeRef}
             src={finalSrc}
             allowFullScreen
             className="absolute inset-0 w-full h-full border-0"
             allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
             sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation-by-user-activation"
+            onError={handleIframeError}
           />
-
-          {/* Anti-detection + UX script */}
-          {(spoof || hideCursor) && (
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `
-                  try {
-                    ${spoof ? `
-                      Object.defineProperty(document, 'referrer', {get: () => 'https://embedsport.xyz/'});
-                      window.top = window.parent = window.self;
-                      window.frameElement = null;
-                      history.pushState = history.replaceState = () => {};
-                    ` : ''}
-
-                    ${hideCursor ? `
-                      let timer;
-                      const hide = () => document.body.style.cursor = 'none';
-                      const show = () => { document.body.style.cursor = 'default'; clearTimeout(timer); timer = setTimeout(hide, 3000); };
-                      document.addEventListener('mousemove', show);
-                      document.addEventListener('touchstart', show);
-                      hide();
-                    ` : ''}
-
-                    // Auto fullscreen on most TVs
-                    setTimeout(() => document.documentElement.requestFullscreen?.(), 2000);
-                  } catch(e) {}
-                `,
-              }}
-            />
-          )}
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-zinc-600 text-xl">Paste an embed URL to begin</p>
+          <div className="text-center space-y-4">
+            <p className="text-zinc-600 text-xl">Paste an embed URL to begin</p>
+            <p className="text-zinc-700 text-sm">Example: https://playembed.top/embed/ucl/2025-12-10/lev-new</p>
+          </div>
         </div>
       )}
     </main>
@@ -111,7 +136,8 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   return (
     <label className="flex items-center gap-4 cursor-pointer select-none">
       <div className="relative">
-        <input type="checkbox"
+        <input
+          type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
           className="sr-only"
