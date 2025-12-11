@@ -21,6 +21,7 @@
     "@iconify/utils": "2.1.19",
     "@langchain/community": "^0.3.48",
     "@langchain/core": "^0.3.62",
+    "@langchain/groq": "^1.0.2",
     "@langchain/langgraph": "^0.3.7",
     "@langchain/openai": "^0.3.17",
     "@picovoice/cobra-web": "^2.0.3",
