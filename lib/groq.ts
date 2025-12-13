@@ -20,13 +20,13 @@ async function shouldDefaultToGroq(): Promise<boolean> {
 
         if (typeof window === 'undefined') {
             __groqDefaultFlag = false;
-            try { console.log('[AI Provider] SSR detected; defaulting groqFirst=false'); } catch {}
+            try { console.log('[AI Provider] SSR detected; defaulting groqFirst=false'); } catch { }
             return false;
         }
         const key = process.env.NEXT_PUBLIC_STATSIG_CLIENT_KEY;
         if (!key) {
             __groqDefaultFlag = false;
-            try { console.log('[AI Provider] NEXT_PUBLIC_STATSIG_CLIENT_KEY not set; groqFirst=false (no gate)'); } catch {}
+            try { console.log('[AI Provider] NEXT_PUBLIC_STATSIG_CLIENT_KEY not set; groqFirst=false (no gate)'); } catch { }
             return false;
         }
         // 2) Statsig gate (client-side only)
@@ -41,12 +41,12 @@ async function shouldDefaultToGroq(): Promise<boolean> {
             return false;
         }
         const enabled = !!Statsig.checkGate('use_groq_default');
-        try { console.log(`[AI Provider] Statsig gate use_groq_default=${enabled}`); } catch {}
+        try { console.log(`[AI Provider] Statsig gate use_groq_default=${enabled}`); } catch { }
         __groqDefaultFlag = enabled;
         return enabled;
     } catch {
         __groqDefaultFlag = false;
-        try { console.log('[AI Provider] Statsig evaluation failed; groqFirst=false'); } catch {}
+        try { console.log('[AI Provider] Statsig evaluation failed; groqFirst=false'); } catch { }
         return false;
     }
 }
@@ -223,7 +223,7 @@ export async function generateHint(
   - Is relevant to the question type
   
   Return the response as a JSON object with a "hint" string property.`;
-  
+
     try {
         const response = await makeGroqRequest(prompt, true);
         const parsedContent = JSON.parse(response);
@@ -281,7 +281,7 @@ export async function gradeAnswerWithGroq(
     "suggestions": string (optional),
     "relatedConcepts": string[] (optional)
   }`;
-  
+
     try {
         const response = await makeGroqRequest(prompt, true);
         let parsedContent: any;
@@ -301,7 +301,7 @@ export async function gradeAnswerWithGroq(
                 parsedContent = null;
             }
         }
-  
+
         // Validate the response format
         if (
             !parsedContent ||
@@ -311,10 +311,10 @@ export async function gradeAnswerWithGroq(
         ) {
             throw new Error("Invalid response format from Groq");
         }
-  
+
         // Ensure score is between 0 and 100
         parsedContent.score = Math.max(0, Math.min(100, parsedContent.score));
-  
+
         return {
             isCorrect: parsedContent.isCorrect,
             score: parsedContent.score,
@@ -336,6 +336,159 @@ export async function gradeAnswerWithGroq(
             feedback: "An error occurred while grading. Please try again.",
             explanation: "The grading service is temporarily unavailable.",
             suggestions: "Try submitting your answer again.",
+        };
+    }
+}
+
+// Essay grading result interface
+export interface EssayGradingResult {
+    marksAwarded: number;
+    maxMarks: number;
+    percentage: number;
+    feedback: string;
+    strengths: string[];
+    improvements: string[];
+    levelDescriptor?: string;
+}
+
+// Subject-specific marking prompts for GCSE essays
+const SUBJECT_MARKING_PROMPTS: Record<string, string> = {
+    english_language: `You are a GCSE English Language examiner. Grade this response focusing on:
+- Spelling, Punctuation and Grammar (SPaG)
+- Sentence structure and variety
+- Vocabulary range and precision
+- Coherence and paragraph organisation
+- Tone and register appropriate to purpose/audience
+Award marks based on the AQA/Edexcel mark scheme bands.`,
+
+    english_literature: `You are a GCSE English Literature examiner. Grade this response focusing on:
+- Understanding of characters, themes, and context
+- Use of relevant quotations and textual evidence
+- Analysis of language, form, and structure
+- Awareness of writer's methods and intentions
+- Quality of written argument and expression
+Award marks based on the AQA/Edexcel mark scheme bands.`,
+
+    geography: `You are a GCSE Geography examiner. Grade this response focusing on:
+- Accurate use of geographical terminology
+- Reference to relevant case studies and examples
+- Understanding of physical/human processes
+- Use of data, maps, or diagram descriptions where relevant
+- Evaluation and balanced discussion
+Award marks based on AQA/Edexcel mark scheme bands.`,
+
+    history: `You are a GCSE History examiner. Grade this response focusing on:
+- Use of historical evidence and source analysis
+- Understanding of causation, consequence, and change
+- Chronological knowledge and accuracy
+- Quality of argument and evaluation
+- Second-order concepts (significance, interpretations)
+Award marks based on AQA/Edexcel mark scheme bands.`,
+
+    product_design: `You are a GCSE Product Design/DT examiner. Grade this response focusing on:
+- Accurate use of technical terminology
+- Understanding of materials, components, and processes
+- Consideration of manufacturing methods and sustainability
+- Application of design principles and theory
+- Quality of explanation and justification
+Award marks based on AQA/OCR mark scheme bands.`,
+
+    religious_studies: `You are a GCSE Religious Studies examiner. Grade this response focusing on:
+- Understanding of religious beliefs, teachings, and practices
+- Consideration of different perspectives and viewpoints
+- Use of religious terminology and sources of authority
+- Quality of evaluation and ethical reasoning
+- Balanced discussion with justified conclusions
+Award marks based on AQA/Edexcel mark scheme bands.`,
+
+    science: `You are a GCSE Science examiner. Grade this response focusing on:
+- Accurate use of scientific terminology
+- Understanding of key concepts and processes
+- Application of scientific knowledge to new contexts
+- Quality of explanations and descriptions
+- Use of equations, data, or calculations where relevant
+Award marks based on AQA/Edexcel mark scheme bands.`,
+
+    default: `You are a GCSE examiner. Grade this response focusing on:
+- Accuracy and completeness of the answer
+- Use of subject-specific terminology
+- Quality of explanation and reasoning
+- Structure and organisation
+- Relevance to the question asked
+Award marks appropriately based on the content.`
+};
+
+export async function gradeEssayWithGroq(
+    subject: string,
+    question: string,
+    answer: string,
+    maxMarks: number
+): Promise<EssayGradingResult> {
+    const subjectKey = subject.toLowerCase().replace(/\s+/g, '_');
+    const markingPrompt = SUBJECT_MARKING_PROMPTS[subjectKey] || SUBJECT_MARKING_PROMPTS.default;
+
+    const prompt = `${markingPrompt}
+
+QUESTION (${maxMarks} marks): ${question}
+
+STUDENT'S ANSWER:
+${answer}
+
+Grade this answer out of ${maxMarks} marks. Be fair but rigorous in your assessment.
+
+Return the response as a JSON object with these properties:
+{
+    "marksAwarded": number (0 to ${maxMarks}),
+    "percentage": number (0-100),
+    "feedback": string (2-3 sentences of overall feedback),
+    "strengths": string[] (2-3 specific strengths),
+    "improvements": string[] (2-3 areas for improvement),
+    "levelDescriptor": string (e.g., "Level 3 - Good understanding shown")
+}`;
+
+    try {
+        const response = await makeGroqRequest(prompt, true, "You are an expert GCSE examiner providing fair, constructive feedback.");
+
+        let parsedContent: any;
+        try {
+            parsedContent = JSON.parse(response);
+        } catch (jsonErr) {
+            const match = response.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    parsedContent = JSON.parse(match[0]);
+                } catch {
+                    parsedContent = null;
+                }
+            }
+        }
+
+        if (!parsedContent || typeof parsedContent.marksAwarded !== "number") {
+            throw new Error("Invalid response format from Groq");
+        }
+
+        // Ensure marks are within valid range
+        const marksAwarded = Math.max(0, Math.min(maxMarks, Math.round(parsedContent.marksAwarded)));
+        const percentage = Math.round((marksAwarded / maxMarks) * 100);
+
+        return {
+            marksAwarded,
+            maxMarks,
+            percentage,
+            feedback: parsedContent.feedback || "Your answer has been graded.",
+            strengths: Array.isArray(parsedContent.strengths) ? parsedContent.strengths : [],
+            improvements: Array.isArray(parsedContent.improvements) ? parsedContent.improvements : [],
+            levelDescriptor: parsedContent.levelDescriptor,
+        };
+    } catch (error) {
+        console.error("Error grading essay with Groq:", error);
+        return {
+            marksAwarded: 0,
+            maxMarks,
+            percentage: 0,
+            feedback: "An error occurred while grading. Please try again.",
+            strengths: [],
+            improvements: ["Unable to grade - please resubmit your answer."],
         };
     }
 }
@@ -440,14 +593,14 @@ export async function generateNoteWithGroq(
     "title": "Key Concepts of Photosynthesis",
     "content": "# Photosynthesis: The Foundation of Life\\n\\n## Introduction\\nPhotosynthesis is a vital process...\\n\\n### Reactants\\n- Water (H2O)\\n- Carbon Dioxide (CO2)\\n\\n### Products\\n- Glucose (C6H12O6)\\n- Oxygen (O2)\\n\\n> This process is fundamental to life on Earth, providing both oxygen and energy.\\n\\n## Chemical Equation\\n$ 6CO_2 + 6H_2O + \\text{light} \\rightarrow C_6H_{12}O_6 + 6O_2 $\\n\\n---\\n\\n## Key Stages\\n1. Light-dependent reactions\\n2. Calvin cycle (light-independent reactions)\\n\\n### Light-Dependent Reactions\\n==These reactions convert light energy to chemical energy==\\n\\nThe energy conversion can be expressed as:\\n$$\\nE = h\\nu = \\frac{hc}{\\lambda}\\n$$\\n\\nWhere:\\n- $ E $ is the energy of a photon\\n- $ h $ is Planck's constant\\n- $ \\nu $ is the frequency\\n- $ \\lambda $ is the wavelength\\n\\n::The miracle of converting sunlight to chemical energy::"
   }`;
-  
+
     const systemMessage =
         "You are an expert content creator specializing in generating well-structured notes in Markdown format. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. The response must be valid JSON that can be parsed by JSON.parse(). When using LaTeX math, ensure proper spacing and line breaks to prevent parsing errors. Ensure the Markdown is clean and follows standard conventions.";
-  
+
     try {
         // First attempt to generate the note with forced JSON format
         const response = await makeGroqRequest(prompt, false, systemMessage, true);
-  
+
         let parsedContent;
         try {
             parsedContent = JSON.parse(response);
@@ -462,7 +615,7 @@ export async function generateNoteWithGroq(
                     .replace(/#\s*\$/g, " $") // Remove any # characters that might appear before $
                     .replace(/\$\$\s*#/g, "$$ ") // Remove any # characters that might appear after $$
                     .replace(/#\s*\$\$/g, " $$"); // Remove any # characters that might appear before $$
-  
+
                 return {
                     title: parsedContent.title,
                     content: cleanedContent,
@@ -474,11 +627,11 @@ export async function generateNoteWithGroq(
                 "Failed to parse JSON for note, attempting to fix format:",
                 response,
             );
-  
+
             // Try to extract title and content from the response
             const titleMatch = response.match(/"title"\s*:\s*"([^"]+)"/);
             const contentMatch = response.match(/"content"\s*:\s*"([^"]+)"/);
-  
+
             if (titleMatch && contentMatch) {
                 try {
                     // Create a properly formatted JSON object and clean up LaTeX math
@@ -487,7 +640,7 @@ export async function generateNoteWithGroq(
                         .replace(/#\s*\$/g, " $")
                         .replace(/\$\$\s*#/g, "$$ ")
                         .replace(/#\s*\$\$/g, " $$");
-  
+
                     return {
                         title: titleMatch[1],
                         content: content,
@@ -496,10 +649,10 @@ export async function generateNoteWithGroq(
                     console.error("Failed to extract title and content:", extractError);
                 }
             }
-  
+
             // If extraction failed, try one more time with a more specific fix prompt
             const fixPrompt = `The following response needs to be formatted as valid JSON with "title" and "content" (Markdown) properties. Please convert this to proper JSON format, ensuring all special characters are properly escaped and LaTeX math expressions are properly formatted with spaces:\n\n${response}\n\nReturn ONLY valid JSON in this format:\n{\n  "title": "Note Title",\n  "content": "Markdown content..."\n}`;
-  
+
             try {
                 const fixedResponse = await makeGroqRequest(
                     fixPrompt,
@@ -519,7 +672,7 @@ export async function generateNoteWithGroq(
                         .replace(/#\s*\$/g, " $")
                         .replace(/\$\$\s*#/g, "$$ ")
                         .replace(/#\s*\$\$/g, " $$");
-  
+
                     return {
                         title: fixedParsedContent.title,
                         content: cleanedContent,
@@ -583,10 +736,10 @@ export async function generateMultipleChoiceQuestionsWithGroq(
     ]
   }
   `;
-  
+
     const systemMessage =
         "You are an expert in creating educational multiple-choice questions based on provided text. Your output must always be a valid JSON object with an 'mcqs' array, where each MCQ has 'question', 'options', 'correctAnswer', and optionally 'explanation' fields. Ensure the options are plausible and the correct answer is clearly identifiable from the note content.";
-  
+
     try {
         const response = await makeGroqRequest(prompt, false, systemMessage);
         let parsedContent;
@@ -619,13 +772,13 @@ export async function generateMultipleChoiceQuestionsWithGroq(
                     (typeof mcq.explanation === "string" ||
                         typeof mcq.explanation === "undefined"),
             );
-  
+
             if (validMcqs.length === 0 && parsedContent.mcqs.length > 0) {
                 // Some MCQs were generated but didn't pass validation
                 console.warn("Some MCQs failed validation:", parsedContent.mcqs);
                 // Potentially try to fix them or return a partial result if needed in future
             }
-  
+
             return {
                 mcqs: validMcqs,
                 sourceNoteTitle: noteTitle,
@@ -741,8 +894,7 @@ export async function makeGroqRequest(
                     errorData,
                 });
                 throw new Error(
-                    `Groq API error: ${groqResponse.statusText}${
-                        errorData ? ` - ${JSON.stringify(errorData)}` : ""
+                    `Groq API error: ${groqResponse.statusText}${errorData ? ` - ${JSON.stringify(errorData)}` : ""
                     }`
                 );
             }
@@ -766,7 +918,7 @@ export async function makeGroqRequest(
         // Try Pollinations AI first (unless Groq already attempted and failed)
         try {
             console.log("Attempting to use Pollinations AI OpenAI-compatible endpoint");
-            
+
             // Prepare the request body for the POST endpoint
             const requestBody: any = {
                 model: "openai",
@@ -783,14 +935,14 @@ export async function makeGroqRequest(
                 stream: false,
                 private: true,
             };
-            
+
             // Add JSON mode if required
             if (requireJson || forceJson) {
                 requestBody.response_format = { type: "json_object" };
             }
-            
+
             console.log("Pollinations AI request body:", JSON.stringify(requestBody, null, 2));
-            
+
             // Add a timeout so we don't hang and fail to fallback
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -829,7 +981,7 @@ export async function makeGroqRequest(
                 throw new Error("Pollinations AI returned invalid JSON");
             }
             console.log("Pollinations AI response:", data);
-            
+
             // If the payload includes an explicit error, or has no usable message, force fallback
             const hasChoices = !!(data && data.choices && data.choices[0] && data.choices[0].message && typeof data.choices[0].message.content === 'string');
             const textLike = typeof data?.text === 'string' ? data.text : (typeof data?.content === 'string' ? data.content : null);
@@ -862,12 +1014,12 @@ export async function makeGroqRequest(
  * - Fill-the-gap: inline gaps using (gap:answer)
  */
 export async function generateExamMarkdownFromNote(
-  noteContent: string,
-  noteTitle?: string,
-  numberOfQuestions: number = 8,
+    noteContent: string,
+    noteTitle?: string,
+    numberOfQuestions: number = 8,
 ): Promise<string> {
-  const systemMessage = "You are an expert exam composer. Output ONLY Markdown that our renderer understands. No JSON, no explanations. Write on a gcse exam level";
-  const prompt = `Create a concise study test from the following note. Use ONLY these formats so the UI can render interactives:
+    const systemMessage = "You are an expert exam composer. Output ONLY Markdown that our renderer understands. No JSON, no explanations. Write on a gcse exam level";
+    const prompt = `Create a concise study test from the following note. Use ONLY these formats so the UI can render interactives:
 
 Sections and formats to include:
 1) A small set of MCQs (mix single- and multi-correct). For each MCQ use:
@@ -906,23 +1058,23 @@ ${noteContent}
 
 Output: ONLY Markdown with the directives above. No extra prose before or after.`;
 
-  let md = await makeGroqRequest(prompt, false, systemMessage, false);
-  console.log("Groq response:", md);
-  const out = typeof md === 'string' ? md : String(md);
-  // Post-process: strip surrounding code fences and normalize any accidental HTML tags into directives
-  const stripped = out.replace(/^```[a-zA-Z0-9]*\n([\s\S]*?)\n```\s*$/m, '$1');
-  // Unescape common sequences (\n, \", \\) so directives parse attributes correctly
-  const unescaped = stripped
-    .replace(/\\n/g, '\n')
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\');
-  // Normalize any accidental HTML self-closing tags and container directives to a single-line leaf :written{...}
-  const normalized = unescaped
-    // <written .../> -> :written{...}
-    .replace(/<written\s+([^>]*?)\s*\/?>/g, (_m, attrs) => `:written{${attrs}}`)
-    // :::written{...} ... ::: -> :written{...}
-    .replace(/:::written\{([^}]*)\}[\s\S]*?:::/g, (_m, attrs) => `:written{${attrs}}`);
-  return normalized;
+    let md = await makeGroqRequest(prompt, false, systemMessage, false);
+    console.log("Groq response:", md);
+    const out = typeof md === 'string' ? md : String(md);
+    // Post-process: strip surrounding code fences and normalize any accidental HTML tags into directives
+    const stripped = out.replace(/^```[a-zA-Z0-9]*\n([\s\S]*?)\n```\s*$/m, '$1');
+    // Unescape common sequences (\n, \", \\) so directives parse attributes correctly
+    const unescaped = stripped
+        .replace(/\\n/g, '\n')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+    // Normalize any accidental HTML self-closing tags and container directives to a single-line leaf :written{...}
+    const normalized = unescaped
+        // <written .../> -> :written{...}
+        .replace(/<written\s+([^>]*?)\s*\/?>/g, (_m, attrs) => `:written{${attrs}}`)
+        // :::written{...} ... ::: -> :written{...}
+        .replace(/:::written\{([^}]*)\}[\s\S]*?:::/g, (_m, attrs) => `:written{${attrs}}`);
+    return normalized;
 }
 
 // Helper function to process a valid JSON response
@@ -939,7 +1091,7 @@ function processFlashcardResponse(
     } else {
         // If we can't find a cards array, create a fallback with the available data
         cards = [];
-  
+
         // Try to extract card data from the response in any format
         if (typeof parsedContent === "object") {
             // Look for properties that might contain card data
@@ -954,23 +1106,23 @@ function processFlashcardResponse(
                 }
             }
         }
-  
+
         // If still no cards, create a fallback card
         if (cards.length === 0) {
             return createFallbackCards(topic);
         }
     }
-  
+
     // Validate each card has question and answer properties
     const validCards = cards.filter(
         (card: any) => card && typeof card === "object" && card.question && card.answer,
     );
-  
+
     // If no valid cards were found, create a fallback
     if (validCards.length === 0) {
         return createFallbackCards(topic);
     }
-  
+
     return {
         cards: validCards.map((card: any) => ({
             question: card.question,
@@ -985,17 +1137,17 @@ function processFlashcardResponse(
 // Helper function to manually extract cards from a non-JSON response
 function extractCardsManually(responseText: string, topic: string): GenerationResult {
     const cards: GeneratedCard[] = [];
-  
+
     // Try to extract question/answer pairs using regex patterns
     const questionAnswerPairs = responseText.match(
         /question["\s:]+([^"]+)["\s,]+answer["\s:]+([^"]+)/gi,
     );
-  
+
     if (questionAnswerPairs && questionAnswerPairs.length > 0) {
         for (const pair of questionAnswerPairs) {
             const questionMatch = pair.match(/question["\s:]+([^"]+)/i);
             const answerMatch = pair.match(/answer["\s:]+([^"]+)/i);
-  
+
             if (questionMatch && questionMatch[1] && answerMatch && answerMatch[1]) {
                 cards.push({
                     question: questionMatch[1].trim(),
@@ -1004,15 +1156,15 @@ function extractCardsManually(responseText: string, topic: string): GenerationRe
             }
         }
     }
-  
+
     // If we couldn't extract cards using regex, try to find question-answer patterns
     if (cards.length === 0) {
         const lines = responseText.split("\n").filter((line: string) => line.trim().length > 0);
-  
+
         for (let i = 0; i < lines.length - 1; i++) {
             const line = lines[i].trim();
             const nextLine = lines[i + 1].trim();
-  
+
             // Look for patterns like "Q: ... A: ..." or numbered questions
             if (
                 (line.startsWith("Q:") || line.match(/^\d+[.)]/)) &&
@@ -1026,12 +1178,12 @@ function extractCardsManually(responseText: string, topic: string): GenerationRe
             }
         }
     }
-  
+
     // If we still couldn't extract cards, create fallback cards
     if (cards.length === 0) {
         return createFallbackCards(topic);
     }
-  
+
     return {
         cards,
         topic,
@@ -1064,10 +1216,10 @@ function createFallbackCards(topic: string): GenerationResult {
  * Returns: { title: string, content: string }
  */
 export async function formatNoteWithGroq(
-  noteContent: string,
-  formattingGuidelines?: string
+    noteContent: string,
+    formattingGuidelines?: string
 ): Promise<GeneratedNote> {
-  const prompt = `You are an expert in Markdown note formatting. Your task is to take the following note and reformat it to be clearer, more visually structured, and easier to study from, following the provided formatting guidelines. Do not remove any information, but improve the structure, clarity, and Markdown usage. If the note lacks a clear title, generate one based on the content. If the note already has a good title, keep it. Use all relevant formatting features (headings, lists, info boxes, math, MCQ, fill-in-the-gap, dragdrop, etc.) where appropriate.
+    const prompt = `You are an expert in Markdown note formatting. Your task is to take the following note and reformat it to be clearer, more visually structured, and easier to study from, following the provided formatting guidelines. Do not remove any information, but improve the structure, clarity, and Markdown usage. If the note lacks a clear title, generate one based on the content. If the note already has a good title, keep it. Use all relevant formatting features (headings, lists, info boxes, math, MCQ, fill-in-the-gap, dragdrop, etc.) where appropriate.
 
 Formatting Guidelines:
 ${formattingGuidelines || `- Use # for main title, ## for sections, and further # for subsections
@@ -1090,42 +1242,42 @@ ${noteContent}
 
 IMPORTANT: Output a valid JSON object with "title" (string) and "content" (string, Markdown formatted) properties. The response must be valid JSON that can be parsed by JSON.parse().`;
 
-  const systemMessage =
-    "You are an expert Markdown formatter. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. The response must be valid JSON that can be parsed by JSON.parse().";
+    const systemMessage =
+        "You are an expert Markdown formatter. Your output must always be a valid JSON object with 'title' and 'content' (Markdown) properties. The response must be valid JSON that can be parsed by JSON.parse().";
 
-  try {
-    const response = await makeGroqRequest(prompt, false, systemMessage, true);
-    let parsedContent;
     try {
-      parsedContent = JSON.parse(response);
-      if (
-        parsedContent &&
-        typeof parsedContent.title === "string" &&
-        typeof parsedContent.content === "string"
-      ) {
-        return {
-          title: parsedContent.title,
-          content: unescapeGeneratedContent(parsedContent.content),
-        };
-      }
-      throw new Error("Invalid note structure in JSON response");
+        const response = await makeGroqRequest(prompt, false, systemMessage, true);
+        let parsedContent;
+        try {
+            parsedContent = JSON.parse(response);
+            if (
+                parsedContent &&
+                typeof parsedContent.title === "string" &&
+                typeof parsedContent.content === "string"
+            ) {
+                return {
+                    title: parsedContent.title,
+                    content: unescapeGeneratedContent(parsedContent.content),
+                };
+            }
+            throw new Error("Invalid note structure in JSON response");
+        } catch (error) {
+            // Try to extract title and content from the response
+            const titleMatch = response.match(/"title"\s*:\s*"([^"]+)"/);
+            const contentMatch = response.match(/"content"\s*:\s*"([^"]+)"/);
+            if (titleMatch && contentMatch) {
+                return {
+                    title: titleMatch[1],
+                    content: unescapeGeneratedContent(contentMatch[1]),
+                };
+            }
+            throw new Error("Failed to parse formatted note JSON");
+        }
     } catch (error) {
-      // Try to extract title and content from the response
-      const titleMatch = response.match(/"title"\s*:\s*"([^"]+)"/);
-      const contentMatch = response.match(/"content"\s*:\s*"([^"]+)"/);
-      if (titleMatch && contentMatch) {
+        console.error("Error formatting note with Groq:", error);
         return {
-          title: titleMatch[1],
-          content: unescapeGeneratedContent(contentMatch[1]),
+            title: "Formatted Note (Error)",
+            content: `An error occurred while formatting the note. Please try again.\n\nOriginal content:\n${noteContent}`,
         };
-      }
-      throw new Error("Failed to parse formatted note JSON");
     }
-  } catch (error) {
-    console.error("Error formatting note with Groq:", error);
-    return {
-      title: "Formatted Note (Error)",
-      content: `An error occurred while formatting the note. Please try again.\n\nOriginal content:\n${noteContent}`,
-    };
-  }
 }
