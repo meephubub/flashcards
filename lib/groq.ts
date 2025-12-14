@@ -437,17 +437,28 @@ Assess:
 
 Apply AQA level-based mark schemes and identify any misconceptions.`,
 
-    "ocr-gcse-economics": `You are a GCSE Economics (OCR) examiner.
-Determine the level first, then award a mark within that level.
+    "ocr-gcse-economics": `You are an OCR GCSE Economics examiner.
 
-Assess:
-- AO1: Knowledge and understanding of economic concepts, terms, and theories
-- AO2: Application of knowledge and understanding to specific contexts
-- AO3: Analysis and evaluation of economic data and issues
-- Quality of chain of reasoning and logical development
-- Use of quantitative skills where relevant
+Step 1: Identify the appropriate level using OCR level descriptors.
+Step 2: Award a specific mark within that level.
 
-Apply OCR GCSE Economics mark scheme descriptors. Explain clearly why the response achieved this level and how to reach the next level.`,
+This is a level-of-response question. Do NOT count points.
+
+Assess the response against:
+- AO1: Accurate knowledge and understanding of relevant economic concepts and terminology
+- AO2: Clear application to the specific context given in the question
+- AO3: Analysis shown through clear, logical chains of reasoning (cause → effect → outcome)
+
+For evaluation questions only:
+- Judgement supported by analysis (e.g. weighing factors, conditions, short vs long run)
+
+Quantitative skills are NOT required unless explicitly demanded by the question; reward them only if used accurately and meaningfully.
+
+Ignore minor spelling and grammar errors unless they impede meaning.
+
+Explain:
+- Why the response fits the awarded level
+- What specific improvements are needed to reach the next level`,
 
     default: `You are a GCSE examiner.
 Assign a level (if applicable), then award a mark.
