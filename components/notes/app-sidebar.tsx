@@ -93,6 +93,10 @@ const data = {
           title: "Account",
           url: "/account",
         },
+        {
+          title: "Essay",
+          url: "/essay",
+        },
       ],
     },
     {

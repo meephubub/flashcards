@@ -59,7 +59,7 @@ export default function PwaInit() {
   // Debug button (remove in production)
   const handleInstall = async () => {
     if (!installPrompt) return;
-    
+
     const result = await installPrompt.prompt();
     console.log('Install prompt result:', result);
     setInstallPrompt(null);
@@ -69,25 +69,8 @@ export default function PwaInit() {
   return (
     <>
       {/* Debug info - remove in production */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          right: 0, 
-          background: 'black', 
-          color: 'white', 
-          padding: '10px',
-          zIndex: 9999,
-          fontSize: '12px'
-        }}>
-          PWA: {isInstallable ? 'Installable' : 'Not Ready'}
-          {isInstallable && (
-            <button onClick={handleInstall} style={{ marginLeft: '10px' }}>
-              Install Now (only visible in dev mode)
-            </button>
-          )}
-        </div>
-      )}
+      {/* Debug info - remove in production -- REMOVED AS REQUESTED */}
+      {/* {process.env.NODE_ENV === 'development' && ( ... )} */}
 
       {/* iOS install hint (no beforeinstallprompt on iOS) */}
       {showIosHint && (

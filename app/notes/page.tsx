@@ -89,7 +89,7 @@ export default function Page() {
 
   // Keep MarkdownContent in sync without re-rendering it (avoid wiping DOM highlights)
   useEffect(() => {
-    try { window.dispatchEvent(new CustomEvent('notes-set-highlight-color', { detail: { color: highlightColor } })) } catch {}
+    try { window.dispatchEvent(new CustomEvent('notes-set-highlight-color', { detail: { color: highlightColor } })) } catch { }
   }, [highlightColor])
 
   useEffect(() => {
@@ -149,7 +149,7 @@ export default function Page() {
         if (qId && qId !== currentNoteId) {
           setCurrentNoteId(qId)
         }
-      } catch {}
+      } catch { }
     }
     applyFromUrl()
     window.addEventListener('popstate', applyFromUrl)
@@ -173,7 +173,7 @@ export default function Page() {
       // Update local state immediately for a seamless refresh
       setNoteContent(content)
       // Best-effort update timestamp locally for UI freshness
-      try { setNoteUpdatedAt(new Date().toISOString()) } catch {}
+      try { setNoteUpdatedAt(new Date().toISOString()) } catch { }
     })
     return () => setUpdateCurrentNoteContent(undefined)
   }, [setUpdateCurrentNoteContent])
@@ -234,7 +234,7 @@ export default function Page() {
   }, [currentNoteId])
   useEffect(() => {
     const id = currentNoteId || 'none'
-    try { localStorage.setItem(`qa_history_${id}`, JSON.stringify(qaHistory)) } catch {}
+    try { localStorage.setItem(`qa_history_${id}`, JSON.stringify(qaHistory)) } catch { }
   }, [qaHistory, currentNoteId])
 
   // Exam side tab state
@@ -358,7 +358,7 @@ export default function Page() {
     // place caret after inserted
     const caret = before.length + insertion.length
     setTimeout(() => {
-      try { el.focus(); el.setSelectionRange(caret, caret) } catch {}
+      try { el.focus(); el.setSelectionRange(caret, caret) } catch { }
     }, 0)
     setStyleMenuOpen(false)
   }, [draftContent])
@@ -377,7 +377,7 @@ export default function Page() {
     const caretStart = before.length + wrapperStart.length
     const caretEnd = caretStart + selected.length
     setTimeout(() => {
-      try { el.focus(); el.setSelectionRange(caretStart, caretEnd) } catch {}
+      try { el.focus(); el.setSelectionRange(caretStart, caretEnd) } catch { }
     }, 0)
     setStyleMenuOpen(false)
   }, [draftContent])
@@ -385,13 +385,13 @@ export default function Page() {
   // Reset embedded exam mode when switching notes or unmounting
   useEffect(() => {
     return () => {
-      try { setShowExamInNotes(false) } catch {}
+      try { setShowExamInNotes(false) } catch { }
     }
   }, [setShowExamInNotes])
 
   useEffect(() => {
     // When changing the selected note, leave exam mode
-    try { setShowExamInNotes(false) } catch {}
+    try { setShowExamInNotes(false) } catch { }
   }, [currentNoteId, setShowExamInNotes])
 
   // Generate exam from current note using Alt+T
@@ -497,21 +497,21 @@ export default function Page() {
     if (!user?.id) return
     if (userNotes.length > 0) return
     let cancelled = false
-    ;(async () => {
-      setSelectLoading(true)
-      setSelectError(null)
-      const { data, error } = await supabase
-        .from("notes")
-        .select("id, title, updated_at, category")
-        .eq("user_id", user.id)
-        .order("updated_at", { ascending: false })
-        .limit(50)
-      if (!cancelled) {
-        if (error) setSelectError(error.message)
-        else setUserNotes((data as any) ?? [])
-        setSelectLoading(false)
-      }
-    })()
+      ; (async () => {
+        setSelectLoading(true)
+        setSelectError(null)
+        const { data, error } = await supabase
+          .from("notes")
+          .select("id, title, updated_at, category")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false })
+          .limit(50)
+        if (!cancelled) {
+          if (error) setSelectError(error.message)
+          else setUserNotes((data as any) ?? [])
+          setSelectLoading(false)
+        }
+      })()
     return () => { cancelled = true }
   }, [supabase, user?.id, userNotes.length])
 
@@ -642,7 +642,7 @@ export default function Page() {
       setNoteContent((data?.content as string) || "")
       setNoteProject((data?.project as string) || "")
       setIsStarred(Boolean((data as any)?.is_starred))
-      try { await saveNoteContent(user.id, { id: currentNoteId, title: (data?.title as string) || "", content: (data?.content as string) || "", updated_at: (data?.updated_at as string) || null }) } catch {}
+      try { await saveNoteContent(user.id, { id: currentNoteId, title: (data?.title as string) || "", content: (data?.content as string) || "", updated_at: (data?.updated_at as string) || null }) } catch { }
       setLoadingNote(false)
     }
     run()
@@ -712,7 +712,7 @@ export default function Page() {
           const owned = Boolean(walletAddress && minter && walletAddress.toLowerCase() === minter)
           setNoteOwnedByYou(owned)
         }
-      } catch {}
+      } catch { }
       finally {
         setNoteVerifying(false)
       }
@@ -746,7 +746,7 @@ export default function Page() {
         } else {
           toast.success('Minted successfully')
         }
-      } catch {}
+      } catch { }
     }
     const onEvent = () => { void handler() }
     window.addEventListener('notes-mint-current', onEvent as EventListener)
@@ -772,15 +772,15 @@ export default function Page() {
       setNoteContent((data?.content as string) ?? draftContent)
       setNoteUpdatedAt((data?.updated_at as string) || "")
       setIsEditing(false)
-      try { await saveNoteContent(user.id, { id: currentNoteId, title: noteTitle || "", content: ((data?.content as string) ?? draftContent) || "", updated_at: (data?.updated_at as string) || null }) } catch {}
+      try { await saveNoteContent(user.id, { id: currentNoteId, title: noteTitle || "", content: ((data?.content as string) ?? draftContent) || "", updated_at: (data?.updated_at as string) || null }) } catch { }
       try {
         const contentStr = (data?.content as string) ?? draftContent
         const fd = new FormData()
         fd.append('file', new File([contentStr], `${(noteTitle || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
         const address = walletAddress || ''
         if (address) fd.append('userAddress', address)
-        await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => {})
-      } catch {}
+        await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => { })
+      } catch { }
     }
     setSaving(false)
   }, [currentNoteId, draftContent, supabase, user?.id, saving, noteTitle, walletAddress])
@@ -841,7 +841,7 @@ Goals:
       try {
         el.focus()
         el.setSelectionRange(caret, caret)
-      } catch {}
+      } catch { }
     }, 0)
   }, [draftContent])
   // Extend paste handler to also embed YouTube links as directives
@@ -866,7 +866,7 @@ Goals:
         try {
           el.focus()
           el.setSelectionRange(caret, caret)
-        } catch {}
+        } catch { }
       }, 0)
       return
     }
@@ -894,7 +894,7 @@ Goals:
       setDraftContent(next)
       const caret = before.length + insertion.length
       setTimeout(() => {
-        try { el.focus(); el.setSelectionRange(caret, caret) } catch {}
+        try { el.focus(); el.setSelectionRange(caret, caret) } catch { }
       }, 0)
       return
     }
@@ -973,7 +973,7 @@ Goals:
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
         e.preventDefault()
         setHighlightColor((cur) => {
-          const order: Array<'green'|'red'|'blue'> = ['green','red','blue']
+          const order: Array<'green' | 'red' | 'blue'> = ['green', 'red', 'blue']
           const idx = order.indexOf(cur || 'green')
           return order[(idx + 1) % order.length]
         })
@@ -993,7 +993,7 @@ Goals:
     try {
       // Restrict to common formats
       const ext = file.name.split('.').pop()?.toLowerCase()
-      if (!ext || !['glb','gltf','stl'].includes(ext)) {
+      if (!ext || !['glb', 'gltf', 'stl'].includes(ext)) {
         throw new Error('Unsupported model type. Use .glb, .gltf or .stl')
       }
       // Send to server route that uses SUPABASE_SERVICE_ROLE_KEY
@@ -1020,7 +1020,7 @@ Goals:
         setDraftContent(next)
         const caret = start + insertion.length
         setTimeout(() => {
-          try { el.focus(); el.setSelectionRange(caret, caret) } catch {}
+          try { el.focus(); el.setSelectionRange(caret, caret) } catch { }
         }, 0)
       } else {
         setDraftContent((prev) => prev + insertion)
@@ -1030,7 +1030,7 @@ Goals:
     } finally {
       setUploadingModel(false)
       // reset value so the same file can be picked again
-      try { if (e.target) e.target.value = '' } catch {}
+      try { if (e.target) e.target.value = '' } catch { }
     }
   }, [draftContent, user?.id])
 
@@ -1098,9 +1098,9 @@ Goals:
           fd.append('file', new File([createdContent], `${(title || 'note').slice(0, 40)}.md`, { type: 'text/markdown' }))
           const address = walletAddress || ''
           if (address) fd.append('userAddress', address)
-          await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => {})
+          await fetch('/api/mint', { method: 'POST', body: fd }).then(r => r.json().catch(() => ({}))).catch(() => { })
         }
-      } catch {}
+      } catch { }
     }
     setCreating(false)
   }
@@ -1127,7 +1127,7 @@ Goals:
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+        <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/40 flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator
@@ -1182,9 +1182,101 @@ Goals:
                 )}
               </BreadcrumbList>
             </Breadcrumb>
+
+            {/* Editing: show save and char count in header */}
+            {/* Editing: toolbar in header */}
+            {isEditing && (
+              <div className="flex items-center gap-1 pl-4 border-l border-border/40 ml-4 overflow-x-auto no-scrollbar scroll-smooth mask-linear-fade">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".glb,.gltf,.stl"
+                  className="hidden"
+                  onChange={onPickModel}
+                />
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void formatWithAI()}
+                  disabled={aiFormatting}
+                  className="h-7 px-2 text-xs"
+                >
+                  {aiFormatting ? 'Doing AI…' : 'AI Format'}
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingModel}
+                  className="h-7 px-2 text-xs"
+                >
+                  {uploadingModel ? '…' : '3D'}
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant={useWysiwyg ? "secondary" : "ghost"}
+                  onClick={() => setUseWysiwyg(v => !v)}
+                  className="h-7 px-2 text-xs"
+                >
+                  {useWysiwyg ? 'Rich' : 'Markdown'}
+                </Button>
+
+                {!useWysiwyg && (
+                  <>
+                    <div className="h-3 w-px bg-border/50 mx-1" />
+                    {pastelColors.slice(0, 4).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => applyColorToSelection(c.id)}
+                        title={c.label}
+                        className="w-5 h-5 rounded-md text-[9px] font-medium hover:ring-1 ring-border/50 transition-shadow mx-0.5"
+                        style={{
+                          backgroundColor: pastelHex[c.id] || '#eee',
+                          color: '#1f2937',
+                        }}
+                      >
+                        {c.label.charAt(0)}
+                      </button>
+                    ))}
+                    <div className="h-3 w-px bg-border/50 mx-1" />
+                    <button type="button" className="w-5 h-5 rounded-md bg-muted hover:bg-muted/80 text-[10px] font-bold mx-0.5" onClick={() => wrapSelection('**')}>B</button>
+                    <button type="button" className="w-5 h-5 rounded-md bg-muted hover:bg-muted/80 text-[10px] italic mx-0.5" onClick={() => wrapSelection('*')}>I</button>
+                  </>
+                )}
+
+                <div className="h-4 w-px bg-border/40 mx-2" />
+
+                <span className="text-xs text-muted-foreground hidden xl:inline w-20 text-right mr-2">{draftContent.length.toLocaleString()} chars</span>
+
+                <Button size="sm" onClick={() => void saveDraft()} disabled={saving} className="h-8">
+                  {saving ? 'Saving…' : 'Save'}
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsEditing(false)
+                    setDraftContent(noteContent || "")
+                    setSaveError(null)
+                    setAiFormatError(null)
+                    setUploadModelError(null)
+                  }}
+                  disabled={saving}
+                  className="h-8 px-2 text-muted-foreground ml-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
           </div>
           {/* Alt+V shortcut to verify current note */}
-          <script dangerouslySetInnerHTML={{ __html: `
+          <script dangerouslySetInnerHTML={{
+            __html: `
             (function(){
               if (window.__alt_v_bound__) return; window.__alt_v_bound__ = true;
               window.addEventListener('keydown', function(e){
@@ -1204,8 +1296,8 @@ Goals:
             })();
           `}} />
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className={`bg-background min-h-[100vh] flex-1 rounded-xl md:min-h-min p-6 md:p-10 transition-[padding-right] duration-200 ${(dictOpen || qaOpen) ? 'pr-[28rem]' : ''}`}>
+        <div className="flex flex-1 flex-col">
+          <div className={`bg-background min-h-[calc(100vh-4rem)] p-8 md:p-12 transition-[padding-right] duration-200 ${(dictOpen || qaOpen) ? 'pr-[28rem]' : ''}`}>
             {/* Create Note Dialog (for palette "Create note") */}
             <NoteCreateDialog
               open={createOpen}
@@ -1322,7 +1414,7 @@ Goals:
               </div>
             )}
             {currentNoteId && !examOpen && (
-              <article className="mx-auto max-w-3xl">
+              <article className="mx-auto max-w-5xl px-4">
                 <header className="mb-8">
                   <div className="mb-2 flex items-center gap-2">
                     <h1 className="text-3xl font-bold tracking-tight flex-1">{noteTitle}</h1>
@@ -1382,7 +1474,7 @@ Goals:
                                     if (!Number.isFinite(n)) return
                                     const clamped = Math.max(0, Math.min(100, n))
                                     setFillGapsDensity(clamped / 100)
-                                  } catch {}
+                                  } catch { }
                                 }}
                                 title="Custom density"
                                 aria-pressed={otherActive}
@@ -1411,119 +1503,40 @@ Goals:
                 {loadingNote ? (
                   <InlineNoteSkeleton />
                 ) : isEditing ? (
-                  <div>
-                    {(saveError || aiFormatError || uploadModelError) && (
-                      <div className="mb-3 text-sm text-red-600">{saveError ?? aiFormatError ?? uploadModelError}</div>
+                  <div className="relative">
+                    {/* Floating toolbar moved to header */}
+
+                    {/* Error display */}
+                    {(saveError || aiFormatError || uploadModelError || styleMenuError) && (
+                      <div className="mb-4 text-sm text-red-600">{saveError ?? aiFormatError ?? uploadModelError ?? styleMenuError}</div>
                     )}
-                    <div className="mb-2 flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => void saveDraft()}
-                        disabled={saving}
-                      >
-                        {saving ? 'Saving…' : 'Save (Ctrl+E)'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => void formatWithAI()}
-                        disabled={aiFormatting}
-                      >
-                        {aiFormatting ? 'Formatting…' : 'Format with AI'}
-                      </Button>
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".glb,.gltf,.stl"
-                      className="hidden"
-                      onChange={onPickModel}
-                    />
-                    <div className="flex items-center gap-2 mb-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadingModel}
-                      >
-                        {uploadingModel ? 'Uploading…' : 'Insert 3D model'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={useWysiwyg ? "default" : "outline"}
-                        onClick={() => setUseWysiwyg(v => !v)}
-                        title={useWysiwyg ? 'Switch to Markdown editor' : 'Switch to WYSIWYG editor'}
-                      >
-                        {useWysiwyg ? 'WYSIWYG: On' : 'WYSIWYG: Off'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setIsEditing(false)
-                          setDraftContent(noteContent || "")
-                          setSaveError(null)
-                          setAiFormatError(null)
-                          setUploadModelError(null)
-                        }}
-                        disabled={saving}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                    <div className="mb-3 w-full rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 shadow-sm p-2">
-                      {styleMenuError && (
-                        <div className="text-xs text-red-600 mb-2">{styleMenuError}</div>
-                      )}
-                      {!useWysiwyg ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-[10px] uppercase tracking-wide text-neutral-500">Text</div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {pastelColors.map((c) => (
-                              <button
-                                key={c.id}
-                                type="button"
-                                onClick={() => applyColorToSelection(c.id)}
-                                title={c.label}
-                                className="text-xs px-2.5 py-1 rounded-md border border-transparent shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700"
-                                style={{
-                                  backgroundColor: pastelHex[c.id] || '#eee',
-                                  color: '#1f2937',
-                                }}
-                              >
-                                {c.label}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="h-5 w-px bg-neutral-200 dark:bg-neutral-800" />
-                          <div className="text-[10px] uppercase tracking-wide text-neutral-500">Quick</div>
-                          <div className="flex gap-1.5">
-                            <button type="button" className="text-xs px-2.5 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-transparent" onClick={() => wrapSelection('**')}>Bold</button>
-                            <button type="button" className="text-xs px-2.5 py-1 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-transparent" onClick={() => wrapSelection('*')}>Italic</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-[12px] text-neutral-500 px-1">
-                          WYSIWYG mode is on. Use your browser formatting shortcuts (Ctrl+B, Ctrl+I) and insert images/links normally. Color tags and directives render when saved.
-                        </div>
-                      )}
-                    </div>
+
+                    {/* Full-screen editor */}
                     {!useWysiwyg ? (
-                      <Textarea
-                        ref={editorRef as any}
-                        value={draftContent}
-                        onChange={(e) => setDraftContent(e.target.value)}
-                        onKeyDown={onEditorKeyDown}
-                        onPaste={onEditorPasteExtended}
-                        placeholder="Write your note in Markdown…"
-                        className="min-h-[55vh] w-full resize-y bg-transparent font-mono text-sm"
-                      />
+                      <div className="grid min-h-[calc(100vh-200px)]">
+                        <div className="col-start-1 row-start-1 whitespace-pre-wrap font-mono text-sm invisible pointer-events-none" aria-hidden="true" style={{ lineHeight: '32px' }}>
+                          {draftContent + '\u200b'}
+                        </div>
+                        <Textarea
+                          ref={editorRef as any}
+                          value={draftContent}
+                          onChange={(e) => setDraftContent(e.target.value)}
+                          onKeyDown={onEditorKeyDown}
+                          onPaste={onEditorPasteExtended}
+                          placeholder="Write your note in Markdown…"
+                          autoFocus
+                          className="col-start-1 row-start-1 w-full h-full resize-none bg-transparent font-mono text-sm border-none focus-visible:ring-0 px-0 py-0 overflow-hidden"
+                          style={{
+                            lineHeight: '32px',
+                          }}
+                        />
+                      </div>
                     ) : (
                       <WysiwygEditor
                         value={draftContent}
                         onChange={setDraftContent}
                         placeholder="Write with formatting…"
-                        className="min-h-[55vh]"
+                        className="min-h-[calc(100vh-200px)]"
                       />
                     )}
                   </div>
@@ -1625,222 +1638,222 @@ Goals:
             )}
           </div>
         </div>
-      {/* Fixed Dictionary Side Panel */}
-      {dictOpen && (
-        <div className="fixed top-0 right-0 h-full z-40" style={{ width: dictWidth }}>
-          {/* Subtle page backdrop for depth */}
-          <div
-            className={
-              `absolute inset-0 pointer-events-none bg-gradient-to-l from-black/10 to-transparent dark:from-black/30 
+        {/* Fixed Dictionary Side Panel */}
+        {dictOpen && (
+          <div className="fixed top-0 right-0 h-full z-40" style={{ width: dictWidth }}>
+            {/* Subtle page backdrop for depth */}
+            <div
+              className={
+                `absolute inset-0 pointer-events-none bg-gradient-to-l from-black/10 to-transparent dark:from-black/30 
                transition-opacity duration-200 ease-out ${dictAnimOpen ? 'opacity-100' : 'opacity-0'}`
-            }
-          />
-          {/* Panel */}
-          <div
-            className={
-              `absolute right-0 top-0 h-full flex flex-col p-4 md:p-5 
+              }
+            />
+            {/* Panel */}
+            <div
+              className={
+                `absolute right-0 top-0 h-full flex flex-col p-4 md:p-5 
                backdrop-blur-md bg-white/70 dark:bg-neutral-900/70 
                border-l border-neutral-200/60 dark:border-neutral-800/60 
                shadow-xl ring-1 ring-black/5 dark:ring-white/5 rounded-l-2xl 
                transition-transform transition-opacity duration-200 ease-out 
                ${dictAnimOpen ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0'}`
-            }
-            style={{ width: dictWidth }}
-          >
-            {/* Resize handle */}
-            <div
-              onMouseDown={onDictResizeMouseDown}
-              title="Resize"
-              className="absolute left-0 top-0 h-full w-1.5 -translate-x-full cursor-ew-resize 
+              }
+              style={{ width: dictWidth }}
+            >
+              {/* Resize handle */}
+              <div
+                onMouseDown={onDictResizeMouseDown}
+                title="Resize"
+                className="absolute left-0 top-0 h-full w-1.5 -translate-x-full cursor-ew-resize 
                          bg-transparent hover:bg-neutral-500/10 active:bg-neutral-500/20"
-            />
-            {/* Header */}
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Dictionary</div>
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/70" aria-hidden="true" />
-              </div>
-              <button
-                type="button"
-                onClick={() => setDictOpen(false)}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-md 
+              />
+              {/* Header */}
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Dictionary</div>
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/70" aria-hidden="true" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDictOpen(false)}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md 
                            border border-neutral-200/70 dark:border-neutral-800/70 
                            hover:bg-neutral-100/60 dark:hover:bg-neutral-800/60 
                            transition-colors"
-                aria-label="Close dictionary"
-                title="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {/* Word */}
-            <div className="mb-3 md:mb-4">
-              <div className="text-xl md:text-2xl font-semibold leading-tight tracking-tight">{dictWord || '—'}</div>
-            </div>
-            {/* Content */}
-            <div className="flex-1 overflow-auto pr-1 md:pr-2 space-y-3 md:space-y-3.5 ">
-              {dictLoading && (
-                <div className="text-sm text-neutral-600 dark:text-neutral-400 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Looking up…</div>
-              )}
-              {dictError && (
-                <div className="text-sm text-red-600/90 dark:text-red-400/90">{dictError}</div>
-              )}
-              {!dictLoading && !dictError && dictEntries.length > 0 && (
-                <ol className="list-decimal pl-5 space-y-2.5">
-                  {dictEntries.map((d, idx) => (
-                    <li key={idx} className="text-sm">
-                      <div className="leading-6">
-                        <span className="font-medium">{d.definition}</span>
-                        {d.pos && <span className="ml-2 text-xs text-neutral-500 italic">{d.pos}</span>}
-                      </div>
-                      {d.example && (
-                        <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">“{d.example}”</div>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              )}
-              {!dictLoading && !dictError && dictEntries.length === 0 && dictWord && (
-                <div className="text-sm text-neutral-600 dark:text-neutral-400">No definitions found.</div>
-              )}
-              {!dictLoading && !dictError && !dictEntries.length && !dictWord && (
-                <div className="text-sm text-neutral-600 dark:text-neutral-400">Select a word and press Alt+D.</div>
-              )}
+                  aria-label="Close dictionary"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {/* Word */}
+              <div className="mb-3 md:mb-4">
+                <div className="text-xl md:text-2xl font-semibold leading-tight tracking-tight">{dictWord || '—'}</div>
+              </div>
+              {/* Content */}
+              <div className="flex-1 overflow-auto pr-1 md:pr-2 space-y-3 md:space-y-3.5 ">
+                {dictLoading && (
+                  <div className="text-sm text-neutral-600 dark:text-neutral-400 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Looking up…</div>
+                )}
+                {dictError && (
+                  <div className="text-sm text-red-600/90 dark:text-red-400/90">{dictError}</div>
+                )}
+                {!dictLoading && !dictError && dictEntries.length > 0 && (
+                  <ol className="list-decimal pl-5 space-y-2.5">
+                    {dictEntries.map((d, idx) => (
+                      <li key={idx} className="text-sm">
+                        <div className="leading-6">
+                          <span className="font-medium">{d.definition}</span>
+                          {d.pos && <span className="ml-2 text-xs text-neutral-500 italic">{d.pos}</span>}
+                        </div>
+                        {d.example && (
+                          <div className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">“{d.example}”</div>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {!dictLoading && !dictError && dictEntries.length === 0 && dictWord && (
+                  <div className="text-sm text-neutral-600 dark:text-neutral-400">No definitions found.</div>
+                )}
+                {!dictLoading && !dictError && !dictEntries.length && !dictWord && (
+                  <div className="text-sm text-neutral-600 dark:text-neutral-400">Select a word and press Alt+D.</div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Fixed Q&A Side Panel */}
-      {qaOpen && (
-        <div className="fixed top-0 right-0 h-full z-40" style={{ width: qaWidth }}>
-          <div
-            className={
-              `absolute inset-0 pointer-events-none bg-gradient-to-l from-black/10 to-transparent dark:from-black/30 
+        {/* Fixed Q&A Side Panel */}
+        {qaOpen && (
+          <div className="fixed top-0 right-0 h-full z-40" style={{ width: qaWidth }}>
+            <div
+              className={
+                `absolute inset-0 pointer-events-none bg-gradient-to-l from-black/10 to-transparent dark:from-black/30 
                transition-opacity duration-200 ease-out ${qaAnimOpen ? 'opacity-100' : 'opacity-0'}`
-            }
-          />
-          <div
-            className={
-              `absolute right-0 top-0 h-full flex flex-col p-4 md:p-5 
+              }
+            />
+            <div
+              className={
+                `absolute right-0 top-0 h-full flex flex-col p-4 md:p-5 
                backdrop-blur-md bg-white/70 dark:bg-neutral-900/70 
                border-l border-neutral-200/60 dark:border-neutral-800/60 
                shadow-xl ring-1 ring-black/5 dark:ring-white/5 rounded-l-2xl 
                transition-transform transition-opacity duration-200 ease-out 
                ${qaAnimOpen ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0'}`
-            }
-            style={{ width: qaWidth }}
-          >
-            <div
-              onMouseDown={onQaResizeMouseDown}
-              title="Resize"
-              className="absolute left-0 top-0 h-full w-1.5 -translate-x-full cursor-ew-resize 
+              }
+              style={{ width: qaWidth }}
+            >
+              <div
+                onMouseDown={onQaResizeMouseDown}
+                title="Resize"
+                className="absolute left-0 top-0 h-full w-1.5 -translate-x-full cursor-ew-resize 
                          bg-transparent hover:bg-neutral-500/10 active:bg-neutral-500/20"
-            />
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="flex items-center gap-2">
-                <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Ask Note</div>
-                <div className="h-1.5 w-1.5 rounded-full bg-sky-500/70" aria-hidden="true" />
-              </div>
-              <button
-                type="button"
-                onClick={() => setQaOpen(false)}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-md 
+              />
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Ask Note</div>
+                  <div className="h-1.5 w-1.5 rounded-full bg-sky-500/70" aria-hidden="true" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQaOpen(false)}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md 
                            border border-neutral-200/70 dark:border-neutral-800/70 
                            hover:bg-neutral-100/60 dark:hover:bg-neutral-800/60 
                            transition-colors"
-                aria-label="Close Q&A"
-                title="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {/* History area */}
-            <div className="flex-1 overflow-auto pr-1 md:pr-2 space-y-3">
-              {qaHistory.length === 0 && (
-                <div className="text-sm text-neutral-600 dark:text-neutral-400">Ask something about this note. We’ll answer concisely and jump to the relevant section.</div>
-              )}
-              {qaHistory.map((item) => (
-                <div key={item.id} className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <div className="mt-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900 text-[10px]">Q</div>
-                    <div className="flex-1 rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/60 px-3 py-2 text-sm shadow-sm">
-                      {item.q}
-                    </div>
-                  </div>
-                  {item.a ? (
-                    <div className="ml-7 rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-900/50 px-3 py-2 shadow-sm">
-                      <div className="prose prose-neutral dark:prose-invert max-w-none text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkBreaks, remarkDirective]} rehypePlugins={[rehypeKatex]}>
-                          {item.a}
-                        </ReactMarkdown>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        {item.snippet && (
-                          <Button size="sm" variant="outline" onClick={() => { try { window.dispatchEvent(new CustomEvent('qa-scroll-to', { detail: { snippet: item.snippet } })) } catch {} }}>Jump to context</Button>
-                        )}
-                        <span className="text-[10px] text-neutral-500">{new Date(item.ts).toLocaleTimeString()}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="ml-7 text-sm text-neutral-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Answering…</div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Input at bottom */}
-            <div className="pt-3 mt-2 border-t border-neutral-200/70 dark:border-neutral-800/70">
-              <div className="flex items-end gap-2">
-                <textarea
-                  value={qaQuestion}
-                  onChange={(e) => setQaQuestion(e.target.value)}
-                  placeholder="Ask a question about this note… (Ctrl+Q to toggle)"
-                  className="flex-1 max-h-40 min-h-[56px] rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700 resize-y"
-                />
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    const question = qaQuestion.trim()
-                    if (!question) return
-                    setQaQuestion('')
-                    setQaError(null)
-                    // Append pending item to history
-                    const pending: QaItem = { id: Math.random().toString(36).slice(2), q: question, ts: Date.now() }
-                    setQaHistory(prev => [...prev, pending])
-                    setQaLoading(true)
-                    try {
-                      const system = "You are a helpful study assistant. Given a note and a user question, answer concisely and return JSON with an 'answer' (Markdown) and 'snippet' (exact quote from the note to scroll to)."
-                      const prompt = `NOTE TITLE: ${noteTitle || 'Untitled'}\n\nNOTE CONTENT:\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n${noteContent}\n\n---\nQUESTION: ${question}\n\nRespond ONLY in JSON with keys: answer (string, markdown allowed), snippet (string, exact text copied from the note that best anchors the answer).`
-                      const raw = await makeGroqRequest(prompt, true, system)
-                      let parsed: any = null
-                      try { parsed = JSON.parse(raw) } catch { const m = raw.match(/\{[\s\S]*\}/); if (m) { try { parsed = JSON.parse(m[0]) } catch {} } }
-                      const answer = (parsed && typeof parsed.answer === 'string') ? parsed.answer : String(raw || '').trim()
-                      const snippet = (parsed && typeof parsed.snippet === 'string') ? parsed.snippet : ''
-                      setQaAnswerMd(answer)
-                      setQaSnippet(snippet)
-                      setQaHistory(prev => prev.map(it => it.id === pending.id ? { ...it, a: answer, snippet } : it))
-                      if (snippet) { try { window.dispatchEvent(new CustomEvent('qa-scroll-to', { detail: { snippet } })) } catch {} }
-                    } catch (err: any) {
-                      setQaError(err?.message || 'Failed to get answer')
-                      // Mark as error in history
-                      setQaHistory(prev => prev.map(it => it.id === pending.id ? { ...it, a: `Sorry, an error occurred: ${err?.message || 'Unknown error'}` } : it))
-                    } finally {
-                      setQaLoading(false)
-                    }
-                  }}
-                  disabled={qaLoading}
+                  aria-label="Close Q&A"
+                  title="Close"
                 >
-                  {qaLoading ? 'Sending…' : 'Ask'}
-                </Button>
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              {qaError && <div className="mt-2 text-xs text-red-600">{qaError}</div>}
+              {/* History area */}
+              <div className="flex-1 overflow-auto pr-1 md:pr-2 space-y-3">
+                {qaHistory.length === 0 && (
+                  <div className="text-sm text-neutral-600 dark:text-neutral-400">Ask something about this note. We’ll answer concisely and jump to the relevant section.</div>
+                )}
+                {qaHistory.map((item) => (
+                  <div key={item.id} className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <div className="mt-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900 text-[10px]">Q</div>
+                      <div className="flex-1 rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/60 px-3 py-2 text-sm shadow-sm">
+                        {item.q}
+                      </div>
+                    </div>
+                    {item.a ? (
+                      <div className="ml-7 rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-900/50 px-3 py-2 shadow-sm">
+                        <div className="prose prose-neutral dark:prose-invert max-w-none text-sm">
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkBreaks, remarkDirective]} rehypePlugins={[rehypeKatex]}>
+                            {item.a}
+                          </ReactMarkdown>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          {item.snippet && (
+                            <Button size="sm" variant="outline" onClick={() => { try { window.dispatchEvent(new CustomEvent('qa-scroll-to', { detail: { snippet: item.snippet } })) } catch { } }}>Jump to context</Button>
+                          )}
+                          <span className="text-[10px] text-neutral-500">{new Date(item.ts).toLocaleTimeString()}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="ml-7 text-sm text-neutral-500 inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Answering…</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Input at bottom */}
+              <div className="pt-3 mt-2 border-t border-neutral-200/70 dark:border-neutral-800/70">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={qaQuestion}
+                    onChange={(e) => setQaQuestion(e.target.value)}
+                    placeholder="Ask a question about this note… (Ctrl+Q to toggle)"
+                    className="flex-1 max-h-40 min-h-[56px] rounded-md border border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-700 resize-y"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      const question = qaQuestion.trim()
+                      if (!question) return
+                      setQaQuestion('')
+                      setQaError(null)
+                      // Append pending item to history
+                      const pending: QaItem = { id: Math.random().toString(36).slice(2), q: question, ts: Date.now() }
+                      setQaHistory(prev => [...prev, pending])
+                      setQaLoading(true)
+                      try {
+                        const system = "You are a helpful study assistant. Given a note and a user question, answer concisely and return JSON with an 'answer' (Markdown) and 'snippet' (exact quote from the note to scroll to)."
+                        const prompt = `NOTE TITLE: ${noteTitle || 'Untitled'}\n\nNOTE CONTENT:\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n${noteContent}\n\n---\nQUESTION: ${question}\n\nRespond ONLY in JSON with keys: answer (string, markdown allowed), snippet (string, exact text copied from the note that best anchors the answer).`
+                        const raw = await makeGroqRequest(prompt, true, system)
+                        let parsed: any = null
+                        try { parsed = JSON.parse(raw) } catch { const m = raw.match(/\{[\s\S]*\}/); if (m) { try { parsed = JSON.parse(m[0]) } catch { } } }
+                        const answer = (parsed && typeof parsed.answer === 'string') ? parsed.answer : String(raw || '').trim()
+                        const snippet = (parsed && typeof parsed.snippet === 'string') ? parsed.snippet : ''
+                        setQaAnswerMd(answer)
+                        setQaSnippet(snippet)
+                        setQaHistory(prev => prev.map(it => it.id === pending.id ? { ...it, a: answer, snippet } : it))
+                        if (snippet) { try { window.dispatchEvent(new CustomEvent('qa-scroll-to', { detail: { snippet } })) } catch { } }
+                      } catch (err: any) {
+                        setQaError(err?.message || 'Failed to get answer')
+                        // Mark as error in history
+                        setQaHistory(prev => prev.map(it => it.id === pending.id ? { ...it, a: `Sorry, an error occurred: ${err?.message || 'Unknown error'}` } : it))
+                      } finally {
+                        setQaLoading(false)
+                      }
+                    }}
+                    disabled={qaLoading}
+                  >
+                    {qaLoading ? 'Sending…' : 'Ask'}
+                  </Button>
+                </div>
+                {qaError && <div className="mt-2 text-xs text-red-600">{qaError}</div>}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </SidebarInset>
-  </SidebarProvider>
+        )}
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
 
@@ -1871,16 +1884,16 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
 
   // DOM-only highlighter (temporary, not persisted)
   const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const currentHLRef = React.useRef<'green'|'red'|'blue'>('green')
+  const currentHLRef = React.useRef<'green' | 'red' | 'blue'>('green')
 
   // Listen for color changes from Page without causing re-renders
   React.useEffect(() => {
     const onSet = (ev: Event) => {
       try {
-        const e = ev as CustomEvent<{ color?: 'green'|'red'|'blue' }>
+        const e = ev as CustomEvent<{ color?: 'green' | 'red' | 'blue' }>
         const c = e?.detail?.color
         if (c === 'green' || c === 'red' || c === 'blue') currentHLRef.current = c
-      } catch {}
+      } catch { }
     }
     window.addEventListener('notes-set-highlight-color', onSet as EventListener)
     return () => window.removeEventListener('notes-set-highlight-color', onSet as EventListener)
@@ -1909,13 +1922,13 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
     }
 
     // Create a transient highlight span for a given range
-    const colorToStyle = (color: 'green'|'red'|'blue') => {
+    const colorToStyle = (color: 'green' | 'red' | 'blue') => {
       if (color === 'red') return { bg: 'rgba(244,63,94,0.35)', cls: 'dom-red-highlight' } // rose-500 @35%
       if (color === 'blue') return { bg: 'rgba(59,130,246,0.35)', cls: 'dom-blue-highlight' } // sky-500 @35%
       return { bg: 'rgba(34,197,94,0.35)', cls: 'dom-green-highlight' } // emerald-500 @35%
     }
 
-    const highlightRange = (range: Range, color: 'green'|'red'|'blue') => {
+    const highlightRange = (range: Range, color: 'green' | 'red' | 'blue') => {
       try {
         const span = document.createElement('span')
         span.className = 'qa-highlight'
@@ -1932,11 +1945,11 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
             const frag = document.createDocumentFragment()
             while (span.firstChild) frag.appendChild(span.firstChild)
             parent.replaceChild(frag, span)
-          } catch {}
+          } catch { }
         }, 1800)
       } catch {
         // In case of invalid range (spans multiple nodes), fallback: just scroll the startContainer into view
-        try { (range.startContainer as Element)?.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch {}
+        try { (range.startContainer as Element)?.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch { }
       }
     }
 
@@ -2079,7 +2092,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
       }
     }
     const onCustom = (ev: Event) => {
-      const e = ev as CustomEvent<{ color?: 'green'|'red'|'blue' }>
+      const e = ev as CustomEvent<{ color?: 'green' | 'red' | 'blue' }>
       const color = e?.detail?.color || currentHLRef.current
       const root = containerRef.current
       if (!root) return
@@ -2103,7 +2116,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
         after.setStartAfter(span)
         after.collapse(true)
         sel.addRange(after)
-      } catch {}
+      } catch { }
     }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('notes-highlight-selection', onCustom as EventListener)
@@ -2196,13 +2209,13 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
     () => {
       // Handle the case where written directives might not be parsed correctly
       let processed = content || ''
-      
+
       // Check if the content contains written directives that aren't being processed
       if (processed.includes(':written{') && !processed.includes('<written')) {
         // If we have leaf directives but they're not being processed, try to normalize them
         processed = normalizeWrittenDirectives(processed)
       }
-      
+
       return processed
     },
     [content]
@@ -2222,7 +2235,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
       // xorshift32
       x ^= x << 13; x >>>= 0
       x ^= x >> 17; x >>>= 0
-      x ^= x << 5;  x >>>= 0
+      x ^= x << 5; x >>>= 0
       return (x >>> 0) / 4294967296
     }
   }, [])
@@ -2238,7 +2251,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
       visitWithParent(tree, (node, parent, index) => {
         if (!parent || typeof node?.type !== 'string') return
         // Skip headings, code blocks, inline code, links, images, tables
-        const skipTypes = new Set(['code','inlineCode','link','image','table','thematicBreak'])
+        const skipTypes = new Set(['code', 'inlineCode', 'link', 'image', 'table', 'thematicBreak'])
         // We'll still strip == == inside headings, but never create gaps there
         if (skipTypes.has(node.type) || skipTypes.has(parent.type)) return
         if (node.type !== 'text' || typeof node.value !== 'string') return
@@ -2394,7 +2407,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
               }
             }
 
-            ;(data as any).hProperties = {
+            ; (data as any).hProperties = {
               ...hast,
               pairs,
               pairsJson: JSON.stringify(pairs),
@@ -2462,7 +2475,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
               }
             }
 
-            ;(data as any).hProperties = {
+            ; (data as any).hProperties = {
               ...hast,
               question: question || '',
               options,
@@ -2510,7 +2523,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
             }
             // Clear children to prevent rendering the raw attribute string
             if (Array.isArray((node as any).children)) {
-              ;(node as any).children = []
+              ; (node as any).children = []
             }
             return
           }
@@ -2752,7 +2765,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
             }
             const onReveal = () => { setValue(answer); setTouched(true); setRevealed(true) }
             const onPointerDown = () => {
-              try { if (pressTimer.current) window.clearTimeout(pressTimer.current) } catch {}
+              try { if (pressTimer.current) window.clearTimeout(pressTimer.current) } catch { }
               pressTimer.current = window.setTimeout(onReveal, 600) as unknown as number
             }
             const clearTimer = () => { if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null } }
@@ -2803,7 +2816,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
             const propPairs = (props as any)?.pairs
             const pairsJson = (props as any)?.pairsJson
             if (Array.isArray(propPairs)) initialPairs = propPairs as Pair[]
-            else if (typeof pairsJson === 'string') { try { const p = JSON.parse(pairsJson); if (Array.isArray(p)) initialPairs = p as Pair[] } catch {} }
+            else if (typeof pairsJson === 'string') { try { const p = JSON.parse(pairsJson); if (Array.isArray(p)) initialPairs = p as Pair[] } catch { } }
 
             const title: string = (props as any)?.title || ''
             const shuffleProp = String((props as any)?.shuffle ?? '').toLowerCase()
@@ -2813,7 +2826,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
             const [right, setRight] = React.useState<string[]>(() => {
               const arr = initialPairs.map(p => p.right)
               if (shouldShuffle) {
-                for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]] }
+                for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[arr[i], arr[j]] = [arr[j], arr[i]] }
               }
               return arr
             })
@@ -2849,12 +2862,12 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
               setConfirmed({})
               setSelection({ l: null, r: null })
               setWrong({ l: null, r: null })
-              if (wrongTimer.current) { try { window.clearTimeout(wrongTimer.current) } catch {} ; wrongTimer.current = null }
+              if (wrongTimer.current) { try { window.clearTimeout(wrongTimer.current) } catch { }; wrongTimer.current = null }
               setRight(prev => {
                 const arr = [...prev]
                 for (let i = arr.length - 1; i > 0; i--) {
                   const j = Math.floor(Math.random() * (i + 1))
-                  ;[arr[i], arr[j]] = [arr[j], arr[i]]
+                    ;[arr[i], arr[j]] = [arr[j], arr[i]]
                 }
                 return arr
               })
@@ -2908,8 +2921,8 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
                           className={`w-full text-left px-3 py-2 rounded-md border transition-all transition-transform
                             ${isMatched ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/50'
                               : isWrong ? 'border-red-400 bg-red-50 dark:border-red-600 dark:bg-red-950/50'
-                              : active ? 'border-neutral-900 dark:border-neutral-200 bg-neutral-100 dark:bg-neutral-800'
-                              : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50/70 dark:hover:bg-neutral-900'} ${justMatched.l === i ? 'scale-105' : 'scale-100'}`}
+                                : active ? 'border-neutral-900 dark:border-neutral-200 bg-neutral-100 dark:bg-neutral-800'
+                                  : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50/70 dark:hover:bg-neutral-900'} ${justMatched.l === i ? 'scale-105' : 'scale-100'}`}
                         >
                           {txt}
                         </button>
@@ -2965,7 +2978,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
               try {
                 const parsed = JSON.parse(optionsJson)
                 if (Array.isArray(parsed)) initialOptions = parsed as Opt[]
-              } catch {}
+              } catch { }
             }
             const multiProp = String((props as any)?.multi ?? '').toLowerCase()
             const shuffleProp = String((props as any)?.shuffle ?? '').toLowerCase()
@@ -2978,7 +2991,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
               const arr = [...initialOptions]
               for (let i = arr.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1))
-                ;[arr[i], arr[j]] = [arr[j], arr[i]]
+                  ;[arr[i], arr[j]] = [arr[j], arr[i]]
               }
               return arr
             })
@@ -3021,7 +3034,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
                     const graded = singleMode ? checked : checked
                     const state = graded ? (isCorrect ? 'correct' : (isSel ? 'wrong' : 'idle')) : (isSel ? 'active' : 'idle')
                     const base = 'group w-full text-left px-3 py-2 rounded-md border transition-all duration-200'
-                    const styles: Record<string,string> = {
+                    const styles: Record<string, string> = {
                       idle: 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50/70 dark:hover:bg-neutral-900 hover:shadow-sm hover:-translate-y-[1px]',
                       active: 'border-neutral-900 dark:border-neutral-200 bg-neutral-100 dark:bg-neutral-800 shadow-sm',
                       correct: 'border-emerald-500 bg-emerald-50 text-emerald-900 dark:border-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-200',
@@ -3269,7 +3282,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
                     return { id, start }
                   }
                 }
-              } catch {}
+              } catch { }
               return { id: null, start }
             }
 
@@ -3356,7 +3369,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
                 const codeText = Array.isArray(raw) ? String(raw.join('')) : String(raw ?? '')
                 return <MermaidDiagram code={(codeText || '').trim()} />
               }
-            } catch {}
+            } catch { }
             return <pre {...props} />
           },
           // Inline gap element renderer (Levenshtein-graded, long-press reveal)
@@ -3394,7 +3407,7 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
 
             const onReveal = () => { setValue(answer); setRevealed(true) }
             const onPointerDown = () => {
-              try { if (pressTimer.current) window.clearTimeout(pressTimer.current) } catch {}
+              try { if (pressTimer.current) window.clearTimeout(pressTimer.current) } catch { }
               pressTimer.current = window.setTimeout(onReveal, 600) as unknown as number
             }
             const clearTimer = () => { if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null } }

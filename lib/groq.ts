@@ -353,81 +353,117 @@ export interface EssayGradingResult {
 
 // Subject-specific marking prompts for GCSE essays
 const SUBJECT_MARKING_PROMPTS: Record<string, string> = {
-    english_language: `You are a GCSE English Language examiner. Grade this response focusing on:
-- Spelling, Punctuation and Grammar (SPaG)
-- Sentence structure and variety
-- Vocabulary range and precision
-- Coherence and paragraph organisation
-- Tone and register appropriate to purpose/audience
-Award marks based on the AQA/Edexcel mark scheme bands.`,
+    english_language: `You are a GCSE English Language examiner.
+Place this response into the most appropriate level, then award a mark within that level.
 
-    english_literature: `You are a GCSE English Literature examiner. Grade this response focusing on:
-- Understanding of characters, themes, and context
-- Use of relevant quotations and textual evidence
-- Analysis of language, form, and structure
-- Awareness of writer's methods and intentions
-- Quality of written argument and expression
-Award marks based on the AQA/Edexcel mark scheme bands.`,
+Assess:
+- AO5: Effectiveness of communication, tone, and register for purpose/audience
+- AO6: Spelling, punctuation, grammar, and sentence control
+- Sentence variety and control of syntax
+- Vocabulary range, precision, and ambition
+- Coherence, paragraphing, and overall structure
 
-    geography: `You are a GCSE Geography examiner. Grade this response focusing on:
-- Accurate use of geographical terminology
-- Reference to relevant case studies and examples
-- Understanding of physical/human processes
-- Use of data, maps, or diagram descriptions where relevant
-- Evaluation and balanced discussion
-Award marks based on AQA/Edexcel mark scheme bands.`,
+Reference OCR mark scheme descriptors. Justify the level chosen and explain why the mark is not higher.`,
 
-    history: `You are a GCSE History examiner. Grade this response focusing on:
-- Use of historical evidence and source analysis
-- Understanding of causation, consequence, and change
-- Chronological knowledge and accuracy
-- Quality of argument and evaluation
-- Second-order concepts (significance, interpretations)
-Award marks based on AQA/Edexcel mark scheme bands.`,
+    english_literature: `You are a GCSE English Literature examiner.
+Determine the level first, then award a mark within that level.
 
-    product_design: `You are a GCSE Product Design/DT examiner. Grade this response focusing on:
-- Accurate use of technical terminology
-- Understanding of materials, components, and processes
-- Consideration of manufacturing methods and sustainability
-- Application of design principles and theory
-- Quality of explanation and justification
-Award marks based on AQA/OCR mark scheme bands.`,
+Assess:
+- AO1: Knowledge and understanding of the text; use of quotations
+- AO2: Analysis of language, form, and structure
+- AO3: Relevant context integrated into the argument
+- Conceptual, critical, and exploratory response
+- Quality of written expression and argument development
 
-    religious_studies: `You are a GCSE Religious Studies examiner. Grade this response focusing on:
-- Understanding of religious beliefs, teachings, and practices
-- Consideration of different perspectives and viewpoints
-- Use of religious terminology and sources of authority
-- Quality of evaluation and ethical reasoning
-- Balanced discussion with justified conclusions
-Award marks based on AQA/Edexcel mark scheme bands.`,
+Use OCR mark scheme bands. Explain strengths, limitations, and how the response could move up a level.`,
 
-    science: `You are a GCSE Science examiner. Grade this response focusing on:
-- Accurate use of scientific terminology
+    geography: `You are a GCSE Geography examiner.
+Identify the level, then award a mark within it.
+
+Assess:
+- Accurate and confident use of geographical terminology
+- Application of knowledge to case studies and real examples
+- Understanding of physical and/or human processes
+- Use and interpretation of data, maps, or figures where relevant
+- Evaluation, judgement, and balance (for higher-level responses)
+
+Apply OCR mark scheme descriptors and comment on depth vs breadth of knowledge.`,
+
+    history: `You are a GCSE History examiner.
+Place the answer into the correct level before deciding the final mark.
+
+Assess:
+- AO1: Accurate, relevant historical knowledge
+- AO2: Explanation of causation, consequence, change, or similarity/difference
+- AO3 (if applicable): Source analysis and interpretation
+- Use of second-order concepts (significance, interpretations)
+- Sustained judgement and quality of argument
+
+Use AQA/Edexcel level descriptors. Explain what limits the response from reaching the top of the level.`,
+
+    product_design: `You are a GCSE Design & Technology examiner.
+Decide the level, then fine-tune the mark.
+
+Assess:
+- Correct and precise use of technical vocabulary
+- Knowledge of materials, components, and manufacturing processes
+- Understanding of sustainability, tolerances, and production methods
+- Application of design principles and theory to the context
+- Quality of explanation, justification, and decision-making
+
+Apply AQA mark scheme levels and give clear improvement targets.`,
+
+    religious_studies: `You are a GCSE Religious Studies examiner.
+Award a level first, then a mark within that level.
+
+Assess:
+- Knowledge and understanding of beliefs, teachings, and practices
+- Use of religious language and sources of authority
+- Consideration of different religious and non-religious viewpoints
+- Evaluation, reasoning, and justified conclusions
+- Balance and coherence of the argument
+
+Use AQA/Edexcel descriptors and comment on evaluative depth.`,
+
+    science: `You are a GCSE Science examiner.
+Determine the level of response, then award marks accordingly.
+
+Assess:
+- Accuracy and precision of scientific terminology
 - Understanding of key concepts and processes
-- Application of scientific knowledge to new contexts
-- Quality of explanations and descriptions
-- Use of equations, data, or calculations where relevant
-Award marks based on AQA/Edexcel mark scheme bands.`,
+- Application of knowledge to unfamiliar contexts
+- Clarity and logical sequencing of explanations
+- Correct use of equations, data, units, and calculations (if relevant)
 
-    default: `You are a GCSE examiner. Grade this response focusing on:
-- Accuracy and completeness of the answer
+Apply AQA level-based mark schemes and identify any misconceptions.`,
+
+    default: `You are a GCSE examiner.
+Assign a level (if applicable), then award a mark.
+
+Assess:
+- Accuracy and relevance to the question
 - Use of subject-specific terminology
-- Quality of explanation and reasoning
-- Structure and organisation
-- Relevance to the question asked
-Award marks appropriately based on the content.`
+- Clarity and depth of explanation or reasoning
+- Structure, organisation, and coherence
+
+Justify the mark awarded and state one clear improvement action.`
 };
 
 export async function gradeEssayWithGroq(
     subject: string,
     question: string,
     answer: string,
-    maxMarks: number
+    maxMarks: number,
+    context?: string
 ): Promise<EssayGradingResult> {
     const subjectKey = subject.toLowerCase().replace(/\s+/g, '_');
     const markingPrompt = SUBJECT_MARKING_PROMPTS[subjectKey] || SUBJECT_MARKING_PROMPTS.default;
 
-    const prompt = `${markingPrompt}
+    const contextSection = context && context.trim()
+        ? `\n\nADDITIONAL CONTEXT/MARK SCHEME:\n${context.trim()}\n\nUse the above context to inform your marking. If it contains a mark scheme, follow it closely.`
+        : '';
+
+    const prompt = `${markingPrompt}${contextSection}
 
 QUESTION (${maxMarks} marks): ${question}
 

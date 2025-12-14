@@ -10,20 +10,34 @@ interface EnvironmentState {
   setEnvironment: (env: Environment) => void
 }
 
-const rawEnv = (process.env.NEXT_PUBLIC_ENVIRONMENT || process.env.ENVIRONMENT || "prod").toLowerCase()
-const normalized = rawEnv === "debug" ? "dev" : rawEnv
-const initialEnv: Environment = normalized === "dev" ? "dev" : "prod"
+// Read env vars lazily to avoid HMR issues with module-scope process.env access
+const getInitialEnvironment = (): Environment => {
+  if (typeof window === "undefined") return "prod"
+  const rawEnv = (process.env.NEXT_PUBLIC_ENVIRONMENT || "prod").toLowerCase()
+  const normalized = rawEnv === "debug" ? "dev" : rawEnv
+  return normalized === "dev" ? "dev" : "prod"
+}
+
 export const useEnvironmentStore = create<EnvironmentState>()(
   persist(
-    (set) => ({
-      environment: initialEnv,
+    (set, get) => ({
+      environment: "prod", // Default, will be overwritten by persisted value or hydration
       setEnvironment: (env) => set({ environment: env }),
     }),
     {
-      name: "ENVIRONMENT", // storage key
+      name: "ENVIRONMENT",
       storage: createJSONStorage(() => localStorage),
-      // Only persist the environment value
       partialize: (state) => ({ environment: state.environment }),
+      // Use onRehydrateStorage to set initial value if nothing persisted
+      onRehydrateStorage: () => (state) => {
+        if (state && state.environment === "prod") {
+          // If still default, check env var
+          const envFromVar = getInitialEnvironment()
+          if (envFromVar !== state.environment) {
+            state.setEnvironment(envFromVar)
+          }
+        }
+      },
     }
   )
 )

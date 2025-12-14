@@ -4,7 +4,7 @@ import { gradeEssayWithGroq } from "@/lib/groq";
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { subject, question, answer, maxMarks } = body;
+        const { subject, question, answer, maxMarks, context } = body;
 
         // Validate required fields
         if (!subject || !question || !answer || !maxMarks) {
@@ -31,8 +31,8 @@ export async function POST(req: Request) {
             );
         }
 
-        // Grade the essay using Groq
-        const result = await gradeEssayWithGroq(subject, question, answer, marks);
+        // Grade the essay using Groq (with optional context)
+        const result = await gradeEssayWithGroq(subject, question, answer, marks, context);
 
         return NextResponse.json(result);
     } catch (error) {

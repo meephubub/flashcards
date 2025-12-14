@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/context/auth-context'
 import { AppSidebar } from "@/components/notes/app-sidebar"
@@ -38,7 +38,10 @@ import {
     ChevronRight,
     FileText,
     Trash2,
-    Sparkles
+    Sparkles,
+    Upload,
+    X,
+    File
 } from 'lucide-react'
 
 const SUBJECTS = [
@@ -74,11 +77,18 @@ interface GradingResult {
     levelDescriptor?: string
 }
 
+interface UploadedFile {
+    name: string
+    text: string
+    pages?: number
+}
+
 type ViewState = 'menu' | 'question' | 'writing' | 'result' | 'history'
 
 export default function EssayPage() {
     const { user } = useAuth()
     const supabase = useMemo(() => createClient(), [])
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const [view, setView] = useState<ViewState>('menu')
     const [selectedSubject, setSelectedSubject] = useState<typeof SUBJECTS[0] | null>(null)
@@ -89,12 +99,14 @@ export default function EssayPage() {
     const [isSaving, setIsSaving] = useState(false)
     const [isGrading, setIsGrading] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
+    const [isUploading, setIsUploading] = useState(false)
     const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
     const [lastSaved, setLastSaved] = useState<Date | null>(null)
     const [gradingResult, setGradingResult] = useState<GradingResult | null>(null)
     const [responses, setResponses] = useState<EssayResponse[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
     const [selectedHistoryItem, setSelectedHistoryItem] = useState<EssayResponse | null>(null)
+    const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
 
     useEffect(() => {
         const words = answer.trim().split(/\s+/).filter(w => w.length > 0)
@@ -110,6 +122,63 @@ export default function EssayPage() {
     useEffect(() => {
         if (view === 'history' && user?.id) loadHistory()
     }, [view, user?.id])
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files
+        if (!files || files.length === 0) return
+
+        setIsUploading(true)
+        try {
+            for (const file of Array.from(files)) {
+                if (file.type === 'application/pdf') {
+                    const formData = new FormData()
+                    formData.append('file', file)
+
+                    const response = await fetch('/api/pdf/parse', {
+                        method: 'POST',
+                        body: formData,
+                    })
+
+                    if (!response.ok) {
+                        const err = await response.json()
+                        throw new Error(err.error || 'Failed to parse PDF')
+                    }
+
+                    const result = await response.json()
+                    setUploadedFiles(prev => [...prev, {
+                        name: file.name,
+                        text: result.text,
+                        pages: result.pages
+                    }])
+                    toast.success(`Uploaded ${file.name}`)
+                } else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+                    const text = await file.text()
+                    setUploadedFiles(prev => [...prev, {
+                        name: file.name,
+                        text: text
+                    }])
+                    toast.success(`Uploaded ${file.name}`)
+                } else {
+                    toast.error(`Unsupported file type: ${file.name}`)
+                }
+            }
+        } catch (err: any) {
+            console.error('Upload error:', err)
+            toast.error(err.message || 'Failed to upload file')
+        } finally {
+            setIsUploading(false)
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+    }
+
+    const removeFile = (index: number) => {
+        setUploadedFiles(prev => prev.filter((_, i) => i !== index))
+    }
+
+    const getContextFromFiles = () => {
+        if (uploadedFiles.length === 0) return undefined
+        return uploadedFiles.map(f => `--- ${f.name} ---\n${f.text}`).join('\n\n')
+    }
 
     const saveDraft = async () => {
         if (!user?.id || !selectedSubject || !question || !answer.trim()) return
@@ -166,7 +235,18 @@ export default function EssayPage() {
         if (answer.trim().length < 10) { toast.error('Your answer is too short'); return }
         setIsGrading(true)
         try {
-            const response = await fetch('/api/essay/grade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject: selectedSubject.id, question, answer, maxMarks: parseInt(maxMarks) }) })
+            const context = getContextFromFiles()
+            const response = await fetch('/api/essay/grade', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subject: selectedSubject.id,
+                    question,
+                    answer,
+                    maxMarks: parseInt(maxMarks),
+                    context
+                })
+            })
             if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Failed to grade essay') }
             const result: GradingResult = await response.json()
             setGradingResult(result)
@@ -183,7 +263,7 @@ export default function EssayPage() {
         finally { setIsGrading(false) }
     }
 
-    const resetAll = () => { setView('menu'); setSelectedSubject(null); setQuestion(''); setMaxMarks('8'); setAnswer(''); setGradingResult(null); setCurrentDraftId(null); setLastSaved(null) }
+    const resetAll = () => { setView('menu'); setSelectedSubject(null); setQuestion(''); setMaxMarks('8'); setAnswer(''); setGradingResult(null); setCurrentDraftId(null); setLastSaved(null); setUploadedFiles([]) }
     const getSubjectById = (id: string) => SUBJECTS.find(s => s.id === id)
     const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     const parseStoredFeedback = (feedbackStr: string | null): Partial<GradingResult> => { if (!feedbackStr) return {}; try { return JSON.parse(feedbackStr) } catch { return { feedback: feedbackStr } } }
@@ -199,7 +279,6 @@ export default function EssayPage() {
         fontFamily: 'inherit',
     }
 
-    // Breadcrumb builder
     const getBreadcrumbs = () => {
         const crumbs: { label: string; href?: string; onClick?: () => void }[] = [{ label: 'Essay Practice', onClick: resetAll }]
 
@@ -222,7 +301,7 @@ export default function EssayPage() {
         const crumbs = getBreadcrumbs()
         return (
             <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-border/40">
-                <div className="flex items-center gap-2 px-4">
+                <div className="flex items-center gap-2 px-4 flex-1">
                     <SidebarTrigger className="-ml-1" />
                     <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
                     <Breadcrumb>
@@ -241,6 +320,20 @@ export default function EssayPage() {
                             ))}
                         </BreadcrumbList>
                     </Breadcrumb>
+
+                    {/* Writing view: marks badge and save button in header */}
+                    {view === 'writing' && (
+                        <div className="ml-auto flex items-center gap-3">
+                            <span className="text-sm font-medium text-muted-foreground">{maxMarks} marks</span>
+                            {uploadedFiles.length > 0 && (
+                                <span className="text-xs text-muted-foreground/60">{uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''}</span>
+                            )}
+                            {lastSaved && <span className="text-xs text-muted-foreground/50 hidden sm:inline">Saved {lastSaved.toLocaleTimeString()}</span>}
+                            <Button variant="ghost" size="sm" onClick={saveDraft} disabled={isSaving}>
+                                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </header>
         )
@@ -251,7 +344,6 @@ export default function EssayPage() {
             case 'menu':
                 return (
                     <div className="p-6 md:p-10 max-w-4xl mx-auto">
-                        {/* Hero section */}
                         <div className="mb-10 text-center">
                             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-zinc-700 to-zinc-900 mb-4">
                                 <Sparkles className="w-8 h-8 text-white" />
@@ -260,7 +352,6 @@ export default function EssayPage() {
                             <p className="text-muted-foreground max-w-md mx-auto">Practice GCSE written questions with AI-powered feedback and grading</p>
                         </div>
 
-                        {/* Subject grid - improved design */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                             {SUBJECTS.map((subject) => {
                                 const Icon = subject.icon
@@ -283,7 +374,6 @@ export default function EssayPage() {
                             })}
                         </div>
 
-                        {/* History button */}
                         <div className="text-center">
                             <Button variant="outline" onClick={() => setView('history')} className="gap-2">
                                 <History className="w-4 h-4" /> View Past Responses
@@ -297,7 +387,7 @@ export default function EssayPage() {
                 return (
                     <div className="p-6 md:p-10 max-w-3xl mx-auto min-h-[calc(100vh-4rem)] flex flex-col">
                         <div className="flex-1 flex flex-col justify-center -mt-16">
-                            <div className="mb-12">
+                            <div className="mb-10">
                                 <textarea
                                     value={question}
                                     onChange={(e) => setQuestion(e.target.value)}
@@ -308,7 +398,7 @@ export default function EssayPage() {
                                 />
                             </div>
 
-                            <div className="mb-12">
+                            <div className="mb-10">
                                 <div className="flex items-center justify-between mb-4">
                                     <span className="text-sm text-muted-foreground">Marks</span>
                                     <span className="text-3xl font-bold text-foreground">{marksValue}</span>
@@ -327,6 +417,64 @@ export default function EssayPage() {
                                 </div>
                             </div>
 
+                            {/* File Upload Section */}
+                            <div className="mb-10">
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-sm text-muted-foreground">Mark scheme / Context (optional)</span>
+                                    {uploadedFiles.length > 0 && (
+                                        <span className="text-xs text-muted-foreground/60">{uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''}</span>
+                                    )}
+                                </div>
+
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".pdf,.txt"
+                                    multiple
+                                    onChange={handleFileUpload}
+                                    className="hidden"
+                                />
+
+                                {uploadedFiles.length > 0 && (
+                                    <div className="space-y-2 mb-4">
+                                        {uploadedFiles.map((file, i) => (
+                                            <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/30">
+                                                <div className="w-8 h-8 rounded-lg bg-foreground/10 flex items-center justify-center">
+                                                    <File className="w-4 h-4 text-foreground/60" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate">{file.name}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {file.pages ? `${file.pages} page${file.pages !== 1 ? 's' : ''}` : `${file.text.length.toLocaleString()} chars`}
+                                                    </p>
+                                                </div>
+                                                <button onClick={() => removeFile(i)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                                                    <X className="w-4 h-4 text-muted-foreground" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading}
+                                    className="w-full p-4 rounded-xl border-2 border-dashed border-border/50 hover:border-foreground/30 transition-colors flex items-center justify-center gap-3 text-muted-foreground hover:text-foreground"
+                                >
+                                    {isUploading ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            <span>Processing...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload className="w-5 h-5" />
+                                            <span>Upload PDF or text file</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
                             <Button onClick={handleQuestionSubmit} size="lg" className="w-full md:w-auto md:self-start">
                                 Start Writing <ChevronRight className="w-5 h-5 ml-2" />
                             </Button>
@@ -338,39 +486,25 @@ export default function EssayPage() {
             case 'writing':
                 return (
                     <div className="flex flex-col h-[calc(100vh-4rem)]">
-                        <div className="flex items-center justify-between px-6 py-3 border-b border-border/30 bg-background/80 backdrop-blur-sm">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                {selectedSubject && (
-                                    <>
-                                        <div className={`w-6 h-6 rounded bg-gradient-to-br ${selectedSubject.color} flex items-center justify-center`}>
-                                            <selectedSubject.icon className="w-3 h-3 text-white" />
-                                        </div>
-                                        <span>{maxMarks} marks</span>
-                                    </>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-3">
-                                {lastSaved && <span className="text-xs text-muted-foreground/60">Saved {lastSaved.toLocaleTimeString()}</span>}
-                                <Button variant="ghost" size="sm" onClick={saveDraft} disabled={isSaving}>
-                                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                </Button>
-                            </div>
+                        {/* Question - large, left-aligned */}
+                        <div className="px-8 md:px-12 pt-8 pb-6">
+                            <p className="text-xl md:text-2xl font-semibold text-foreground leading-relaxed max-w-4xl">{question}</p>
                         </div>
-                        <div className="px-6 py-3 border-b border-border/20 bg-muted/20">
-                            <p className="text-sm text-foreground max-w-3xl mx-auto font-medium">{question}</p>
+
+                        {/* Answer area - aligned with question */}
+                        <div className="flex-1 overflow-auto px-8 md:px-12">
+                            <textarea
+                                value={answer}
+                                onChange={(e) => setAnswer(e.target.value)}
+                                placeholder="Start writing your answer..."
+                                className="w-full max-w-4xl min-h-[55vh] bg-transparent text-foreground placeholder:text-muted-foreground/40"
+                                style={dottedLineStyle}
+                                autoFocus
+                            />
                         </div>
-                        <div className="flex-1 overflow-auto">
-                            <div className="max-w-3xl mx-auto px-6 py-6">
-                                <textarea
-                                    value={answer}
-                                    onChange={(e) => setAnswer(e.target.value)}
-                                    placeholder="Start writing your answer..."
-                                    className="w-full min-h-[60vh] bg-transparent text-foreground placeholder:text-muted-foreground/40"
-                                    style={dottedLineStyle}
-                                />
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-between px-6 py-3 border-t border-border/30 bg-background/80">
+
+                        {/* Footer with word count and submit */}
+                        <div className="flex items-center justify-between px-8 md:px-12 py-4 border-t border-border/30 bg-background/80">
                             <span className="text-sm text-muted-foreground">{wordCount} words</span>
                             <Button onClick={handleGrade} disabled={isGrading || wordCount < 5}>
                                 {isGrading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Grading...</> : <><Send className="w-4 h-4 mr-2" />Submit</>}
