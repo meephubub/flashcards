@@ -41,7 +41,8 @@ import {
     Sparkles,
     Upload,
     X,
-    File
+    File,
+    TrendingUp
 } from 'lucide-react'
 
 const SUBJECTS = [
@@ -52,6 +53,7 @@ const SUBJECTS = [
     { id: 'product_design', name: 'Product Design', icon: Hammer, color: 'from-zinc-600 to-zinc-800', accent: 'bg-zinc-700', description: 'Materials, processes, sustainability' },
     { id: 'religious_studies', name: 'Religious Studies', icon: Church, color: 'from-zinc-500 to-zinc-700', accent: 'bg-zinc-600', description: 'Beliefs, ethics, perspectives' },
     { id: 'science', name: 'Science', icon: FlaskConical, color: 'from-zinc-600 to-zinc-800', accent: 'bg-zinc-700', description: 'Concepts, equations, explanations' },
+    { id: 'ocr-gcse-economics', name: 'Economics (OCR GCSE)', icon: TrendingUp, color: 'from-zinc-500 to-zinc-700', accent: 'bg-zinc-600', description: 'Markets, economy, evaluation' },
 ]
 
 interface EssayResponse {
