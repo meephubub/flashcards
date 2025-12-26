@@ -1,6 +1,5 @@
 "use client"
 
-import { Card, CardContent } from "@/components/ui/card"
 import { Calendar, Clock, Settings2 } from "lucide-react"
 import { useDecks } from "@/context/deck-context"
 import { formatDate } from "@/lib/date-utils"
@@ -13,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { FSRSControls } from "@/components/fsrs-controls"
+import { FSRSControls, DEFAULT_FSRS_PARAMS } from "@/components/fsrs-controls"
 import { useSettings } from "@/context/settings-context"
 import { useState, useEffect } from "react"
 
@@ -71,61 +70,59 @@ export function SpacedRepetitionStats({ deckId }: SpacedRepetitionStatsProps) {
   }
 
   return (
-    <Card className="bg-secondary border-secondary-foreground/20">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-center">
-          <h3 className="font-medium text-foreground flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            Spaced Repetition Stats
-          </h3>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <Settings2 className="h-4 w-4" />
-                <span className="sr-only">Configure FSRS</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>FSRS Configuration</DialogTitle>
-                <DialogDescription>
-                  Adjust the spaced repetition algorithm parameters. These settings apply globally.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="py-4">
-                {fsrsParams && (
-                  <FSRSControls
-                    params={fsrsParams}
-                    onParamsChange={handleSaveParams}
-                  />
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <Calendar className="h-4 w-4 text-zinc-500" />
+          <span>SRS Stats</span>
         </div>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
+              <Settings2 className="h-3.5 w-3.5" />
+              <span className="sr-only">Configure FSRS</span>
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>FSRS Configuration</DialogTitle>
+              <DialogDescription>
+                Adjust the spaced repetition algorithm parameters. These settings apply globally.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <FSRSControls
+                params={fsrsParams || DEFAULT_FSRS_PARAMS}
+                onParamsChange={handleSaveParams}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
 
-        <div className="mt-2 space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Cards in system:</span>
-            <span className="font-medium">
-              {cardsWithProgress} / {totalCards} ({percentInSystem}%)
-            </span>
-          </div>
-
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Due for review:</span>
-            <span className="font-medium">{dueCards} cards</span>
-          </div>
-
-          <div className="flex justify-between items-center mt-2">
-            <span className="text-muted-foreground flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              Last studied:
-            </span>
-            <span className="font-medium">{formatDate(deck.last_studied, 'relative')}</span>
-          </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800/50 py-2 px-1">
+          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{dueCards}</div>
+          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Due</div>
         </div>
-      </CardContent>
-    </Card>
+        <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800/50 py-2 px-1">
+          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{cardsWithProgress}</div>
+          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Tracked</div>
+        </div>
+        <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800/50 py-2 px-1">
+          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{percentInSystem}%</div>
+          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Progress</div>
+        </div>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          Last studied
+        </span>
+        <span className="font-medium text-zinc-700 dark:text-zinc-300">{formatDate(deck.last_studied, 'relative')}</span>
+      </div>
+    </div>
   )
 }
+

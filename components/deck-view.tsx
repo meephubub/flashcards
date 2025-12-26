@@ -116,46 +116,44 @@ export function DeckView({ deckId }: DeckViewProps) {
 
       {deck.description && <p className="text-gray-600 dark:text-gray-300">{deck.description}</p>}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2">
-          <div className="flex gap-3">
-            <Button asChild>
-              <Link href={`/deck/${deckId}/study`}>
-                <Play className="h-4 w-4 mr-2" />
-                {isSpacedRepetitionEnabled ? `Study (${dueCards.length} due)` : "Study"}
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href={`/deck/${deckId}/exam`}>
-                <Trophy className="h-4 w-4 mr-2" />
-                {hasInProgressExam ? "Resume Exam" : "Exam Mode"}
-              </Link>
-            </Button>
-            <Button variant="outline" onClick={() => setIsCreateCardOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Card
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href={`/deck/${deckId}/edit`}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Deck
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href={`/deck/${deckId}/language-study`}>
-                <BookText className="h-4 w-4 mr-2" />
-                Language Study
-              </Link>
-            </Button>
-          </div>
-        </div>
-
-        {isSpacedRepetitionEnabled && (
-          <div className="md:col-span-1">
-            <SpacedRepetitionStats deckId={deckId} />
-          </div>
-        )}
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-2">
+        <Button asChild>
+          <Link href={`/deck/${deckId}/study`}>
+            <Play className="h-4 w-4 mr-2" />
+            {isSpacedRepetitionEnabled ? `Study (${dueCards.length} due)` : "Study"}
+          </Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href={`/deck/${deckId}/exam`}>
+            <Trophy className="h-4 w-4 mr-2" />
+            {hasInProgressExam ? "Resume Exam" : "Exam Mode"}
+          </Link>
+        </Button>
+        <Button variant="outline" onClick={() => setIsCreateCardOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Card
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href={`/deck/${deckId}/edit`}>
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Deck
+          </Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href={`/deck/${deckId}/language-study`}>
+            <BookText className="h-4 w-4 mr-2" />
+            Language Study
+          </Link>
+        </Button>
       </div>
+
+      {/* Spaced Repetition Stats */}
+      {isSpacedRepetitionEnabled && (
+        <div className="max-w-sm">
+          <SpacedRepetitionStats deckId={deckId} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {deck.cards?.map((card) => {

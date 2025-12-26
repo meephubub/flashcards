@@ -19,6 +19,8 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card } from "@/components/ui/card"
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
+import { FSRSControls, DEFAULT_FSRS_PARAMS, type FSRSParams } from "@/components/fsrs-controls"
+import { useSettings } from "@/context/settings-context"
 
 export default function FSRSStatsPage() {
     const { user, isLoading: authLoading } = useAuth()
@@ -30,6 +32,30 @@ export default function FSRSStatsPage() {
     const [cardStates, setCardStates] = useState<CardStateDistribution | null>(null)
     const [loading, setLoading] = useState(true)
     const [days, setDays] = useState(30)
+
+    // FSRS Settings
+    const { settings, updateSettings } = useSettings()
+    const [fsrsParams, setFsrsParams] = useState<FSRSParams>(DEFAULT_FSRS_PARAMS)
+
+    // Sync FSRS params with global settings
+    useEffect(() => {
+        if (settings?.studySettings?.fsrsParams) {
+            setFsrsParams(settings.studySettings.fsrsParams as FSRSParams)
+        }
+    }, [settings])
+
+    const handleSaveFsrsParams = async (newParams: FSRSParams) => {
+        setFsrsParams(newParams)
+        if (settings) {
+            await updateSettings({
+                ...settings,
+                studySettings: {
+                    ...settings.studySettings,
+                    fsrsParams: newParams
+                }
+            })
+        }
+    }
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -212,30 +238,14 @@ export default function FSRSStatsPage() {
 
                         {/* FSRS Settings Panel */}
                         <Card className="p-6 border border-black/10 dark:border-white/10">
-                            <h2 className="text-lg font-semibold mb-4">FSRS Settings</h2>
-                            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-                                Advanced FSRS parameter customization coming soon. The default settings are optimized for most users.
+                            <h2 className="text-lg font-semibold mb-2">FSRS Settings</h2>
+                            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
+                                Customize the FSRS spaced repetition algorithm parameters. These settings apply globally to all your study sessions.
                             </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-sm text-neutral-600 dark:text-neutral-400 block mb-1">
-                                        Request Retention (Target)
-                                    </label>
-                                    <div className="text-lg font-medium">90%</div>
-                                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                                        The desired percentage of information you want to retain
-                                    </p>
-                                </div>
-                                <div>
-                                    <label className="text-sm text-neutral-600 dark:text-neutral-400 block mb-1">
-                                        Maximum Interval
-                                    </label>
-                                    <div className="text-lg font-medium">36500 days</div>
-                                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                                        Maximum number of days between reviews
-                                    </p>
-                                </div>
-                            </div>
+                            <FSRSControls
+                                params={fsrsParams}
+                                onParamsChange={handleSaveFsrsParams}
+                            />
                         </Card>
                     </div>
                 </div>
