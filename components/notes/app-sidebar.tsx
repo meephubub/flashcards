@@ -97,6 +97,10 @@ const data = {
           title: "Essay",
           url: "/essay",
         },
+        {
+          title: "Exam Questions",
+          url: "/question",
+        },
       ],
     },
     {

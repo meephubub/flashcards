@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { FSRSControls } from "@/components/fsrs-controls"
 
 export function SettingsContent() {
   const { settings, loading, updateSettings, updateStudySettings, resetSettings } = useSettings()
@@ -313,60 +314,19 @@ export function SettingsContent() {
               </div>
 
               {localSettings.studySettings.enableSpacedRepetition && (
-                <div className="border-l-2 border-neutral-200 dark:border-neutral-800 pl-4 space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="fsrs-retention">Target Retention: {localSettings.studySettings.fsrsParams?.request_retention || 0.9}</Label>
-                    <p className="text-xs text-muted-foreground">
-                      The desired percentage of information you want to retain. Higher values mean more frequent reviews.
-                    </p>
-                    <Slider
-                      id="fsrs-retention"
-                      min={0.7}
-                      max={0.99}
-                      step={0.01}
-                      value={[localSettings.studySettings.fsrsParams?.request_retention || 0.9]}
-                      onValueChange={(value) =>
-                        setLocalSettings({
-                          ...localSettings,
-                          studySettings: {
-                            ...localSettings.studySettings,
-                            fsrsParams: {
-                              ...localSettings.studySettings.fsrsParams,
-                              request_retention: value[0]
-                            }
-                          },
-                        })
-                      }
-                      className="py-4"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="fsrs-max-interval">Maximum Interval: {localSettings.studySettings.fsrsParams?.maximum_interval || 36500} days</Label>
-                    <p className="text-xs text-muted-foreground">
-                      The maximum number of days between reviews.
-                    </p>
-                    <Slider
-                      id="fsrs-max-interval"
-                      min={30}
-                      max={36500}
-                      step={30}
-                      value={[localSettings.studySettings.fsrsParams?.maximum_interval || 36500]}
-                      onValueChange={(value) =>
-                        setLocalSettings({
-                          ...localSettings,
-                          studySettings: {
-                            ...localSettings.studySettings,
-                            fsrsParams: {
-                              ...localSettings.studySettings.fsrsParams,
-                              maximum_interval: value[0]
-                            }
-                          },
-                        })
-                      }
-                      className="py-4"
-                    />
-                  </div>
+                <div className="border-l-2 border-neutral-200 dark:border-neutral-800 pl-4 mt-4">
+                  <FSRSControls
+                    params={localSettings.studySettings.fsrsParams || { request_retention: 0.9, maximum_interval: 36500 }}
+                    onParamsChange={(newParams) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        studySettings: {
+                          ...localSettings.studySettings,
+                          fsrsParams: newParams
+                        },
+                      })
+                    }
+                  />
                 </div>
               )}
 

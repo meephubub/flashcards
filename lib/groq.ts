@@ -920,6 +920,7 @@ export async function makeGroqRequest(
         // Local helper to call Groq directly
         const tryGroq = async (): Promise<string> => {
             const groqApiKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
+            console.log("Debug: Using Groq API Key starting with:", groqApiKey ? groqApiKey.substring(0, 4) + "..." : "undefined");
             if (!groqApiKey) {
                 throw new Error("GROQ_API_KEY (or NEXT_PUBLIC_GROQ_API_KEY) is not defined in environment variables");
             }

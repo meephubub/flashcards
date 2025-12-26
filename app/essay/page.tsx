@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/context/auth-context'
 import { AppSidebar } from "@/components/notes/app-sidebar"
@@ -109,6 +110,27 @@ export default function EssayPage() {
     const [loadingHistory, setLoadingHistory] = useState(false)
     const [selectedHistoryItem, setSelectedHistoryItem] = useState<EssayResponse | null>(null)
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+
+    // Check for query params from question generator
+    const searchParams = useSearchParams()
+
+    useEffect(() => {
+        const qParam = searchParams.get('question')
+        const mParam = searchParams.get('marks')
+        const sParam = searchParams.get('subjectId')
+
+        if (qParam && mParam && sParam && view === 'menu') {
+            const subject = SUBJECTS.find(s => s.id === sParam)
+            if (subject) {
+                setSelectedSubject(subject)
+                setQuestion(qParam)
+                setMaxMarks(mParam)
+                setView('writing')
+                // Clean up URL without refresh
+                window.history.replaceState({}, '', '/essay')
+            }
+        }
+    }, [searchParams, view])
 
     useEffect(() => {
         const words = answer.trim().split(/\s+/).filter(w => w.length > 0)

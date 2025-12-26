@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
 
   // Create Supabase client
-  const supabase = createBrowserClient<Database>(
+  const [supabase] = useState(() => createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUB_API!,
     {
@@ -56,7 +56,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         },
       },
     }
-  );
+  ));
 
   useEffect(() => {
     const getSession = async () => {
@@ -222,11 +222,11 @@ export const useAuth = () => {
       user: null,
       isLoading: true,
       error: null,
-      signIn: async () => {},
-      signUp: async () => {},
-      signOut: async () => {},
-      signInWithGoogle: async () => {},
-      signInWithGitHub: async () => {},
+      signIn: async () => { },
+      signUp: async () => { },
+      signOut: async () => { },
+      signInWithGoogle: async () => { },
+      signInWithGitHub: async () => { },
     };
   }
   return context;

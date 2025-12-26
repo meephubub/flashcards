@@ -119,18 +119,24 @@ export function useSettings() {
     // Return default values for SSR compatibility
     return {
       settings: {
-        theme: "system",
+        theme: "system" as "system",
+        enableAnimations: true,
+        enableSounds: false,
+        enableTTS: true,
         studySettings: {
-          autoPlay: false,
-          showAnswer: false,
-          shuffleCards: false,
-          studyMode: "spaced-repetition",
+          cardsPerSession: 20,
+          showProgressBar: true,
+          enableSpacedRepetition: true,
+          autoFlip: false,
+          autoFlipDelay: 5,
+          languageSimilarityThreshold: 0.75,
+          fsrsParams: undefined,
         },
       },
       loading: true,
-      updateSettings: async () => {},
-      updateStudySettings: async () => {},
-      resetSettings: async () => {},
+      updateSettings: async () => { },
+      updateStudySettings: async () => { },
+      resetSettings: async () => { },
     }
   }
   return context
