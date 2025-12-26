@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/context/auth-context'
@@ -88,7 +88,7 @@ interface UploadedFile {
 
 type ViewState = 'menu' | 'question' | 'writing' | 'result' | 'history'
 
-export default function EssayPage() {
+function EssayPageContent() {
     const { user } = useAuth()
     const supabase = useMemo(() => createClient(), [])
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -675,5 +675,17 @@ export default function EssayPage() {
                 {renderContent()}
             </SidebarInset>
         </SidebarProvider>
+    )
+}
+
+export default function EssayPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-screen items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+        }>
+            <EssayPageContent />
+        </Suspense>
     )
 }
