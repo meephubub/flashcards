@@ -117,6 +117,8 @@
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^5.4.54",
     "picocolors": "^1.1.1",
+    "playwright": "^1.57.0",
+    "quizlet-fetcher": "^3.0.0",
     "react": "^19.1.0",
     "react-beautiful-dnd": "latest",
     "react-confetti": "^6.4.0",

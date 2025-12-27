@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { ConfidenceRating } from "@/lib/spaced-repetition"
 import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText, getRatingDescription } from "@/lib/spaced-repetition"
 import { haptics } from "@/lib/haptics"
+import { MarkdownCardContent } from "@/components/markdown-card-content"
 
 interface DueCardWithDeck {
   deckId: number
@@ -354,7 +355,9 @@ export function AllDueStudyMode() {
                       />
                     </div>
                   )}
-                  <div className="font-semibold text-2xl md:text-3xl leading-snug">{currentCard.front}</div>
+                  <div className="w-full flex justify-center">
+                    <MarkdownCardContent content={currentCard.front} className="font-semibold text-2xl md:text-3xl leading-snug" />
+                  </div>
                   <div className="hidden sm:block text-[11px] text-neutral-500 mt-4 absolute bottom-4 left-0 right-0 text-center">
                     Press <kbd className="px-1.5 py-0.5 border border-black/20 rounded text-[10px] bg-white">Space</kbd> to flip
                   </div>
@@ -371,7 +374,9 @@ export function AllDueStudyMode() {
                       />
                     </div>
                   )}
-                  <div className="font-semibold text-xl md:text-2xl leading-snug">{currentCard.back}</div>
+                  <div className="w-full flex justify-center">
+                    <MarkdownCardContent content={currentCard.back} className="font-semibold text-xl md:text-2xl leading-snug" />
+                  </div>
                   {isFlipped && (
                     <div className="mt-6 animate-fadeIn">
                       <div className="text-sm text-neutral-600 mb-3">How well did you know this? (Press 0-5)</div>

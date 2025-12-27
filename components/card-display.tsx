@@ -2,6 +2,7 @@ import * as React from "react"
 import { Card, CardContent, CardImage } from "./ui/card"
 import { Button } from "./ui/button"
 import { CardProgress } from "@/lib/spaced-repetition"
+import { MarkdownCardContent } from "./markdown-card-content"
 
 interface CardDisplayProps {
   front: string
@@ -31,8 +32,8 @@ export function CardDisplay({ front, back, front_img_url, back_img_url, progress
       {isFlipped && back_img_url && <CardImage src={back_img_url} alt="Back image" />}
       <CardContent className="p-6">
         <div className="text-center space-y-4">
-          <div className="text-xl font-medium">
-            {isFlipped ? back : front}
+          <div className="text-xl font-medium w-full flex justify-center">
+            <MarkdownCardContent content={isFlipped ? back : front} />
           </div>
           <div className="flex justify-center gap-4">
             {isFlipped ? (
@@ -55,4 +56,3 @@ export function CardDisplay({ front, back, front_img_url, back_img_url, progress
     </Card>
   )
 }
- 

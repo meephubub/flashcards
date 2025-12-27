@@ -1341,3 +1341,240 @@ IMPORTANT: Output a valid JSON object with "title" (string) and "content" (strin
         };
     }
 }
+
+// Maths question generation result interface
+export interface MathsQuestionResult {
+    question: string;
+    maxMarks: number;
+    questionType: 'calculation' | 'problem-solving' | 'reasoning' | 'proof';
+    expectedAnswer: string;
+    workingSteps?: string[];
+    hint?: string;
+}
+
+// Maths grading result interface
+export interface MathsGradingResult {
+    marksAwarded: number;
+    maxMarks: number;
+    percentage: number;
+    isCorrect: boolean;
+    feedback: string;
+    workingFeedback?: string;
+    correctAnswer: string;
+    commonMistake?: string;
+}
+
+// Topic-specific prompts for GCSE maths
+const MATHS_TOPIC_PROMPTS: Record<string, string> = {
+    algebra: `Focus on:
+- Solving linear and quadratic equations
+- Simplifying expressions and expanding brackets
+- Factorising expressions
+- Working with sequences (nth term)
+- Simultaneous equations
+- Inequalities
+- Algebraic fractions`,
+
+    geometry: `Focus on:
+- Angles in polygons and parallel lines
+- Properties of 2D and 3D shapes
+- Transformations (rotation, reflection, translation, enlargement)
+- Pythagoras' theorem
+- Trigonometry (sin, cos, tan)
+- Circle theorems
+- Vectors`,
+
+    statistics: `Focus on:
+- Mean, median, mode, and range
+- Frequency tables and grouped data
+- Probability (single and combined events)
+- Tree diagrams and Venn diagrams
+- Scatter graphs and correlation
+- Cumulative frequency and box plots
+- Pie charts and histograms`,
+
+    number: `Focus on:
+- Fractions, decimals, and percentages
+- Ratio and proportion
+- Standard form
+- Powers and roots
+- Prime factorisation (HCF and LCM)
+- Percentage change (simple and compound interest)
+- Bounds and error intervals`,
+
+    graphs: `Focus on:
+- Plotting and interpreting linear graphs (y = mx + c)
+- Quadratic graphs and their properties
+- Finding equations of lines
+- Distance-time and velocity-time graphs
+- Gradient and area under curves
+- Graph transformations`,
+
+    default: `General GCSE maths question covering core topics.`
+};
+
+export async function generateMathsQuestionWithGroq(
+    topic: string,
+    difficulty: 'foundation' | 'higher' = 'foundation',
+    calculatorAllowed: boolean = true
+): Promise<MathsQuestionResult> {
+    const topicKey = topic.toLowerCase().replace(/\s+/g, '_');
+    const topicPrompt = MATHS_TOPIC_PROMPTS[topicKey] || MATHS_TOPIC_PROMPTS.default;
+
+    const difficultyDesc = difficulty === 'higher'
+        ? 'Higher tier GCSE (grades 4-9), more challenging with multi-step problems'
+        : 'Foundation tier GCSE (grades 1-5), clear single or two-step problems';
+
+    const calculatorNote = calculatorAllowed
+        ? 'Calculator IS allowed for this question.'
+        : 'Calculator is NOT allowed - ensure calculations are manageable without one.';
+
+    const prompt = `You are a GCSE Mathematics examiner creating exam-style questions.
+
+Topic: ${topic}
+Difficulty: ${difficultyDesc}
+${calculatorNote}
+
+${topicPrompt}
+
+Generate ONE GCSE maths question that:
+1. Is appropriate for the difficulty level
+2. Has a clear, unambiguous answer
+3. Tests genuine mathematical understanding
+4. Uses proper mathematical notation where needed
+
+Return the response as a JSON object with these properties:
+{
+    "question": string (the full question text, can include LaTeX using $...$ for inline or $$...$$ for display),
+    "maxMarks": number (typically 2-6 marks),
+    "questionType": "calculation" | "problem-solving" | "reasoning" | "proof",
+    "expectedAnswer": string (the correct answer, with working if relevant),
+    "workingSteps": string[] (optional, step-by-step solution),
+    "hint": string (optional, a hint without giving away the answer)
+}`;
+
+    try {
+        const response = await makeGroqRequest(prompt, true, "You are an expert GCSE Mathematics examiner creating fair, curriculum-aligned questions.");
+
+        let parsedContent: any;
+        try {
+            parsedContent = JSON.parse(response);
+        } catch (jsonErr) {
+            const match = response.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    parsedContent = JSON.parse(match[0]);
+                } catch {
+                    parsedContent = null;
+                }
+            }
+        }
+
+        if (!parsedContent || typeof parsedContent.question !== "string") {
+            throw new Error("Invalid response format from Groq");
+        }
+
+        return {
+            question: parsedContent.question,
+            maxMarks: typeof parsedContent.maxMarks === 'number' ? parsedContent.maxMarks : 3,
+            questionType: parsedContent.questionType || 'calculation',
+            expectedAnswer: parsedContent.expectedAnswer || '',
+            workingSteps: Array.isArray(parsedContent.workingSteps) ? parsedContent.workingSteps : undefined,
+            hint: parsedContent.hint,
+        };
+    } catch (error) {
+        console.error("Error generating maths question with Groq:", error);
+        return {
+            question: "Solve the equation: 2x + 5 = 13",
+            maxMarks: 2,
+            questionType: 'calculation',
+            expectedAnswer: "x = 4",
+            workingSteps: ["2x + 5 = 13", "2x = 13 - 5", "2x = 8", "x = 4"],
+        };
+    }
+}
+
+export async function gradeMathsAnswerWithGroq(
+    question: string,
+    userAnswer: string,
+    expectedAnswer: string,
+    maxMarks: number,
+    topic: string = 'general'
+): Promise<MathsGradingResult> {
+    const prompt = `You are a GCSE Mathematics examiner marking a student's answer.
+
+QUESTION: ${question}
+
+EXPECTED ANSWER: ${expectedAnswer}
+
+STUDENT'S ANSWER:
+${userAnswer}
+
+Maximum marks: ${maxMarks}
+
+Marking Guidelines:
+1. Award full marks if the answer is mathematically correct, even if presented differently
+2. Award method marks for correct working even if the final answer is wrong
+3. Be lenient with notation (e.g., accept "x=4" or "4" or "x is 4")
+4. Look for correct mathematical reasoning
+5. For multi-mark questions, award partial credit appropriately
+
+Return the response as a JSON object with these properties:
+{
+    "marksAwarded": number (0 to ${maxMarks}),
+    "percentage": number (0-100),
+    "isCorrect": boolean (true if full marks awarded),
+    "feedback": string (2-3 sentences of constructive feedback),
+    "workingFeedback": string (optional, feedback on their working/method),
+    "correctAnswer": string (the correct answer for reference),
+    "commonMistake": string (optional, if they made a common error, explain it)
+}`;
+
+    try {
+        const response = await makeGroqRequest(prompt, true, "You are a fair GCSE Mathematics examiner providing constructive feedback.");
+
+        let parsedContent: any;
+        try {
+            parsedContent = JSON.parse(response);
+        } catch (jsonErr) {
+            const match = response.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    parsedContent = JSON.parse(match[0]);
+                } catch {
+                    parsedContent = null;
+                }
+            }
+        }
+
+        if (!parsedContent || typeof parsedContent.marksAwarded !== "number") {
+            throw new Error("Invalid response format from Groq");
+        }
+
+        const marksAwarded = Math.max(0, Math.min(maxMarks, Math.round(parsedContent.marksAwarded)));
+        const percentage = Math.round((marksAwarded / maxMarks) * 100);
+
+        return {
+            marksAwarded,
+            maxMarks,
+            percentage,
+            isCorrect: marksAwarded === maxMarks,
+            feedback: parsedContent.feedback || "Your answer has been marked.",
+            workingFeedback: parsedContent.workingFeedback,
+            correctAnswer: parsedContent.correctAnswer || expectedAnswer,
+            commonMistake: parsedContent.commonMistake,
+        };
+    } catch (error) {
+        console.error("Error grading maths answer with Groq:", error);
+        // Fallback - simple string comparison
+        const isCorrect = userAnswer.toLowerCase().trim().includes(expectedAnswer.toLowerCase().trim());
+        return {
+            marksAwarded: isCorrect ? maxMarks : 0,
+            maxMarks,
+            percentage: isCorrect ? 100 : 0,
+            isCorrect,
+            feedback: "An error occurred while marking. Please try again.",
+            correctAnswer: expectedAnswer,
+        };
+    }
+}

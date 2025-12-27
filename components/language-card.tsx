@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Volume2 } from "lucide-react";
 import { makeGroqRequest } from "@/lib/groq";
 import { useSettings } from "@/context/settings-context";
+import { MarkdownCardContent } from "@/components/markdown-card-content";
 
 // Import kokoro-js in a type-safe way
 let KokoroTTS: any;
@@ -31,14 +32,14 @@ interface LanguageCardProps {
   onSkip?: () => void;
 }
 
-export function LanguageCard({ 
-  questionText, 
-  correctAnswer, 
-  userAnswer, 
-  similarityScore, 
-  isAnswerChecked, 
-  onSubmitAnswer, 
-  isSubmitting, 
+export function LanguageCard({
+  questionText,
+  correctAnswer,
+  userAnswer,
+  similarityScore,
+  isAnswerChecked,
+  onSubmitAnswer,
+  isSubmitting,
   onSkip
 }: LanguageCardProps) {
   const { settings } = useSettings();
@@ -75,7 +76,7 @@ export function LanguageCard({
           console.log('Initializing TTS engine...');
           const model_id = "onnx-community/Kokoro-82M-v1.0-ONNX";
           ttsInstance.current = await KokoroTTS.from_pretrained(model_id, {
-            dtype: "fp32", 
+            dtype: "fp32",
             device: "wasm",
           });
           console.log('TTS engine initialized successfully');
@@ -94,7 +95,7 @@ export function LanguageCard({
         audioContext.current.close().catch(err => console.error('Error closing AudioContext:', err));
       }
     };
-  }, [settings.enableTTS]); 
+  }, [settings.enableTTS]);
 
   // Always focus input when answer is checked so Enter can skip
   useEffect(() => {
@@ -115,16 +116,16 @@ export function LanguageCard({
   const generateExplanation = async () => {
     setIsGeneratingExplanation(true);
     setShowExplanation(true);
-    
+
     try {
       const promptContent = `Please provide a concise explanation of the following concept or phrase: "${questionText}"
       
       Keep your explanation clear, educational, and focused on helping someone understand this concept. Include relevant context, examples if applicable, and highlight key points.
       `;
-      
-      const response = await makeGroqRequest(promptContent, false, 
+
+      const response = await makeGroqRequest(promptContent, false,
         "You are an educational AI assistant. Your purpose is to provide clear, accurate, and helpful explanations about language learning concepts, phrases, words, and their meanings. Present information in a structured, educational format.");
-      
+
       setExplanation(response);
     } catch (error) {
       console.error('Error generating explanation:', error);
@@ -138,7 +139,7 @@ export function LanguageCard({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setLocalUserAnswer(value);
-    
+
     // If user types just '?', prepare to show explanation
     if (value === '?') {
       // Don't auto-submit to allow user to decide when to hit enter
@@ -156,13 +157,13 @@ export function LanguageCard({
   const playAudio = async () => {
     // Check if TTS is enabled in settings
     if (!settings.enableTTS) return;
-    
+
     // Make sure we have KokoroTTS available (it's dynamically imported)
     if (!KokoroTTS) {
       console.log('TTS engine not yet loaded');
       return;
     }
-    
+
     // Try to initialize TTS if needed
     if (!ttsInstance.current && !isInitializingTTS.current) {
       try {
@@ -182,23 +183,23 @@ export function LanguageCard({
         isInitializingTTS.current = false;
       }
     }
-    
+
     // If we still don't have TTS, exit
     if (!ttsInstance.current) return;
-    
+
     try {
       setIsPlayingAudio(true);
       console.log('Starting TTS for text:', questionText);
-      
+
       // Create a new AudioContext if needed
       if (!audioContext.current) {
         audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
-      
+
       // Set up the text splitter and stream
       const splitter = new TextSplitterStream();
       const stream = ttsInstance.current.stream(splitter);
-      
+
       // Play all chunks of audio as they are generated
       (async () => {
         try {
@@ -224,11 +225,11 @@ export function LanguageCard({
           console.log('Finished TTS playback');
         }
       })();
-      
+
       // Send the text to the stream
       splitter.push(questionText);
       splitter.close();
-      
+
     } catch (error) {
       console.error('Error in TTS playback:', error);
       setIsPlayingAudio(false);
@@ -243,9 +244,9 @@ export function LanguageCard({
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
-            <p className="text-2xl p-6 bg-secondary rounded-md min-h-[80px] flex items-center justify-center">
-              {questionText}
-            </p>
+            <div className="text-2xl p-6 bg-secondary rounded-md min-h-[80px] flex items-center justify-center">
+              <MarkdownCardContent content={questionText} className="text-center" />
+            </div>
             {settings.enableTTS && (
               <Button
                 type="button"
@@ -260,7 +261,7 @@ export function LanguageCard({
               </Button>
             )}
           </div>
-          
+
           {showExplanation && (
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md mb-4 border border-blue-200 dark:border-blue-800">
               <h3 className="font-medium mb-2 text-blue-700 dark:text-blue-300 flex items-center">
@@ -282,9 +283,9 @@ export function LanguageCard({
                   explanation
                 )}
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 className="mt-2 text-xs text-blue-600 dark:text-blue-400"
                 onClick={() => setShowExplanation(false)}
                 disabled={isGeneratingExplanation}
@@ -293,7 +294,7 @@ export function LanguageCard({
               </Button>
             </div>
           )}
-          
+
           <Input
             ref={inputRef}
             id="answer"
@@ -307,23 +308,22 @@ export function LanguageCard({
             readOnly={isAnswerChecked}
             className="text-lg p-4"
           />
-          
+
           {/* Show answer results after submission */}
           {isAnswerChecked && correctAnswer && (
             <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-md border">
               <div className="flex items-center justify-between">
                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Answer Results</h3>
                 {similarityScore !== null && (
-                  <span className={`text-sm px-2 py-1 rounded-full ${
-                    similarityScore >= 0.75 
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                  <span className={`text-sm px-2 py-1 rounded-full ${similarityScore >= 0.75
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                       : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                  }`}>
+                    }`}>
                     {Math.round(similarityScore * 100)}% match
                   </span>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Your answer:</label>
@@ -331,20 +331,20 @@ export function LanguageCard({
                     {userAnswer || localUserAnswer}
                   </p>
                 </div>
-                
+
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Correct answer:</label>
-                  <p className="text-gray-900 dark:text-gray-100 bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800">
-                    {correctAnswer}
-                  </p>
+                  <div className="text-gray-900 dark:text-gray-100 bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800">
+                    <MarkdownCardContent content={correctAnswer} />
+                  </div>
                 </div>
               </div>
             </div>
           )}
-          
-          <Button 
-            type="submit" 
-            className="w-full" 
+
+          <Button
+            type="submit"
+            className="w-full"
             disabled={isSubmitting || isGeneratingExplanation || !localUserAnswer.trim() || isAnswerChecked}
           >
             {isSubmitting ? 'Checking...' : localUserAnswer.trim() === '?' ? 'Get Explanation' : 'Submit Answer'}

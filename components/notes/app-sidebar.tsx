@@ -98,8 +98,16 @@ const data = {
           url: "/essay",
         },
         {
+          title: "Maths",
+          url: "/maths",
+        },
+        {
           title: "Exam Questions",
           url: "/question",
+        },
+        {
+          title: "Maths",
+          url: "/maths",
         },
       ],
     },
