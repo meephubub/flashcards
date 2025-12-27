@@ -314,10 +314,10 @@ export function LanguageCard({
             <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-md border">
               <div className="flex items-center justify-between">
                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Answer Results</h3>
-                {similarityScore !== null && (
+                {typeof similarityScore === 'number' && (
                   <span className={`text-sm px-2 py-1 rounded-full ${similarityScore >= 0.75
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                      : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                     }`}>
                     {Math.round(similarityScore * 100)}% match
                   </span>

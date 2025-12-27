@@ -1416,8 +1416,10 @@ const MATHS_TOPIC_PROMPTS: Record<string, string> = {
 export async function generateMathsQuestionWithGroq(
     topic: string,
     difficulty: 'foundation' | 'higher' = 'foundation',
-    calculatorAllowed: boolean = true
-): Promise<MathsQuestionResult> {
+    calculatorAllowed: boolean = true,
+    numQuestions: number = 1,
+    context?: string
+): Promise<MathsQuestionResult[]> {
     const topicKey = topic.toLowerCase().replace(/\s+/g, '_');
     const topicPrompt = MATHS_TOPIC_PROMPTS[topicKey] || MATHS_TOPIC_PROMPTS.default;
 
@@ -1429,28 +1431,38 @@ export async function generateMathsQuestionWithGroq(
         ? 'Calculator IS allowed for this question.'
         : 'Calculator is NOT allowed - ensure calculations are manageable without one.';
 
+    const contextSection = context && context.trim()
+        ? `\n\nADDITIONAL CONTEXT/REFERENCE:\n${context.trim()}\n\nUse this context to inform the questions. If it contains a specific topic or examples, follow those.`
+        : '';
+
     const prompt = `You are a GCSE Mathematics examiner creating exam-style questions.
 
 Topic: ${topic}
+Number of questions: ${numQuestions}
 Difficulty: ${difficultyDesc}
-${calculatorNote}
+${calculatorNote}${contextSection}
 
 ${topicPrompt}
 
-Generate ONE GCSE maths question that:
-1. Is appropriate for the difficulty level
-2. Has a clear, unambiguous answer
-3. Tests genuine mathematical understanding
-4. Uses proper mathematical notation where needed
+Generate ${numQuestions} GCSE maths question(s) that:
+1. Are appropriate for the difficulty level
+2. Have a clear, unambiguous answer
+3. Test genuine mathematical understanding
+4. Use proper mathematical notation where needed
 
-Return the response as a JSON object with these properties:
+Return the response as a JSON object with this property:
 {
-    "question": string (the full question text, can include LaTeX using $...$ for inline or $$...$$ for display),
-    "maxMarks": number (typically 2-6 marks),
-    "questionType": "calculation" | "problem-solving" | "reasoning" | "proof",
-    "expectedAnswer": string (the correct answer, with working if relevant),
-    "workingSteps": string[] (optional, step-by-step solution),
-    "hint": string (optional, a hint without giving away the answer)
+    "questions": [
+        {
+            "question": string (the full question text, can include LaTeX using $...$ for inline or $$...$$ for display),
+            "maxMarks": number (typically 2-6 marks),
+            "questionType": "calculation" | "problem-solving" | "reasoning" | "proof",
+            "expectedAnswer": string (the correct answer, with working if relevant),
+            "workingSteps": string[] (optional, step-by-step solution),
+            "hint": string (optional, a hint without giving away the answer)
+        },
+        ...
+    ]
 }`;
 
     try {
@@ -1470,27 +1482,38 @@ Return the response as a JSON object with these properties:
             }
         }
 
-        if (!parsedContent || typeof parsedContent.question !== "string") {
+        if (!parsedContent || !Array.isArray(parsedContent.questions)) {
+            // Fallback for single question if format was misunderstood
+            if (parsedContent && typeof parsedContent.question === "string") {
+                return [{
+                    question: parsedContent.question,
+                    maxMarks: typeof parsedContent.maxMarks === 'number' ? parsedContent.maxMarks : 3,
+                    questionType: parsedContent.questionType || 'calculation',
+                    expectedAnswer: parsedContent.expectedAnswer || '',
+                    workingSteps: Array.isArray(parsedContent.workingSteps) ? parsedContent.workingSteps : undefined,
+                    hint: parsedContent.hint,
+                }];
+            }
             throw new Error("Invalid response format from Groq");
         }
 
-        return {
-            question: parsedContent.question,
-            maxMarks: typeof parsedContent.maxMarks === 'number' ? parsedContent.maxMarks : 3,
-            questionType: parsedContent.questionType || 'calculation',
-            expectedAnswer: parsedContent.expectedAnswer || '',
-            workingSteps: Array.isArray(parsedContent.workingSteps) ? parsedContent.workingSteps : undefined,
-            hint: parsedContent.hint,
-        };
+        return parsedContent.questions.map((q: any) => ({
+            question: q.question || '',
+            maxMarks: typeof q.maxMarks === 'number' ? q.maxMarks : 3,
+            questionType: q.questionType || 'calculation',
+            expectedAnswer: q.expectedAnswer || '',
+            workingSteps: Array.isArray(q.workingSteps) ? q.workingSteps : undefined,
+            hint: q.hint,
+        }));
     } catch (error) {
-        console.error("Error generating maths question with Groq:", error);
-        return {
+        console.error("Error generating maths questions with Groq:", error);
+        return [{
             question: "Solve the equation: 2x + 5 = 13",
             maxMarks: 2,
             questionType: 'calculation',
             expectedAnswer: "x = 4",
             workingSteps: ["2x + 5 = 13", "2x = 13 - 5", "2x = 8", "x = 4"],
-        };
+        }];
     }
 }
 

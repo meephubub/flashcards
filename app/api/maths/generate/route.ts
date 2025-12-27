@@ -3,7 +3,7 @@ import { generateMathsQuestionWithGroq } from '@/lib/groq'
 
 export async function POST(req: Request) {
     try {
-        const { topic, difficulty, calculatorAllowed } = await req.json()
+        const { topic, difficulty, calculatorAllowed, count, context } = await req.json()
 
         if (!topic) {
             return NextResponse.json(
@@ -15,7 +15,9 @@ export async function POST(req: Request) {
         const result = await generateMathsQuestionWithGroq(
             topic,
             difficulty || 'foundation',
-            calculatorAllowed ?? true
+            calculatorAllowed ?? true,
+            count || 1,
+            context
         )
 
         return NextResponse.json(result)
