@@ -45,7 +45,11 @@ import ExamFromNotesPage from "@/app/exam-from-notes/page"
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Environment, Bounds, useGLTF } from '@react-three/drei'
 import { STLLoader } from 'three-stdlib'
-import { Loader2, X, Star } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Slider } from "@/components/ui/slider"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Loader2, X, Star, Settings, Table as TableIcon } from 'lucide-react'
 
 export default function Page() {
   const { user } = useAuth()
@@ -256,6 +260,9 @@ export default function Page() {
   }, [noteContent, draftContent])
   const cacheKey = React.useMemo(() => currentNoteId ? `${currentNoteId}:${contentHash}` : '', [currentNoteId, contentHash])
 
+  // Image size cap state (default 360px)
+  const [imageSizeCap, setImageSizeCap] = useState<number>(360)
+
   // Trigger a subtle slide/fade-in on open
   useEffect(() => {
     if (dictOpen) {
@@ -426,6 +433,47 @@ export default function Page() {
       setExamLoading(false)
     }
   }, [currentNoteId, noteContent, draftContent, noteTitle, examCache, cacheKey])
+
+
+  const insertTable = React.useCallback((rows = 3, cols = 3) => {
+    const el = editorRef.current
+    if (!el) return
+    const start = el.selectionStart ?? draftContent.length
+    const end = el.selectionEnd ?? start
+    const before = draftContent.slice(0, start)
+    const after = draftContent.slice(end)
+
+    let header = '|'
+    let separator = '|'
+    for (let c = 1; c <= cols; c++) {
+      header += ` Header ${c} |`
+      separator += ` :--- |`
+    }
+    let body = ''
+    for (let r = 1; r <= rows; r++) {
+      body += '|'
+      for (let c = 1; c <= cols; c++) {
+        body += ` Cell ${r}-${c} |`
+      }
+      body += '\n'
+    }
+
+    const tableTemplate = `
+${header}
+${separator}
+${body}
+`
+    const next = `${before}${tableTemplate}${after}`
+    setDraftContent(next)
+    setTimeout(() => {
+      try {
+        el.focus()
+        // position cursor inside first cell (approx)
+        const newCursor = start + tableTemplate.indexOf('Header 1')
+        el.setSelectionRange(newCursor, newCursor + 8)
+      } catch { }
+    }, 0)
+  }, [draftContent])
 
   // Alt+D: open dictionary for current selection
   useEffect(() => {
@@ -1245,6 +1293,33 @@ Goals:
                     <div className="h-3 w-px bg-border/50 mx-1" />
                     <button type="button" className="w-5 h-5 rounded-md bg-muted hover:bg-muted/80 text-[10px] font-bold mx-0.5" onClick={() => wrapSelection('**')}>B</button>
                     <button type="button" className="w-5 h-5 rounded-md bg-muted hover:bg-muted/80 text-[10px] italic mx-0.5" onClick={() => wrapSelection('*')}>I</button>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button type="button" className="w-5 h-5 rounded-md bg-muted hover:bg-muted/80 inline-flex items-center justify-center mx-0.5" title="Insert Table">
+                          <TableIcon className="w-3 h-3" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-60 p-3" align="start">
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-xs leading-none">Insert Table</h4>
+                          <div className="flex gap-2">
+                            <div className="grid gap-1.5 flex-1">
+                              <Label htmlFor="rows" className="text-[10px]">Rows</Label>
+                              <Input id="rows" defaultValue="3" className="h-7 text-xs" type="number" min="1" max="20" />
+                            </div>
+                            <div className="grid gap-1.5 flex-1">
+                              <Label htmlFor="cols" className="text-[10px]">Cols</Label>
+                              <Input id="cols" defaultValue="3" className="h-7 text-xs" type="number" min="1" max="10" />
+                            </div>
+                          </div>
+                          <Button size="sm" className="h-7 w-full text-xs" onClick={() => {
+                            const r = parseInt((document.getElementById('rows') as HTMLInputElement).value || '3')
+                            const c = parseInt((document.getElementById('cols') as HTMLInputElement).value || '3')
+                            insertTable(r, c)
+                          }}>Insert</Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </>
                 )}
 
@@ -1274,6 +1349,32 @@ Goals:
               </div>
             )}
           </div>
+          {/* View Settings */}
+          <div className="ml-auto px-4 flex items-center">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-4" align="end">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none text-sm">Image Size Cap</h4>
+                    <p className="text-xs text-muted-foreground">Max width for images ({imageSizeCap}px)</p>
+                    <Slider
+                      value={[imageSizeCap]}
+                      min={100}
+                      max={1000}
+                      step={10}
+                      onValueChange={(v) => setImageSizeCap(v[0])}
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           {/* Alt+V shortcut to verify current note */}
           <script dangerouslySetInnerHTML={{
             __html: `
@@ -1552,7 +1653,7 @@ Goals:
                         <ExamFromNotesPage />
                       </div>
                     ) : (
-                      <MemoMarkdownContent content={noteContent} fillGaps={fillGapsMode} density={fillGapsDensity} seed={cacheKey} />
+                      <MemoMarkdownContent content={noteContent} fillGaps={fillGapsMode} density={fillGapsDensity} seed={cacheKey} imageSizeCap={imageSizeCap} />
                     )}
                   </div>
                 )}
@@ -1597,7 +1698,7 @@ Goals:
                       <InlineNoteSkeleton />
                     ) : (
                       <div className="group/reader">
-                        <MarkdownContent content={noteContent} fillGaps={fillGapsMode} density={fillGapsDensity} seed={cacheKey} />
+                        <MarkdownContent content={noteContent} fillGaps={fillGapsMode} density={fillGapsDensity} seed={cacheKey} imageSizeCap={imageSizeCap} />
                       </div>
                     )}
                   </article>
@@ -1629,7 +1730,7 @@ Goals:
                       {examLoading ? (
                         <InlineNoteSkeleton />
                       ) : (
-                        <MemoMarkdownContent key={examVersion} content={examMarkdown} fillGaps={false} seed={cacheKey} />
+                        <MemoMarkdownContent key={examVersion} content={examMarkdown} fillGaps={false} seed={cacheKey} imageSizeCap={imageSizeCap} />
                       )}
                     </div>
                   </div>
@@ -1864,11 +1965,12 @@ const MemoMarkdownContent = React.memo(
     prev.content === next.content &&
     prev.fillGaps === next.fillGaps &&
     prev.density === next.density &&
-    prev.seed === next.seed
+    prev.seed === next.seed &&
+    prev.imageSizeCap === next.imageSizeCap
   )
 )
 
-function MarkdownContent({ content, fillGaps, density, seed }: { content: string; fillGaps?: boolean; density?: number; seed?: string }) {
+function MarkdownContent({ content, fillGaps, density, seed, imageSizeCap = 360 }: { content: string; fillGaps?: boolean; density?: number; seed?: string, imageSizeCap?: number }) {
   // Utilities to modify mdast with parent tracking
   function visitWithParent(tree: any, visitor: (node: any, parent: any, index: number) => void) {
     function walk(node: any, parent: any) {
@@ -3487,7 +3589,8 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
                   {/* Inline (small) image */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    className="my-4 block w-full max-w-[360px] rounded-md border cursor-zoom-in transition-all duration-300 ease-in-out"
+                    className="my-4 block w-full rounded-md border cursor-zoom-in transition-all duration-300 ease-in-out"
+                    style={{ maxWidth: imageSizeCap }}
                     loading="lazy"
                     decoding="async"
                     referrerPolicy="no-referrer"
@@ -3562,6 +3665,11 @@ function MarkdownContent({ content, fillGaps, density, seed }: { content: string
       <style jsx global>{`
         /* Match DOM green highlight for persisted ==text== */
         .prose mark { background-color: rgba(34,197,94,0.35); border-radius: 4px; padding: 0 0.1em; }
+        /* Fix table rendering: do NOT use display:block on table as it breaks styling. Wrapper handles overflow. */
+        .prose table { width: 100%; border-collapse: collapse; }
+        .prose table img { max-width: 150px !important; height: auto; display: inline-block; vertical-align: middle; margin: 0; }
+        .prose table td, .prose table th { min-width: 80px; padding: 0.5rem; border-bottom: 1px solid var(--tw-prose-td-borders); }
+        .prose table th { text-align: left; font-weight: 600; }
       `}</style>
     </div>
   )

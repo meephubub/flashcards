@@ -16,7 +16,7 @@ export default function EnvBanner() {
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-500" />
           <span className="text-sm font-medium">
-            Caution: You are running in DEV mode. Middleware relaxations may apply.
+            Caution: You are running in DEV mode. Middleware relaxations may apply. Version: {process.env.NEXT_PUBLIC_APP_VERSION}
           </span>
         </div>
         <button

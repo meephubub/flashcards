@@ -137,7 +137,7 @@ export default function ExamFromNotesPage() {
 
       const newState: QuestionState = {
         answer: userAnswers[currentQuestion.id] || "",
-        matchingPairs: currentQuestion.type === "matching" && currentQuestion.matchingPairs 
+        matchingPairs: currentQuestion.type === "matching" && currentQuestion.matchingPairs
           ? [...currentQuestion.matchingPairs].sort(() => 0.5 - Math.random())
           : [],
         sequence: currentQuestion.type === "sequence" && currentQuestion.sequence
@@ -282,17 +282,17 @@ export default function ExamFromNotesPage() {
         correctAnswer: currentQuestion?.correctAnswer,
         options: currentQuestion?.options
       });
-      
-             let gradingResult
-       if (currentQuestion.type === "short-answer") {
-         // Use Groq for short answer grading
-         gradingResult = await gradeAnswerWithGroq(
-           currentQuestion.type,
-           currentQuestion.question,
-           currentQuestion.correctAnswer,
-           answerToSave
-         )
-       } else {
+
+      let gradingResult
+      if (currentQuestion.type === "short-answer") {
+        // Use Groq for short answer grading
+        gradingResult = await gradeAnswerWithGroq(
+          currentQuestion.type,
+          currentQuestion.question,
+          currentQuestion.correctAnswer,
+          answerToSave
+        )
+      } else {
         gradingResult = await gradeAnswer(
           currentQuestion.type,
           currentQuestion.question,
@@ -327,12 +327,12 @@ export default function ExamFromNotesPage() {
         setStreakCount(0)
       }
 
-             toast({
-         title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
-         description: gradingResult.feedback,
-         variant: gradingResult.isCorrect ? "default" : "destructive",
-         duration: 1200
-       })
+      toast({
+        title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
+        description: gradingResult.feedback,
+        variant: gradingResult.isCorrect ? "default" : "destructive",
+        duration: 1200
+      })
     } catch (error) {
       console.error("Error grading answer:", error)
       toast({
@@ -595,7 +595,7 @@ export default function ExamFromNotesPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="text-lg font-medium">{currentQuestion.question}</div>
-          
+
           {/* Show correct answer when user gets it wrong */}
           {currentQuestionState?.isAnswered && !results[currentQuestion.id]?.isCorrect && (
             <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -613,8 +613,8 @@ export default function ExamFromNotesPage() {
               {/* Debug info - only show in dev environment */}
               {env === 'dev' && (
                 <div className="text-xs text-gray-500 p-2 bg-gray-100 rounded">
-                  Debug: Correct Answer = "{currentQuestion.correctAnswer}" | 
-                  Options: {currentQuestion.options?.join(', ')} | 
+                  Debug: Correct Answer = "{currentQuestion.correctAnswer}" |
+                  Options: {currentQuestion.options?.join(', ')} |
                   Match Found: {currentQuestion.options?.includes(currentQuestion.correctAnswer) ? 'YES' : 'NO'}
                 </div>
               )}
@@ -624,44 +624,42 @@ export default function ExamFromNotesPage() {
                 disabled={currentQuestionState?.isAnswered}
                 className="space-y-2"
               >
-              {currentQuestion.options?.map((option: string, i: number) => (
-                <div
-                  key={i}
-                  className={`flex items-center space-x-3 p-4 rounded-lg border transition-all duration-200
-                    ${
-                      currentQuestionState?.answer === option
+                {currentQuestion.options?.map((option: string, i: number) => (
+                  <div
+                    key={i}
+                    className={`flex items-center space-x-3 p-4 rounded-lg border transition-all duration-200
+                    ${currentQuestionState?.answer === option
                         ? "border-primary bg-primary/5"
                         : "border-border hover:border-primary/50 hover:bg-muted/50"
-                    }
-                    ${
-                      currentQuestionState?.isAnswered
+                      }
+                    ${currentQuestionState?.isAnswered
                         ? option === currentQuestion.correctAnswer
                           ? "border-success bg-success/5"
                           : currentQuestionState?.answer === option
                             ? "border-destructive bg-destructive/5"
                             : ""
                         : "cursor-pointer"
-                    }`}
-                  onClick={() => !currentQuestionState?.isAnswered && handleAnswerChange(option)}
-                >
-                  <RadioGroupItem value={option} id={`option-${i}`} className="h-5 w-5" />
-                  <Label
-                    htmlFor={`option-${i}`}
-                    className={`flex-1 cursor-pointer text-base
+                      }`}
+                    onClick={() => !currentQuestionState?.isAnswered && handleAnswerChange(option)}
+                  >
+                    <RadioGroupItem value={option} id={`option-${i}`} className="h-5 w-5" />
+                    <Label
+                      htmlFor={`option-${i}`}
+                      className={`flex-1 cursor-pointer text-base
                       ${currentQuestionState?.isAnswered && option === currentQuestion.correctAnswer ? "text-success" : ""}
                       ${currentQuestionState?.isAnswered && currentQuestionState?.answer === option && option !== currentQuestion.correctAnswer ? "text-destructive" : ""}
                     `}
-                  >
-                    {option}
-                  </Label>
-                  {currentQuestionState?.isAnswered && option === currentQuestion.correctAnswer && (
-                    <Check className="h-5 w-5 text-success" />
-                  )}
-                  {currentQuestionState?.isAnswered && currentQuestionState?.answer === option && option !== currentQuestion.correctAnswer && (
-                    <X className="h-5 w-5 text-destructive" />
-                  )}
-                </div>
-              ))}
+                    >
+                      {option}
+                    </Label>
+                    {currentQuestionState?.isAnswered && option === currentQuestion.correctAnswer && (
+                      <Check className="h-5 w-5 text-success" />
+                    )}
+                    {currentQuestionState?.isAnswered && currentQuestionState?.answer === option && option !== currentQuestion.correctAnswer && (
+                      <X className="h-5 w-5 text-destructive" />
+                    )}
+                  </div>
+                ))}
               </RadioGroup>
             </>
           )}

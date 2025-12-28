@@ -43,6 +43,14 @@ import {
     ChevronLeft
 } from 'lucide-react'
 
+// react-markdown and math plugins
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import remarkBreaks from 'remark-breaks'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
+
 // Topics previously used for selection, now we allow custom topics
 const TOPICS = []
 
@@ -87,6 +95,19 @@ interface UploadedFile {
 }
 
 type ViewState = 'setup' | 'question' | 'result' | 'history'
+
+function MathsMarkdown({ content }: { content: string }) {
+    return (
+        <div className="prose prose-neutral dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-zinc-900 prose-pre:text-white">
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+                rehypePlugins={[rehypeKatex]}
+            >
+                {content}
+            </ReactMarkdown>
+        </div>
+    )
+}
 
 function MathsPageContent() {
     const { user } = useAuth()
@@ -628,9 +649,9 @@ function MathsPageContent() {
                                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
                                         Question {currentQuestionIndex + 1} of {questions.length}
                                     </span>
-                                    <p className="text-xl md:text-2xl font-semibold text-foreground leading-relaxed">
-                                        {currentQuestion.question}
-                                    </p>
+                                    <div className="text-xl md:text-2xl font-semibold text-foreground leading-relaxed">
+                                        <MathsMarkdown content={currentQuestion.question} />
+                                    </div>
                                 </div>
                                 {currentQuestion.hint && (
                                     <Button
@@ -699,14 +720,14 @@ function MathsPageContent() {
                             {/* Feedback */}
                             <div className="p-5 rounded-xl bg-muted/20 border border-border/30">
                                 <h3 className="font-semibold mb-2">Feedback</h3>
-                                <p className="text-muted-foreground leading-relaxed">{gradingResult.feedback}</p>
+                                <MathsMarkdown content={gradingResult.feedback} />
                             </div>
 
                             {/* Working Feedback */}
                             {gradingResult.workingFeedback && (
                                 <div className="p-5 rounded-xl bg-muted/20 border border-border/30">
                                     <h3 className="font-semibold mb-2">Working Method</h3>
-                                    <p className="text-muted-foreground">{gradingResult.workingFeedback}</p>
+                                    <MathsMarkdown content={gradingResult.workingFeedback} />
                                 </div>
                             )}
 
@@ -715,7 +736,7 @@ function MathsPageContent() {
                                 <h3 className="font-semibold mb-2 flex items-center gap-2">
                                     <CheckCircle className="w-4 h-4" /> Correct Answer
                                 </h3>
-                                <p className="text-muted-foreground font-mono">{gradingResult.correctAnswer}</p>
+                                <MathsMarkdown content={gradingResult.correctAnswer} />
                             </div>
 
                             {/* Common Mistake */}
@@ -724,7 +745,7 @@ function MathsPageContent() {
                                     <h3 className="font-semibold mb-2 flex items-center gap-2">
                                         <XCircle className="w-4 h-4 text-muted-foreground" /> Common Mistake
                                     </h3>
-                                    <p className="text-muted-foreground">{gradingResult.commonMistake}</p>
+                                    <MathsMarkdown content={gradingResult.commonMistake} />
                                 </div>
                             )}
                         </div>
@@ -769,16 +790,16 @@ function MathsPageContent() {
                             </div>
                             <div className="p-5 rounded-xl bg-muted/20 border border-border/30 mb-4">
                                 <div className="text-xs text-muted-foreground mb-1">Question</div>
-                                <p className="font-medium">{selectedHistoryItem.question}</p>
+                                <MathsMarkdown content={selectedHistoryItem.question} />
                             </div>
                             <div className="p-5 rounded-xl bg-muted/20 border border-border/30 mb-4">
                                 <div className="text-xs text-muted-foreground mb-1">Your Answer</div>
-                                <p className="text-muted-foreground whitespace-pre-wrap">{selectedHistoryItem.answer}</p>
+                                <MathsMarkdown content={selectedHistoryItem.answer} />
                             </div>
                             {feedbackData.feedback && (
                                 <div className="p-5 rounded-xl bg-muted/20 border border-border/30">
                                     <div className="text-xs text-muted-foreground mb-1">Feedback</div>
-                                    <p className="text-muted-foreground">{feedbackData.feedback}</p>
+                                    <MathsMarkdown content={feedbackData.feedback} />
                                 </div>
                             )}
                             <div className="mt-6">

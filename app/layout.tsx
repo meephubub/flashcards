@@ -56,7 +56,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         {/* PWA init (service worker) */}
-        <EnvBannerClient/>
+        <EnvBannerClient />
         {/* Dev environment banner */}
         <ThemeProvider
           attribute="class"
@@ -77,8 +77,6 @@ export default function RootLayout({
                   <SpeedInsights />
                   <Analytics />
                   <PwaInit />
-                  <OnlineIndicator />
-                  <EnvBannerClient />
                 </FolderProvider>
               </DeckProvider>
             </SettingsProvider>
