@@ -24,6 +24,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import {
     Calculator,
     Send,
@@ -134,7 +136,19 @@ function MathsPageContent() {
     const [loadingHistory, setLoadingHistory] = useState(false)
     const [selectedHistoryItem, setSelectedHistoryItem] = useState<MathsResponse | null>(null)
     const [showHint, setShowHint] = useState(false)
+    const [autoCompleteEnabled, setAutoCompleteEnabled] = useState(true)
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // Load autoComplete setting
+    useEffect(() => {
+        const saved = localStorage.getItem('maths_autocomplete_enabled')
+        if (saved !== null) setAutoCompleteEnabled(saved === 'true')
+    }, [])
+
+    // Save autoComplete setting
+    useEffect(() => {
+        localStorage.setItem('maths_autocomplete_enabled', autoCompleteEnabled.toString())
+    }, [autoCompleteEnabled])
 
     // Autofill evaluation
     const evaluateSimpleExpression = (expr: string): string | null => {
@@ -156,7 +170,7 @@ function MathsPageContent() {
         const newVal = e.target.value
         setAnswer(newVal)
 
-        if (calculatorAllowed) {
+        if (calculatorAllowed && autoCompleteEnabled) {
             // Check if the last character typed was '='
             // Look for patterns like "1+1=" or "(20*2)/4="
             const lastPartMatch = newVal.match(/([0-9+\-*/().\s]+)=$/);
@@ -567,6 +581,17 @@ function MathsPageContent() {
                                             </Button>
                                         </div>
                                     </div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium">Auto-fill Expressions</span>
+                                            <span className="text-[10px] text-muted-foreground">Type "1+1=" to auto-complete</span>
+                                        </div>
+                                        <Switch
+                                            checked={autoCompleteEnabled}
+                                            onCheckedChange={setAutoCompleteEnabled}
+                                            disabled={!calculatorAllowed}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -692,10 +717,20 @@ function MathsPageContent() {
 
                         {/* Footer */}
                         <div className="flex items-center justify-between px-8 md:px-12 py-4 border-t border-border/30 bg-background/80">
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-6">
                                 <Button variant="ghost" size="sm" onClick={resetAll} disabled={isGenerating}>
                                     Cancel
                                 </Button>
+                                <div className="hidden md:flex items-center gap-2">
+                                    <Switch
+                                        id="autofill-toggle"
+                                        checked={autoCompleteEnabled}
+                                        onCheckedChange={setAutoCompleteEnabled}
+                                    />
+                                    <Label htmlFor="autofill-toggle" className="text-xs text-muted-foreground cursor-pointer">
+                                        Autofill (=)
+                                    </Label>
+                                </div>
                             </div>
                             <Button onClick={handleGrade} disabled={isGrading || !answer.trim()}>
                                 {isGrading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Checking...</> : <><Send className="w-4 h-4 mr-2" />Submit</>}
