@@ -2,8 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Card as UICard, CardContent } from "@/components/ui/card"
-import { ArrowLeft, Play, Plus, Edit, Trophy, BookText } from "lucide-react"
+import { ArrowLeft, Play, Plus, Edit, Trophy, BookText, Download } from "lucide-react"
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { useDecks } from "@/context/deck-context"
@@ -21,6 +25,15 @@ interface DeckViewProps {
 
 export function DeckView({ deckId }: DeckViewProps) {
   const [isCreateCardOpen, setIsCreateCardOpen] = useState(false)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
+  const [exportOptions, setExportOptions] = useState({
+    includeFront: true,
+    includeBack: true,
+    includeState: true,
+    includeNextReview: true,
+    includeEaseFactor: true,
+    format: 'csv' as 'csv' | 'tsv'
+  })
   const { getDeck, loading, getDueCards } = useDecks()
   const { settings } = useSettings()
   const router = useRouter()
@@ -54,6 +67,86 @@ export function DeckView({ deckId }: DeckViewProps) {
       setHasInProgressExam(!!cachedExam)
     }
   }, [deckId])
+
+  // Export handler with customizable options
+  const handleExport = () => {
+    if (!deck || !deck.cards || deck.cards.length === 0) return
+
+    const delimiter = exportOptions.format === 'csv' ? ',' : '\t'
+    const fileExt = exportOptions.format
+
+    // Helper to escape values based on format
+    const escapeValue = (value: string) => {
+      if (!value) return exportOptions.format === 'csv' ? '""' : ''
+      if (exportOptions.format === 'tsv') {
+        // For TSV, just escape tabs and newlines
+        return value.replace(/\t/g, ' ').replace(/\n/g, ' ').replace(/\r/g, '')
+      }
+      // CSV escaping
+      const needsQuotes = value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')
+      const escaped = value.replace(/"/g, '""')
+      return needsQuotes ? `"${escaped}"` : escaped
+    }
+
+    // Build header based on selected options
+    const headers: string[] = []
+    if (exportOptions.includeFront) headers.push('Front')
+    if (exportOptions.includeBack) headers.push('Back')
+    if (isSpacedRepetitionEnabled && exportOptions.includeState) headers.push('State')
+    if (isSpacedRepetitionEnabled && exportOptions.includeNextReview) headers.push('Next Review')
+    if (isSpacedRepetitionEnabled && exportOptions.includeEaseFactor) headers.push('Ease Factor')
+
+    let output = headers.join(delimiter) + '\n'
+
+    // Build rows
+    deck.cards.forEach((card) => {
+      const progress = (card as any).progress
+      const values: string[] = []
+
+      if (exportOptions.includeFront) values.push(escapeValue(card.front))
+      if (exportOptions.includeBack) values.push(escapeValue(card.back))
+
+      if (isSpacedRepetitionEnabled) {
+        if (exportOptions.includeState) {
+          let state = 'New'
+          if (progress?.fsrs_state) {
+            const stateNum = progress.fsrs_state.state
+            if (stateNum === 1) state = 'Learning'
+            else if (stateNum === 2) state = 'Review'
+            else if (stateNum === 3) state = 'Relearning'
+          }
+          values.push(state)
+        }
+        if (exportOptions.includeNextReview) {
+          const nextReview = progress?.due_date ? formatDate(progress.due_date, 'short') : 'N/A'
+          values.push(nextReview)
+        }
+        if (exportOptions.includeEaseFactor) {
+          const easeFactor = progress?.ease_factor?.toFixed(2) || '2.50'
+          values.push(easeFactor)
+        }
+      }
+
+      output += values.join(delimiter) + '\n'
+    })
+
+    // Create blob with UTF-8 BOM for Excel compatibility
+    const BOM = '\uFEFF'
+    const mimeType = exportOptions.format === 'csv' ? 'text/csv' : 'text/tab-separated-values'
+    const blob = new Blob([BOM + output], { type: `${mimeType};charset=utf-8;` })
+
+    // Trigger download
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `${deck.name.replace(/[^a-z0-9]/gi, '_')}.${fileExt}`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    setIsExportDialogOpen(false)
+  }
 
   if (loading) {
     return (
@@ -140,6 +233,10 @@ export function DeckView({ deckId }: DeckViewProps) {
             Edit Deck
           </Link>
         </Button>
+        <Button variant="outline" onClick={() => setIsExportDialogOpen(true)}>
+          <Download className="h-4 w-4 mr-2" />
+          Export
+        </Button>
         <Button variant="outline" asChild>
           <Link href={`/deck/${deckId}/language-study`}>
             <BookText className="h-4 w-4 mr-2" />
@@ -207,6 +304,92 @@ export function DeckView({ deckId }: DeckViewProps) {
       </div>
 
       <CreateCardDialog open={isCreateCardOpen} onOpenChange={setIsCreateCardOpen} deckId={deckId} />
+
+      {/* Export Options Dialog */}
+      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Export Deck</DialogTitle>
+            <DialogDescription>
+              Choose which columns to include and the export format.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Columns to Include</Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="front"
+                    checked={exportOptions.includeFront}
+                    onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeFront: checked as boolean }))}
+                  />
+                  <Label htmlFor="front" className="text-sm font-normal cursor-pointer">Front</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="back"
+                    checked={exportOptions.includeBack}
+                    onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeBack: checked as boolean }))}
+                  />
+                  <Label htmlFor="back" className="text-sm font-normal cursor-pointer">Back</Label>
+                </div>
+                {isSpacedRepetitionEnabled && (
+                  <>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="state"
+                        checked={exportOptions.includeState}
+                        onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeState: checked as boolean }))}
+                      />
+                      <Label htmlFor="state" className="text-sm font-normal cursor-pointer">State (New/Learning/Review)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="nextReview"
+                        checked={exportOptions.includeNextReview}
+                        onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeNextReview: checked as boolean }))}
+                      />
+                      <Label htmlFor="nextReview" className="text-sm font-normal cursor-pointer">Next Review Date</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="easeFactor"
+                        checked={exportOptions.includeEaseFactor}
+                        onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeEaseFactor: checked as boolean }))}
+                      />
+                      <Label htmlFor="easeFactor" className="text-sm font-normal cursor-pointer">Ease Factor</Label>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Export Format</Label>
+              <RadioGroup
+                value={exportOptions.format}
+                onValueChange={(value) => setExportOptions(prev => ({ ...prev, format: value as 'csv' | 'tsv' }))}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="csv" id="csv" />
+                  <Label htmlFor="csv" className="text-sm font-normal cursor-pointer">CSV (Comma-separated)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="tsv" id="tsv" />
+                  <Label htmlFor="tsv" className="text-sm font-normal cursor-pointer">TSV (Tab-separated)</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleExport} disabled={!exportOptions.includeFront && !exportOptions.includeBack}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

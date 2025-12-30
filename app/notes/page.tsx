@@ -38,6 +38,7 @@ import remarkMath from 'remark-math'
 import remarkDirective from 'remark-directive'
 import remarkBreaks from 'remark-breaks'
 import rehypeKatex from 'rehype-katex'
+import rehypeSlug from 'rehype-slug'
 import 'katex/dist/katex.min.css'
 import { Skeleton } from "@/components/ui/skeleton"
 import { makeGroqRequest, generateExamMarkdownFromNote, gradeAnswerWithGroq } from "@/lib/groq"
@@ -2832,7 +2833,7 @@ function MarkdownContent({ content, fillGaps, density, seed, imageSizeCap = 360 
           directivePlugin,
           gapPlugin,
         ]}
-        rehypePlugins={[rehypeKatex, rehypeHighlightEquals]}
+        rehypePlugins={[rehypeKatex, rehypeSlug, rehypeHighlightEquals]}
         components={{
           // Fill-the-gaps renderer for nodes created by gapPlugin
           gap: (props: any) => {
@@ -3665,10 +3666,19 @@ function MarkdownContent({ content, fillGaps, density, seed, imageSizeCap = 360 
       <style jsx global>{`
         /* Match DOM green highlight for persisted ==text== */
         .prose mark { background-color: rgba(34,197,94,0.35); border-radius: 4px; padding: 0 0.1em; }
+        /* Smooth scroll for anchor links (table of contents) */
+        html { scroll-behavior: smooth; }
         /* Fix table rendering: do NOT use display:block on table as it breaks styling. Wrapper handles overflow. */
         .prose table { width: 100%; border-collapse: collapse; }
         .prose table img { max-width: 150px !important; height: auto; display: inline-block; vertical-align: middle; margin: 0; }
-        .prose table td, .prose table th { min-width: 80px; padding: 0.5rem; border-bottom: 1px solid var(--tw-prose-td-borders); }
+        .prose table td, .prose table th { 
+          min-width: 80px; 
+          padding: 0.5rem; 
+          border: 1px solid var(--tw-prose-td-borders); 
+          vertical-align: top;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+        }
         .prose table th { text-align: left; font-weight: 600; }
       `}</style>
     </div>
