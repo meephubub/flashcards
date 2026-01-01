@@ -752,6 +752,14 @@ function MathsPageContent() {
                         </div>
 
                         <div className="space-y-4">
+                            {/* Your Answer */}
+                            {answer.trim() && (
+                                <div className="p-5 rounded-xl bg-muted/20 border border-border/30">
+                                    <h3 className="font-semibold mb-2">Your Answer</h3>
+                                    <MathsMarkdown content={answer} />
+                                </div>
+                            )}
+
                             {/* Feedback */}
                             <div className="p-5 rounded-xl bg-muted/20 border border-border/30">
                                 <h3 className="font-semibold mb-2">Feedback</h3>
@@ -832,9 +840,27 @@ function MathsPageContent() {
                                 <MathsMarkdown content={selectedHistoryItem.answer} />
                             </div>
                             {feedbackData.feedback && (
-                                <div className="p-5 rounded-xl bg-muted/20 border border-border/30">
+                                <div className="p-5 rounded-xl bg-muted/20 border border-border/30 mb-4">
                                     <div className="text-xs text-muted-foreground mb-1">Feedback</div>
                                     <MathsMarkdown content={feedbackData.feedback} />
+                                </div>
+                            )}
+                            {feedbackData.workingFeedback && (
+                                <div className="p-5 rounded-xl bg-muted/20 border border-border/30 mb-4">
+                                    <div className="text-xs text-muted-foreground mb-1">Working Method</div>
+                                    <MathsMarkdown content={feedbackData.workingFeedback} />
+                                </div>
+                            )}
+                            {feedbackData.correctAnswer && (
+                                <div className="p-5 rounded-xl bg-muted/20 border border-border/30 mb-4">
+                                    <div className="text-xs text-muted-foreground mb-1">Correct Answer</div>
+                                    <MathsMarkdown content={feedbackData.correctAnswer} />
+                                </div>
+                            )}
+                            {feedbackData.commonMistake && (
+                                <div className="p-5 rounded-xl bg-muted/20 border border-border/30 mb-4">
+                                    <div className="text-xs text-muted-foreground mb-1">Common Mistake</div>
+                                    <MathsMarkdown content={feedbackData.commonMistake} />
                                 </div>
                             )}
                             <div className="mt-6">
@@ -871,7 +897,9 @@ function MathsPageContent() {
                                                         <span className="font-medium truncate">{r.topic}</span>
                                                         {r.is_draft && <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Draft</span>}
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground truncate">{r.question}</p>
+                                                    <div className="text-sm text-muted-foreground line-clamp-2">
+                                                        <MathsMarkdown content={r.question} />
+                                                    </div>
                                                     <p className="text-xs text-muted-foreground/60 mt-1">{formatDate(r.created_at)}</p>
                                                 </div>
                                                 {r.marks_awarded !== null && (
