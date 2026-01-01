@@ -1541,6 +1541,7 @@ Marking Guidelines:
 3. Be lenient with notation (e.g., accept "x=4" or "4" or "x is 4")
 4. Look for correct mathematical reasoning
 5. For multi-mark questions, award partial credit appropriately
+6. if answer is correct and just an answer is given with no method award full marks, if incorrect method is shown grade accordingly
 
 Return the response as a JSON object with these properties:
 {
