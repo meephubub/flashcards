@@ -144,7 +144,7 @@ function EssayPageContent() {
     }, [user?.id, view, answer])
 
     useEffect(() => {
-        if (view === 'history' && user?.id) loadHistory()
+        if ((view === 'history' || view === 'menu') && user?.id) loadHistory()
     }, [view, user?.id])
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,6 +287,19 @@ function EssayPageContent() {
         finally { setIsGrading(false) }
     }
 
+    const continueDraft = (draft: EssayResponse) => {
+        const subject = SUBJECTS.find(s => s.id === draft.subject)
+        if (!subject) return
+        setSelectedSubject(subject)
+        setQuestion(draft.question)
+        setMaxMarks(draft.max_marks.toString())
+        setAnswer(draft.answer)
+        setCurrentDraftId(draft.id)
+        setView('writing')
+        setLastSaved(new Date(draft.updated_at))
+        setSelectedHistoryItem(null)
+    }
+
     const resetAll = () => { setView('menu'); setSelectedSubject(null); setQuestion(''); setMaxMarks('8'); setAnswer(''); setGradingResult(null); setCurrentDraftId(null); setLastSaved(null); setUploadedFiles([]) }
     const getSubjectById = (id: string) => SUBJECTS.find(s => s.id === id)
     const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -398,7 +411,34 @@ function EssayPageContent() {
                             })}
                         </div>
 
-                        <div className="text-center">
+                        <div className="text-center space-y-4">
+                            {responses.filter(r => r.is_draft).length > 0 && (
+                                <div className="max-w-md mx-auto mb-8">
+                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Recent Drafts</h4>
+                                    <div className="space-y-2">
+                                        {responses.filter(r => r.is_draft).slice(0, 3).map(draft => {
+                                            const subject = getSubjectById(draft.subject)
+                                            return (
+                                                <button
+                                                    key={draft.id}
+                                                    onClick={() => continueDraft(draft)}
+                                                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/30 hover:bg-muted/50 transition-colors text-left group"
+                                                >
+                                                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${subject?.color || 'from-zinc-500 to-zinc-700'} flex items-center justify-center flex-shrink-0`}>
+                                                        {subject && <subject.icon className="w-4 h-4 text-white" />}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium truncate group-hover:text-foreground transition-colors">{draft.question || 'Untitled Draft'}</p>
+                                                        <p className="text-[10px] text-muted-foreground">{formatDate(draft.updated_at)}</p>
+                                                    </div>
+                                                    <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                             <Button variant="outline" onClick={() => setView('history')} className="gap-2">
                                 <History className="w-4 h-4" /> View Past Responses
                             </Button>
@@ -595,9 +635,16 @@ function EssayPageContent() {
                                             <div className="text-xs text-muted-foreground">{Math.round((selectedHistoryItem.marks_awarded / selectedHistoryItem.max_marks) * 100)}%</div>
                                         </div>
                                     )}
-                                    <Button variant="ghost" size="sm" onClick={() => deleteResponse(selectedHistoryItem.id)} disabled={isDeleting} className="text-destructive hover:text-destructive">
-                                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        {selectedHistoryItem.is_draft && (
+                                            <Button variant="outline" size="sm" onClick={() => continueDraft(selectedHistoryItem)} className="gap-2">
+                                                <PenTool className="w-4 h-4" /> Continue Writing
+                                            </Button>
+                                        )}
+                                        <Button variant="ghost" size="sm" onClick={() => deleteResponse(selectedHistoryItem.id)} disabled={isDeleting} className="text-destructive hover:text-destructive">
+                                            {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                             <div className="p-5 rounded-xl bg-muted/20 border border-border/30 mb-4">
@@ -648,14 +695,24 @@ function EssayPageContent() {
                                                 )}
                                                 <ChevronRight className="w-5 h-5 text-muted-foreground/40" />
                                             </button>
-                                            {r.is_draft && (
+                                            <div className="absolute right-14 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {r.is_draft && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); continueDraft(r) }}
+                                                        className="p-2 text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                                                        title="Continue Writing"
+                                                    >
+                                                        <PenTool className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); deleteResponse(r.id) }}
-                                                    className="absolute right-14 top-1/2 -translate-y-1/2 p-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                                    className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-colors"
+                                                    title="Delete"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
-                                            )}
+                                            </div>
                                         </div>
                                     )
                                 })}
