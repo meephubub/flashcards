@@ -37,6 +37,7 @@ import { getSentenceEmbedding, cosineSimilarity } from "@/lib/ai/xenova-similari
 import { useToast } from "@/hooks/use-toast"
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd"
 import confetti from "canvas-confetti"
+import { haptics } from "@/lib/haptics"
 import { DifficultySelector } from "@/components/difficulty-selector"
 import {
   getCachedExamData,
@@ -143,7 +144,7 @@ export function ExamMode({ deckId }: ExamModeProps) {
       // Initialize new state for this question
       const newState: QuestionState = {
         answer: userAnswers[currentQuestion.id] || "",
-        matchingPairs: currentQuestion.type === "matching" && currentQuestion.matchingPairs 
+        matchingPairs: currentQuestion.type === "matching" && currentQuestion.matchingPairs
           ? [...currentQuestion.matchingPairs].sort(() => 0.5 - Math.random())
           : [],
         sequence: currentQuestion.type === "sequence" && currentQuestion.sequence
@@ -402,6 +403,11 @@ export function ExamMode({ deckId }: ExamModeProps) {
       }
 
       // Always show the correct answer in the toast notification
+      if (gradingResult.isCorrect) {
+        haptics.correct()
+      } else {
+        haptics.incorrect()
+      }
       toast({
         title: gradingResult.isCorrect ? "Correct! 🎉" : "Not quite right 🤔",
         description: `${gradingResult.feedback}\n\nCorrect answer: ${currentQuestion.correctAnswer}`,
@@ -1028,7 +1034,7 @@ Provide a helpful response that:
 Keep your response concise and focused.`
 
       const response = await makeGroqRequest(prompt, true)
-      
+
       // Add AI response to chat
       setQuestionStates(prev => ({
         ...prev,
@@ -1520,19 +1526,17 @@ Keep your response concise and focused.`
                 <div
                   key={i}
                   className={`flex items-center space-x-3 p-4 rounded-lg border transition-all duration-200
-                    ${
-                      currentQuestionState?.answer === option
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50 hover:bg-muted/50"
+                    ${currentQuestionState?.answer === option
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50 hover:bg-muted/50"
                     }
-                    ${
-                      currentQuestionState?.isAnswered
-                        ? option === currentQuestion.correctAnswer
-                          ? "border-success bg-success/5"
-                          : currentQuestionState?.answer === option
-                            ? "border-destructive bg-destructive/5"
-                            : ""
-                        : "cursor-pointer"
+                    ${currentQuestionState?.isAnswered
+                      ? option === currentQuestion.correctAnswer
+                        ? "border-success bg-success/5"
+                        : currentQuestionState?.answer === option
+                          ? "border-destructive bg-destructive/5"
+                          : ""
+                      : "cursor-pointer"
                     }`}
                   onClick={() => !currentQuestionState?.isAnswered && handleAnswerChange(option)}
                 >
@@ -1694,7 +1698,7 @@ Keep your response concise and focused.`
                   Close
                 </Button>
               </div>
-              
+
               <div className="space-y-4 max-h-[300px] overflow-y-auto">
                 {currentQuestionState.chatMessages.map((message, index) => (
                   <div
@@ -1702,11 +1706,10 @@ Keep your response concise and focused.`
                     className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary"
-                      }`}
+                      className={`max-w-[80%] rounded-lg p-3 ${message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary"
+                        }`}
                     >
                       {message.content}
                     </div>
@@ -1753,11 +1756,14 @@ Keep your response concise and focused.`
 
           <div>
             {!currentQuestionState?.isAnswered ? (
-              <Button onClick={handleSubmitAnswer} disabled={currentQuestionState?.isGrading} className="w-full sm:w-auto">
+              <Button onClick={handleSubmitAnswer} disabled={currentQuestionState?.isGrading} className="w-full sm:w-auto" disableHaptics>
                 {currentQuestionState?.isGrading ? "Grading..." : "Submit Answer"}
               </Button>
             ) : (
-              <Button onClick={handleNextQuestion} className="w-full sm:w-auto">
+              <Button onClick={() => {
+                haptics.navigation()
+                handleNextQuestion()
+              }} className="w-full sm:w-auto" disableHaptics>
                 {currentQuestionIndex < totalQuestions - 1 ? (
                   <>
                     Next

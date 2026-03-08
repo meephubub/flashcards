@@ -61,3 +61,18 @@ CREATE TABLE public.settings (
   CONSTRAINT settings_pkey PRIMARY KEY (id),
   CONSTRAINT settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+
+CREATE TABLE public.user_activity (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  session_id uuid NOT NULL,
+  activity_type text NOT NULL,
+  subject_id text,
+  start_time timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  last_heartbeat timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  duration_seconds integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT user_activity_pkey PRIMARY KEY (id),
+  CONSTRAINT user_activity_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+);

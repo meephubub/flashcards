@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { getUserStats, getLearningCurveData, getCardStateDistribution } from "@/lib/stats"
 import type { UserStats, LearningCurveDataPoint, CardStateDistribution } from "@/lib/stats"
+import { getSubjectDurations, type SubjectDuration, getUserHeatmap, getUserStreak } from "@/lib/activity"
 import { AppSidebar } from "@/components/notes/app-sidebar"
+import { ActivityHeatmap } from "@/components/activity-heatmap"
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -21,6 +23,7 @@ import { Card } from "@/components/ui/card"
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 import { FSRSControls, DEFAULT_FSRS_PARAMS, type FSRSParams } from "@/components/fsrs-controls"
 import { useSettings } from "@/context/settings-context"
+import { Flame, Calendar, BookOpen, BarChart3, Clock, Target } from "lucide-react"
 
 export default function FSRSStatsPage() {
     const { user, isLoading: authLoading } = useAuth()
@@ -30,6 +33,9 @@ export default function FSRSStatsPage() {
     const [stats, setStats] = useState<UserStats | null>(null)
     const [learningCurve, setLearningCurve] = useState<LearningCurveDataPoint[]>([])
     const [cardStates, setCardStates] = useState<CardStateDistribution | null>(null)
+    const [subjectDurations, setSubjectDurations] = useState<SubjectDuration[]>([])
+    const [heatmapData, setHeatmapData] = useState<{ date: string; count: number }[]>([])
+    const [streak, setStreak] = useState<{ currentStreak: number; longestStreak: number } | null>(null)
     const [loading, setLoading] = useState(true)
     const [days, setDays] = useState(30)
 
@@ -69,15 +75,21 @@ export default function FSRSStatsPage() {
 
             setLoading(true)
             try {
-                const [userStats, curveData, statesDist] = await Promise.all([
+                const [userStats, curveData, statesDist, durations, heatmap, streakData] = await Promise.all([
                     getUserStats(supabase, user.id),
                     getLearningCurveData(supabase, user.id, days),
                     getCardStateDistribution(supabase, user.id),
+                    getSubjectDurations(supabase, user.id, days),
+                    getUserHeatmap(supabase, user.id),
+                    getUserStreak(supabase, user.id)
                 ])
 
                 setStats(userStats)
                 setLearningCurve(curveData)
                 setCardStates(statesDist)
+                setSubjectDurations(durations)
+                setHeatmapData(heatmap)
+                setStreak(streakData)
             } catch (error) {
                 console.error("Error fetching stats:", error)
             } finally {
@@ -123,7 +135,7 @@ export default function FSRSStatsPage() {
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator className="hidden md:block" />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage>FSRS Statistics</BreadcrumbPage>
+                                    <BreadcrumbPage>Statistics</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
@@ -131,107 +143,178 @@ export default function FSRSStatsPage() {
                 </header>
 
                 <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-                    <div className="mx-auto w-full max-w-6xl">
+                    <div className="mx-auto w-full max-w-6xl space-y-6">
                         {/* Header */}
-                        <div className="mb-6">
+                        <div>
                             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-2">
                                 Learning Statistics
                             </h1>
                             <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                                Track your progress and optimize your spaced repetition learning
+                                Track your progress, consistency, and optimization.
                             </p>
                         </div>
 
-                        {/* Stats Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                            <Card className="p-4 border border-black/10 dark:border-white/10">
-                                <div className="text-sm text-neutral-500 dark:text-neutral-400">Total Cards</div>
-                                <div className="text-3xl font-bold mt-1">{stats?.totalCards || 0}</div>
+                        {/* Top Stats Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <Card className="p-4 border border-black/5 dark:border-white/5 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+                                        <BookOpen className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm text-neutral-500 dark:text-neutral-400">Total Cards</div>
+                                        <div className="text-2xl font-bold">{stats?.totalCards || 0}</div>
+                                    </div>
+                                </div>
                             </Card>
-                            <Card className="p-4 border border-black/10 dark:border-white/10">
-                                <div className="text-sm text-neutral-500 dark:text-neutral-400">Due Today</div>
-                                <div className="text-3xl font-bold mt-1">{stats?.cardsDueToday || 0}</div>
+                            <Card className="p-4 border border-black/5 dark:border-white/5 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg">
+                                        <Clock className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm text-neutral-500 dark:text-neutral-400">Due Today</div>
+                                        <div className="text-2xl font-bold">{stats?.cardsDueToday || 0}</div>
+                                    </div>
+                                </div>
                             </Card>
-                            <Card className="p-4 border border-black/10 dark:border-white/10">
-                                <div className="text-sm text-neutral-500 dark:text-neutral-400">Studied Today</div>
-                                <div className="text-3xl font-bold mt-1">{stats?.cardsStudiedToday || 0}</div>
+                            <Card className="p-4 border border-black/5 dark:border-white/5 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                                        <Target className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm text-neutral-500 dark:text-neutral-400">Retention</div>
+                                        <div className="text-2xl font-bold">{((stats?.averageRetentionRate || 0) * 100).toFixed(0)}%</div>
+                                    </div>
+                                </div>
                             </Card>
-                            <Card className="p-4 border border-black/10 dark:border-white/10">
-                                <div className="text-sm text-neutral-500 dark:text-neutral-400">Retention Rate</div>
-                                <div className="text-3xl font-bold mt-1">
-                                    {((stats?.averageRetentionRate || 0) * 100).toFixed(0)}%
+                            <Card className="p-4 border border-black/5 dark:border-white/5 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-lg">
+                                        <Flame className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm text-neutral-500 dark:text-neutral-400">Streak</div>
+                                        <div className="text-2xl font-bold">{streak?.currentStreak || 0} <span className="text-xs font-normal text-neutral-400">days</span></div>
+                                    </div>
                                 </div>
                             </Card>
                         </div>
 
+                        {/* Heatmap Section */}
+                        <Card className="p-6 border border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shadow-sm">
+                            <div className="flex items-center gap-2 mb-6">
+                                <Calendar className="w-5 h-5 text-neutral-500" />
+                                <h2 className="text-lg font-semibold">Activity Map</h2>
+                            </div>
+                            <ActivityHeatmap data={heatmapData} />
+                            <div className="mt-4 flex gap-6 text-sm text-neutral-500">
+                                <div>Current Streak: <span className="font-semibold text-neutral-900 dark:text-neutral-100">{streak?.currentStreak} days</span></div>
+                                <div>Longest Streak: <span className="font-semibold text-neutral-900 dark:text-neutral-100">{streak?.longestStreak} days</span></div>
+                            </div>
+                        </Card>
+
                         {/* Charts Row */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Learning Curve */}
-                            <Card className="p-6 border border-black/10 dark:border-white/10">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-semibold">Learning Curve</h2>
+                            <Card className="p-6 border border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shadow-sm">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <BarChart3 className="w-5 h-5 text-neutral-500" />
+                                        <h2 className="text-lg font-semibold">Learning Curve</h2>
+                                    </div>
                                     <select
                                         value={days}
                                         onChange={(e) => setDays(Number(e.target.value))}
-                                        className="text-sm border border-neutral-300 dark:border-neutral-700 rounded px-2 py-1 bg-white dark:bg-neutral-900"
+                                        className="text-xs font-medium border border-neutral-200 dark:border-neutral-800 rounded-lg px-2 py-1 bg-neutral-50 dark:bg-neutral-900 outline-none focus:ring-2 focus:ring-black/5"
                                     >
-                                        <option value={7}>7 days</option>
-                                        <option value={30}>30 days</option>
-                                        <option value={90}>90 days</option>
+                                        <option value={7}>Last 7 days</option>
+                                        <option value={30}>Last 30 days</option>
+                                        <option value={90}>Last 90 days</option>
                                     </select>
                                 </div>
                                 <ResponsiveContainer width="100%" height={250}>
                                     <LineChart data={learningCurve}>
-                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5E5" opacity={0.5} />
                                         <XAxis
                                             dataKey="date"
-                                            tick={{ fontSize: 12 }}
+                                            tick={{ fontSize: 10, fill: '#888' }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tickMargin={10}
                                             tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                         />
-                                        <YAxis tick={{ fontSize: 12 }} />
-                                        <Tooltip />
-                                        <Legend />
-                                        <Line type="monotone" dataKey="reviews" stroke="#3b82f6" name="Reviews" />
-                                        <Line type="monotone" dataKey="newCards" stroke="#10b981" name="New Cards" />
+                                        <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
+                                        <Tooltip
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                            labelStyle={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}
+                                        />
+                                        <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                                        <Line type="monotone" dataKey="reviews" stroke="#3b82f6" strokeWidth={2} dot={false} name="Reviews" />
+                                        <Line type="monotone" dataKey="newCards" stroke="#10b981" strokeWidth={2} dot={false} name="New Cards" />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </Card>
 
                             {/* Card State Distribution */}
-                            <Card className="p-6 border border-black/10 dark:border-white/10">
-                                <h2 className="text-lg font-semibold mb-4">Card States</h2>
-                                <ResponsiveContainer width="100%" height={250}>
-                                    <PieChart>
-                                        <Pie
-                                            data={pieData}
-                                            cx="50%"
-                                            cy="50%"
-                                            labelLine={false}
-                                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                            outerRadius={80}
-                                            fill="#8884d8"
-                                            dataKey="value"
-                                        >
-                                            {pieData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                                <div className="mt-4 space-y-2">
-                                    {pieData.map((item) => (
-                                        <div key={item.name} className="flex items-center justify-between text-sm">
-                                            <div className="flex items-center gap-2">
+                            <Card className="p-6 border border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shadow-sm">
+                                <h2 className="text-lg font-semibold mb-6">Card States</h2>
+                                <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
+                                    <div className="w-[180px] h-[180px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={pieData}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={60}
+                                                    outerRadius={80}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                    stroke="none"
+                                                >
+                                                    {pieData.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="flex flex-col gap-3">
+                                        {pieData.map((item) => (
+                                            <div key={item.name} className="flex items-center gap-3">
                                                 <div
                                                     className="w-3 h-3 rounded-full"
                                                     style={{ backgroundColor: item.color }}
                                                 ></div>
-                                                <span>{item.name}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-medium">{item.name}</span>
+                                                    <span className="text-xs text-neutral-500">{item.value} cards</span>
+                                                </div>
                                             </div>
-                                            <span className="font-medium">{item.value}</span>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
+                                </div>
+                            </Card>
+
+                            {/* Time Spent Chart */}
+                            <Card className="p-6 border border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shadow-sm col-span-1 lg:col-span-2">
+                                <h2 className="text-lg font-semibold mb-6">Time Spent by Subject</h2>
+                                <div className="h-[250px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={subjectDurations.map(d => ({ ...d, minutes: Math.round(d.duration_seconds / 60) }))}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5E5" opacity={0.5} />
+                                            <XAxis dataKey="subject_name" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} tickMargin={10} />
+                                            <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
+                                            <Tooltip
+                                                formatter={(value: number) => [`${value} mins`, 'Time']}
+                                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                            />
+                                            <Line type="monotone" dataKey="minutes" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4, fill: '#8b5cf6' }} name="Time (mins)" />
+                                        </LineChart>
+                                    </ResponsiveContainer>
                                 </div>
                             </Card>
                         </div>

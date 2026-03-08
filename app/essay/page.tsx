@@ -45,6 +45,7 @@ import {
     File,
     TrendingUp
 } from 'lucide-react'
+import { useTimeTracking } from '@/hooks/use-time-tracking'
 
 const SUBJECTS = [
     { id: 'english_language', name: 'English Language', icon: PenTool, color: 'from-zinc-600 to-zinc-800', accent: 'bg-zinc-700', description: 'Creative writing, SPaG, comprehension' },
@@ -110,6 +111,12 @@ function EssayPageContent() {
     const [loadingHistory, setLoadingHistory] = useState(false)
     const [selectedHistoryItem, setSelectedHistoryItem] = useState<EssayResponse | null>(null)
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+
+    useTimeTracking({
+        activityType: 'essay',
+        subjectId: selectedSubject?.id,
+        isEnabled: view === 'writing' && !!selectedSubject && !!user
+    })
 
     // Check for query params from question generator
     const searchParams = useSearchParams()

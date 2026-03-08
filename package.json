@@ -100,6 +100,7 @@
     "gsap": "^3.13.0",
     "ignore-loader": "^0.1.2",
     "input-otp": "1.4.1",
+    "ios-haptics": "^0.1.4",
     "katex": "^0.16.22",
     "kokoro-js": "^1.2.1",
     "langchain": "^0.3.29",

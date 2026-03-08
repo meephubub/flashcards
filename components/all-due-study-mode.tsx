@@ -395,6 +395,7 @@ export function AllDueStudyMode() {
                               key={rating}
                               variant="outline"
                               className={`h-11 w-11 font-medium text-lg border border-black/20 ${extra} hover:scale-105 transition-all duration-150`}
+                              disableHaptics
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleRating(rating as ConfidenceRating)

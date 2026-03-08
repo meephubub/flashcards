@@ -1,4 +1,9 @@
+import { haptic } from 'ios-haptics'
+
 // Haptic feedback utility for mobile devices
+// This uses the ios-haptics library which provides:
+// 1. Native haptics in iOS Safari (via checkbox-switch hack)
+// 2. navigator.vibrate() on Android and other supporting browsers
 
 export interface HapticPatterns {
   light: 'light'
@@ -14,56 +19,37 @@ export interface HapticPatterns {
 
 export const triggerHaptic = (pattern: keyof HapticPatterns) => {
   if (typeof window === 'undefined') return
-  
-  // Check if the device supports haptic feedback
-  if ('vibrate' in navigator) {
-    const vibrationAPI = navigator.vibrate
-    
+
+  try {
     switch (pattern) {
       case 'light':
-        vibrationAPI(10)
+      case 'selection':
+        haptic()
         break
       case 'medium':
-        vibrationAPI(20)
+      case 'rigid':
+        // Two rapid haptics
+        haptic.confirm()
         break
       case 'heavy':
-        vibrationAPI(40)
-        break
-      case 'rigid':
-        vibrationAPI([10, 50, 10])
-        break
-      case 'soft':
-        vibrationAPI([5, 20, 5])
-        break
       case 'success':
-        vibrationAPI([10, 30, 10, 30, 10])
+        // Two rapid haptics (same as confirm for now, as ios-haptics has limited methods)
+        haptic.confirm()
         break
       case 'warning':
-        vibrationAPI([20, 50, 20])
-        break
       case 'error':
-        vibrationAPI([50, 30, 50, 30, 50])
+        // Three rapid haptics
+        haptic.error()
         break
-      case 'selection':
-        vibrationAPI(5)
+      case 'soft':
+        haptic()
         break
       default:
-        vibrationAPI(10)
+        haptic()
     }
-  }
-  
-  // For iOS devices that support the newer haptic API
-  if ('vibrate' in navigator && window.DeviceMotionEvent) {
-    // This is a fallback for iOS devices that might support haptics
-    // but don't expose the full API
-    try {
-      // Try to use the newer haptic feedback API if available
-      if ('hapticFeedback' in window && (window as any).hapticFeedback) {
-        ;(window as any).hapticFeedback.impactOccurred('medium')
-      }
-    } catch (e) {
-      // Silently fail if haptic API is not available
-    }
+  } catch (e) {
+    // Silently fail if haptics are not supported or blocked
+    console.debug('Haptic feedback failed:', e)
   }
 }
 

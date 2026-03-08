@@ -18,6 +18,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { useTimeTracking } from "@/hooks/use-time-tracking";
 
 export function StudyPageClient({ deckId }: { deckId: number }) {
   const { session, isLoading, user } = useAuth();
@@ -35,6 +36,12 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
     wrong: number;
   } | null>(null);
   const [initialSide, setInitialSide] = useState<"front" | "back" | "mixed">("front");
+
+  useTimeTracking({
+    activityType: 'study',
+    subjectId: deckId,
+    isEnabled: !Number.isNaN(deckId) && !!user
+  });
 
   useEffect(() => {
     if (!isLoading && !session) {

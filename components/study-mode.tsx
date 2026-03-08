@@ -742,6 +742,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                                   key={rating}
                                   variant={variant as any}
                                   className={`h-12 w-12 font-medium text-lg border border-black/20 ${extra} hover:scale-105 transition-all duration-150 flex-shrink-0`}
+                                  disableHaptics
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleRating(rating as ConfidenceRating)
