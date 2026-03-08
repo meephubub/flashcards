@@ -3568,6 +3568,56 @@ function MarkdownContent({ content, fillGaps, density, seed, imageSizeCap = 360 
               <table className="w-full text-left border-collapse [&_th]:border-b [&_td]:border-b [&_th]:px-3 [&_td]:px-3 [&_th]:py-2 [&_td]:py-2" {...props} />
             </div>
           ),
+          td: (props: any) => {
+            const processContent = (content: any): any[] => {
+              if (typeof content === 'string') {
+                return content.split(/<br\s*\/?>/gi).flatMap((text, idx, arr) => 
+                  idx < arr.length - 1 ? [text, <br key={`br-${idx}`} />] : [text]
+                )
+              }
+              if (Array.isArray(content)) {
+                return content.flatMap((item, idx) => {
+                  if (typeof item === 'string') {
+                    return item.split(/<br\s*\/?>/gi).flatMap((text, sidx, sarr) =>
+                      sidx < sarr.length - 1 ? [text, <br key={`br-${idx}-${sidx}`} />] : [text]
+                    )
+                  }
+                  return [item]
+                })
+              }
+              return [content]
+            }
+            return (
+              <td {...props}>
+                {processContent(props.children)}
+              </td>
+            )
+          },
+          th: (props: any) => {
+            const processContent = (content: any): any[] => {
+              if (typeof content === 'string') {
+                return content.split(/<br\s*\/?>/gi).flatMap((text, idx, arr) => 
+                  idx < arr.length - 1 ? [text, <br key={`br-${idx}`} />] : [text]
+                )
+              }
+              if (Array.isArray(content)) {
+                return content.flatMap((item, idx) => {
+                  if (typeof item === 'string') {
+                    return item.split(/<br\s*\/?>/gi).flatMap((text, sidx, sarr) =>
+                      sidx < sarr.length - 1 ? [text, <br key={`br-${idx}-${sidx}`} />] : [text]
+                    )
+                  }
+                  return [item]
+                })
+              }
+              return [content]
+            }
+            return (
+              <th {...props}>
+                {processContent(props.children)}
+              </th>
+            )
+          },
           img: (props: any) => {
             const src: string | undefined = props?.src
             const isDataUri = typeof src === 'string' && src.startsWith('data:')
@@ -3633,6 +3683,56 @@ function MarkdownContent({ content, fillGaps, density, seed, imageSizeCap = 360 
           blockquote: (props: any) => (
             <blockquote className="mt-6 border-l-2 pl-6 italic text-muted-foreground" {...props} />
           ),
+          td: (props: any) => {
+            const processContent = (content: any): any[] => {
+              if (typeof content === 'string') {
+                return content.split(/<br\s*\/?>/gi).flatMap((text, idx, arr) => 
+                  idx < arr.length - 1 ? [text, <br key={`br-${idx}`} />] : [text]
+                )
+              }
+              if (Array.isArray(content)) {
+                return content.flatMap((item, idx) => {
+                  if (typeof item === 'string') {
+                    return item.split(/<br\s*\/?>/gi).flatMap((text, sidx, sarr) =>
+                      sidx < sarr.length - 1 ? [text, <br key={`br-${idx}-${sidx}`} />] : [text]
+                    )
+                  }
+                  return [item]
+                })
+              }
+              return [content]
+            }
+            return (
+              <td {...props}>
+                {processContent(props.children)}
+              </td>
+            )
+          },
+          th: (props: any) => {
+            const processContent = (content: any): any[] => {
+              if (typeof content === 'string') {
+                return content.split(/<br\s*\/?>/gi).flatMap((text, idx, arr) => 
+                  idx < arr.length - 1 ? [text, <br key={`br-${idx}`} />] : [text]
+                )
+              }
+              if (Array.isArray(content)) {
+                return content.flatMap((item, idx) => {
+                  if (typeof item === 'string') {
+                    return item.split(/<br\s*\/?>/gi).flatMap((text, sidx, sarr) =>
+                      sidx < sarr.length - 1 ? [text, <br key={`br-${idx}-${sidx}`} />] : [text]
+                    )
+                  }
+                  return [item]
+                })
+              }
+              return [content]
+            }
+            return (
+              <th {...props}>
+                {processContent(props.children)}
+              </th>
+            )
+          },
           // Loosened typing to support 'inline' prop from react-markdown Code component
           code: ({ inline, className, children, ...props }: any) => {
             if (inline) {
