@@ -114,3 +114,56 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(req))
   );
 });
+
+// --- Push Notifications ---
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  try {
+    const data = event.data.json();
+    const title = data.title || 'New Notification';
+    const options = {
+      body: data.body || 'You have a new message.',
+      icon: data.icon || '/IMG_2251.png',
+      badge: '/favicon.png',
+      data: {
+        url: data.url || '/'
+      }
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch (error) {
+    console.error('Error handling push event:', error);
+    // Fallback for non-JSON payload
+    const text = event.data.text();
+    event.waitUntil(
+      self.registration.showNotification('Flashcard App', {
+        body: text,
+        icon: '/IMG_2251.png',
+        badge: '/favicon.png'
+      })
+    );
+  }
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const urlToOpen = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Check if there is already a window/tab open with the target URL
+      for (let client of windowClients) {
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // If no window/tab is open, open a new one
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});

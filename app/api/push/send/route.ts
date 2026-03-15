@@ -1,0 +1,102 @@
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+import webpush from 'web-push'
+
+// Configure web-push with VAPID keys
+webpush.setVapidDetails(
+  'mailto:samthelegend68@gmail.com', // Corrected email or use a generic one
+  process.env.VAPID_PUBLIC_KEY!,
+  process.env.VAPID_PRIVATE_KEY!
+)
+
+const ALLOWED_EMAIL = 'samthelegend68@gmail.com'
+
+export async function POST(req: Request) {
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUB_API!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // The `setAll` method was called from a Route Handler.
+            }
+          },
+        },
+      }
+    )
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user || user.email !== ALLOWED_EMAIL) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { title, body, url } = await req.json()
+
+    if (!title || !body) {
+      return NextResponse.json({ error: 'Title and body are required' }, { status: 400 })
+    }
+
+    // Fetch all subscriptions
+    const { data: subscriptions, error: fetchError } = await supabase
+      .from('push_subscriptions')
+      .select('id, subscription')
+
+    if (fetchError) {
+      console.error('Error fetching subscriptions:', fetchError)
+      return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 })
+    }
+
+    console.log(`Sending notification to ${subscriptions?.length || 0} subscribers`)
+
+    const payload = JSON.stringify({
+      title,
+      body,
+      url: url || '/',
+      icon: '/IMG_2251.png'
+    })
+
+    const results = await Promise.all(
+      subscriptions.map(async (subRecord: any) => {
+        try {
+          await webpush.sendNotification(subRecord.subscription, payload)
+          return { id: subRecord.id, status: 'success' }
+        } catch (error: any) {
+          console.error(`Error sending to subscription ${subRecord.id}:`, error)
+          
+          // If subscription is expired or invalid, remove it from the database
+          if (error.statusCode === 404 || error.statusCode === 410) {
+            await supabase
+              .from('push_subscriptions')
+              .delete()
+              .match({ id: subRecord.id })
+            return { id: subRecord.id, status: 'removed' }
+          }
+          
+          return { id: subRecord.id, status: 'failed', error: error.message }
+        }
+      })
+    )
+
+    return NextResponse.json({ 
+      success: true, 
+      sentCount: results.filter(r => r.status === 'success').length,
+      removedCount: results.filter(r => r.status === 'removed').length,
+      failedCount: results.filter(r => r.status === 'failed').length
+    })
+  } catch (error) {
+    console.error('Push send error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

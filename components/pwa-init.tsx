@@ -40,8 +40,21 @@ export default function PwaInit() {
     if ('serviceWorker' in navigator) {
       const onLoad = () => {
         navigator.serviceWorker.register('/sw.js', { scope: '/' })
-          .then(registration => {
+          .then(async (registration) => {
             console.log('Service Worker registered successfully:', registration)
+            
+            // Check for existing subscription
+            const existingSub = await registration.pushManager.getSubscription()
+            if (existingSub) {
+              console.log('Existing push subscription found')
+              return
+            }
+
+            // Auto-subscribe if standalone (PWA) and permission granted
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+            if (isStandalone && Notification.permission === 'granted') {
+              subscribeUser(registration)
+            }
           })
           .catch(error => {
             console.error('Service Worker registration failed:', error)
@@ -55,6 +68,51 @@ export default function PwaInit() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, [])
+
+  const subscribeUser = async (registration: ServiceWorkerRegistration) => {
+    try {
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (!vapidPublicKey) {
+        console.error('VAPID public key not found in env')
+        return
+      }
+
+      // Convert VAPID key to Uint8Array
+      const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey)
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey
+      })
+
+      console.log('User subscribed:', subscription)
+
+      // Send subscription to server
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription })
+      })
+    } catch (error) {
+      console.error('Failed to subscribe user:', error)
+    }
+  }
+
+  // Helper to convert VAPID key
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4)
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/')
+
+    const rawData = window.atob(base64)
+    const outputArray = new Uint8Array(rawData.length)
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i)
+    }
+    return outputArray
+  }
 
   // Debug button (remove in production)
   const handleInstall = async () => {
