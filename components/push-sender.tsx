@@ -15,8 +15,8 @@ export default function PushSender() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title || !body) {
-      toast.error("Please fill in both title and body")
+    if (!title) {
+      toast.error("Please fill in the title")
       return
     }
 
@@ -81,11 +81,12 @@ export default function PushSender() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             disabled={isSending}
+            required
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Body</label>
+          <label className="text-sm font-medium">Body (optional)</label>
           <Textarea
             placeholder="Notification Body"
             value={body}

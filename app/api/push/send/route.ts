@@ -43,16 +43,40 @@ export async function POST(req: Request) {
       }
     )
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const cronSecret = process.env.CRON_SECRET
+    const authHeader = req.headers.get('Authorization')
+    const secretHeader = req.headers.get('x-cron-secret')
+    
+    // Check if authorized via cron secret
+    const isCronAuthorized = cronSecret && (
+      secretHeader === cronSecret || 
+      authHeader === `Bearer ${cronSecret}`
+    )
+    
+    let isAuthorized = false
+    let authorizedBy = ''
 
-    if (!user || user.email !== ALLOWED_EMAIL) {
+    if (isCronAuthorized) {
+      isAuthorized = true
+      authorizedBy = 'cron'
+    } else {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user && user.email === ALLOWED_EMAIL) {
+        isAuthorized = true
+        authorizedBy = user.email
+      }
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    console.log(`Push send request authorized by: ${authorizedBy}`)
+
     const { title, body, url } = await req.json()
 
-    if (!title || !body) {
-      return NextResponse.json({ error: 'Title and body are required' }, { status: 400 })
+    if (!title) {
+      return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
 
     // Fetch all subscriptions
