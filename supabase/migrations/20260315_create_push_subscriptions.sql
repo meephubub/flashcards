@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL,
     subscription JSONB NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -31,4 +32,4 @@ CREATE POLICY "Users can delete their own subscriptions"
 CREATE INDEX IF NOT EXISTS push_subscriptions_user_id_idx ON public.push_subscriptions(user_id);
 
 -- Unique index for upsert logic (user_id + endpoint)
-CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_user_endpoint_idx ON public.push_subscriptions (user_id, (subscription->>'endpoint'));
+CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_user_endpoint_idx ON public.push_subscriptions (user_id, endpoint);

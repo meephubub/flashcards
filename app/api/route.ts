@@ -279,7 +279,7 @@ export async function GET() {
         get: {
           path: "/api/settings",
           method: "GET",
-          description: "Get user settings"
+          description: "Get user settings (managed in /account)"
         },
         update: {
           path: "/api/settings",

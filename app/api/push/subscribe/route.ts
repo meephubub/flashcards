@@ -39,21 +39,27 @@ export async function POST(req: Request) {
     }
 
     // Store subscription in database
-    // Using upsert logic: find existing subscription for this user and endpoint, or create new one
     const { error } = await supabase
       .from('push_subscriptions')
       .upsert(
         { 
           user_id: user.id, 
+          endpoint: subscription.endpoint,
           subscription,
           updated_at: new Date().toISOString()
         },
-        { onConflict: 'user_id, subscription->>endpoint' } // Requires unique constraint or careful handling
+        { onConflict: 'user_id, endpoint' }
       )
 
     if (error) {
-      console.error('Error saving subscription:', error)
-      return NextResponse.json({ error: 'Failed to save subscription' }, { status: 500 })
+      console.error('Error saving subscription to Supabase:', error)
+      console.error('User ID:', user.id)
+      console.error('Endpoint:', subscription.endpoint)
+      return NextResponse.json({ 
+        error: 'Failed to save subscription', 
+        details: error.message,
+        hint: 'Ensure push_subscriptions table has an "endpoint" column.'
+      }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })

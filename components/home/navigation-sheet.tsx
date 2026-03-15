@@ -18,7 +18,7 @@ export const NavigationSheet = () => {
           <Link href="/" className="text-lg font-medium text-gray-700 dark:text-gray-200 hover:text-primary transition-colors" onClick={() => setOpen(false)}>Home</Link>
           <Link href="/decks" className="text-lg font-medium text-gray-700 dark:text-gray-200 hover:text-primary transition-colors" onClick={() => setOpen(false)}>Decks</Link>
           <Link href="/notes" className="text-lg font-medium text-gray-700 dark:text-gray-200 hover:text-primary transition-colors" onClick={() => setOpen(false)}>Notes</Link>
-          <Link href="/settings" className="text-lg font-medium text-gray-700 dark:text-gray-200 hover:text-primary transition-colors" onClick={() => setOpen(false)}>Settings</Link>
+          <Link href="/account" className="text-lg font-medium text-gray-700 dark:text-gray-200 hover:text-primary transition-colors" onClick={() => setOpen(false)}>Account</Link>
           <div className="mt-8 flex flex-col gap-2">
             <Link href="/login" className="text-lg font-medium text-primary underline hover:opacity-80" onClick={() => setOpen(false)}>Sign In</Link>
             <Link href="/signup" className="text-lg font-medium text-primary underline hover:opacity-80" onClick={() => setOpen(false)}>Get Started</Link>

@@ -148,12 +148,12 @@ export function Sidebar({ onLinkClick }: { onLinkClick?: () => void }) {
           </Button>
           <Button
             variant="ghost"
-            className={`w-full justify-start gap-2 ${pathname === "/settings" ? "bg-accent" : ""}`}
+            className={`w-full justify-start gap-2 ${pathname === "/account" ? "bg-accent" : ""}`}
             asChild
           >
-            <Link href="/settings" onClick={onLinkClick}>
+            <Link href="/account" onClick={onLinkClick}>
               <Settings className="h-4 w-4" />
-              Settings
+              Account
             </Link>
           </Button>
         </div>

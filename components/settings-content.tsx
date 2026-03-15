@@ -99,7 +99,21 @@ export function SettingsContent() {
     try {
       setIsResetting(true)
       await resetSettings()
-      setLocalSettings(settings)
+      setLocalSettings({
+        theme: settings.theme,
+        enableAnimations: settings.enableAnimations,
+        enableSounds: settings.enableSounds,
+        enableTTS: settings.enableTTS,
+        studySettings: {
+          cardsPerSession: settings.studySettings.cardsPerSession,
+          showProgressBar: settings.studySettings.showProgressBar,
+          enableSpacedRepetition: settings.studySettings.enableSpacedRepetition,
+          autoFlip: settings.studySettings.autoFlip,
+          autoFlipDelay: settings.studySettings.autoFlipDelay,
+          languageSimilarityThreshold: settings.studySettings.languageSimilarityThreshold ?? 0.75,
+          fsrsParams: settings.studySettings.fsrsParams || { request_retention: 0.9, maximum_interval: 36500 },
+        },
+      })
       toast({
         title: "Settings reset",
         description: "Your settings have been reset to default values.",
@@ -155,15 +169,6 @@ export function SettingsContent() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-      </div>
-
       <Tabs defaultValue="appearance" className="space-y-4">
         <TabsList>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
