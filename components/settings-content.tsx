@@ -224,7 +224,13 @@ export function SettingsContent() {
                   }
                 />
               </div>
-
+              <div className="flex items-center justify-between space-y-1">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableTTS">Text-to-Speech</Label>
+                  <p className="text-muted-foreground text-xs">
+                    Enable or disable text-to-speech for language cards
+                  </p>
+                </div>
                 <Switch
                   id="enableTTS"
                   checked={localSettings.enableTTS}
@@ -508,6 +514,6 @@ export function SettingsContent() {
           {isSaving ? "Saving..." : "Save Settings"}
         </Button>
       </div>
-    </div >
+    </div>
   )
 }
