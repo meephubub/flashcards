@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { usePushNotifications } from "@/hooks/use-push-notifications"
 
 export default function PwaInit() {
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
   const [showIosHint, setShowIosHint] = useState(false);
+  const { permission, subscribe } = usePushNotifications()
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -15,7 +17,14 @@ export default function PwaInit() {
     if (isStandalone) {
       console.log('PWA is already installed');
       setShowIosHint(false);
-      return;
+    } else {
+      // iOS: no beforeinstallprompt; show manual A2HS hint
+      const ua = window.navigator.userAgent;
+      const isIOS = /iP(hone|od|ad)/.test(ua) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS) {
+        setShowIosHint(true);
+      }
     }
 
     // Listen for beforeinstallprompt event
@@ -28,91 +37,15 @@ export default function PwaInit() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // iOS: no beforeinstallprompt; show manual A2HS hint
-    const ua = window.navigator.userAgent;
-    const isIOS = /iP(hone|od|ad)/.test(ua) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (isIOS && !isStandalone) {
-      setShowIosHint(true);
-    }
-
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-      const onLoad = () => {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' })
-          .then(async (registration) => {
-            console.log('Service Worker registered successfully:', registration)
-            
-            // Check for existing subscription
-            const existingSub = await registration.pushManager.getSubscription()
-            if (existingSub) {
-              console.log('Existing push subscription found')
-              return
-            }
-
-            // Auto-subscribe if standalone (PWA) and permission granted
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-            if (isStandalone && Notification.permission === 'granted') {
-              subscribeUser(registration)
-            }
-          })
-          .catch(error => {
-            console.error('Service Worker registration failed:', error)
-          })
-      }
-      if (document.readyState === 'complete') onLoad()
-      else window.addEventListener('load', onLoad, { once: true })
+    // Auto-subscribe if standalone (PWA) and permission granted
+    if (isStandalone && Notification.permission === 'granted') {
+      subscribe()
     }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, [])
-
-  const subscribeUser = async (registration: ServiceWorkerRegistration) => {
-    try {
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!vapidPublicKey) {
-        console.error('VAPID public key not found in env')
-        return
-      }
-
-      // Convert VAPID key to Uint8Array
-      const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey)
-
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedVapidKey
-      })
-
-      console.log('User subscribed:', subscription)
-
-      // Send subscription to server
-      await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription })
-      })
-    } catch (error) {
-      console.error('Failed to subscribe user:', error)
-    }
-  }
-
-  // Helper to convert VAPID key
-  const urlBase64ToUint8Array = (base64String: string) => {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4)
-    const base64 = (base64String + padding)
-      .replace(/\-/g, '+')
-      .replace(/_/g, '/')
-
-    const rawData = window.atob(base64)
-    const outputArray = new Uint8Array(rawData.length)
-
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i)
-    }
-    return outputArray
-  }
+  }, [subscribe])
 
   // Debug button (remove in production)
   const handleInstall = async () => {

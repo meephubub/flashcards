@@ -8,11 +8,12 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, RotateCcw, Download, AlertTriangle } from "lucide-react"
+import { ArrowLeft, Save, RotateCcw, Download, AlertTriangle, Bell, BellOff } from "lucide-react"
 import { useSettings } from "@/context/settings-context"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { useDecks } from "@/context/deck-context"
+import { usePushNotifications } from "@/hooks/use-push-notifications"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +31,7 @@ export function SettingsContent() {
   const { settings, loading, updateSettings, updateStudySettings, resetSettings } = useSettings()
   const { decks } = useDecks()
   const { toast } = useToast()
+  const { permission, isSupported, subscription, requestPermission, unsubscribe } = usePushNotifications()
   const [isSaving, setIsSaving] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
 
@@ -223,13 +225,6 @@ export function SettingsContent() {
                 />
               </div>
 
-              <div className="flex items-center justify-between space-y-1">
-                <div className="space-y-0.5">
-                  <Label htmlFor="enableTTS">Text-to-Speech</Label>
-                  <p className="text-muted-foreground text-xs">
-                    Enable or disable text-to-speech for language cards
-                  </p>
-                </div>
                 <Switch
                   id="enableTTS"
                   checked={localSettings.enableTTS}
@@ -237,6 +232,44 @@ export function SettingsContent() {
                     setLocalSettings({ ...localSettings, enableTTS: value })
                   }
                 />
+              </div>
+
+              <div className="flex items-center justify-between space-y-1">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="push-notifications">Push Notifications</Label>
+                    {isSupported && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${permission === 'granted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {permission === 'granted' ? 'Active' : 'Not enabled'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    Receive study reminders and system updates
+                  </p>
+                </div>
+                {!isSupported ? (
+                  <p className="text-xs text-muted-foreground italic">Not supported in this browser</p>
+                ) : (
+                  <Switch
+                    id="push-notifications"
+                    checked={permission === "granted" && !!subscription}
+                    onCheckedChange={async (checked) => {
+                      if (checked) {
+                        const result = await requestPermission()
+                        if (result !== 'granted') {
+                          toast({
+                            title: "Permission Denied",
+                            description: "Please enable notifications in your browser settings.",
+                            variant: "destructive"
+                          })
+                        }
+                      } else {
+                        await unsubscribe()
+                      }
+                    }}
+                  />
+                )}
               </div>
             </CardContent>
           </Card>
