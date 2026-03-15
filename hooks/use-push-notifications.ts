@@ -22,8 +22,22 @@ export function usePushNotifications() {
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.ready.then((registration) => {
-        registration.pushManager.getSubscription().then((sub) => {
+        registration.pushManager.getSubscription().then(async (sub) => {
           setSubscription(sub)
+          
+          // If a subscription exists, sync it with the server to ensure it's still registered
+          if (sub) {
+            try {
+              await fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subscription: sub }),
+              })
+            } catch (err) {
+              console.error("Failed to sync push subscription:", err)
+            }
+          }
+          
           setLoading(false)
         })
       })
@@ -46,14 +60,19 @@ export function usePushNotifications() {
   }
 
   const subscribe = useCallback(async () => {
-    if (!isSupported) return null
+    if (!isSupported) {
+      console.warn("Push notifications not supported in this browser")
+      return null
+    }
 
     try {
+      // Ensure service worker is ready
       const registration = await navigator.serviceWorker.ready
+      
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-
       if (!vapidPublicKey) {
-        console.error("VAPID public key not found")
+        console.error("VAPID public key not found in env")
+        toast.error("Notification setup error: missing public key")
         return null
       }
 
@@ -68,15 +87,22 @@ export function usePushNotifications() {
       setPermission(Notification.permission)
 
       // Send to server
-      await fetch("/api/push/subscribe", {
+      const response = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscription: sub }),
       })
 
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Server failed to save subscription")
+      }
+
+      toast.success("Push notifications enabled!")
       return sub
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to subscribe:", error)
+      toast.error(`Failed to enable notifications: ${error.message}`)
       return null
     }
   }, [isSupported])
@@ -85,13 +111,21 @@ export function usePushNotifications() {
     if (!subscription) return
 
     try {
+      const endpoint = subscription.endpoint
       await subscription.unsubscribe()
       setSubscription(null)
       
-      // Optionally notify server to remove subscription
-      // await fetch("/api/push/unsubscribe", { ... })
+      // Notify server to remove this specific device subscription
+      await fetch("/api/push/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint }),
+      })
+      
+      toast.success("Push notifications disabled for this device")
     } catch (error) {
       console.error("Failed to unsubscribe:", error)
+      toast.error("Failed to disable push notifications")
     }
   }, [subscription])
 
