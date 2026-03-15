@@ -441,6 +441,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.1.5
         version: 19.1.7(@types/react@19.1.9)
+      '@types/web-push':
+        specifier: ^3.6.4
+        version: 3.6.4
       baseline-browser-mapping:
         specifier: ^2.8.32
         version: 2.8.32
@@ -3774,6 +3777,9 @@ packages:
 
   '@types/uuid@8.3.4':
     resolution: {integrity: sha512-c/I8ZRb51j+pYGAu5CrFMRxqZ2ke4y2grEBO5AUjgSkSk+qT2Ea+OdWElz/OiMf5MNpn2b17kuVBwZLQJXzihw==}
+
+  '@types/web-push@3.6.4':
+    resolution: {integrity: sha512-GnJmSr40H3RAnj0s34FNTcJi1hmWFV5KXugE0mYWnYhgTAHLJ/dJKAwDmvPJYMke0RplY2XE9LnM4hqSqKIjhQ==}
 
   '@types/webxr@0.5.22':
     resolution: {integrity: sha512-Vr6Stjv5jPRqH690f5I5GLjVk8GSsoQSYJ2FVd/3jJF7KaqfwPi3ehfBS96mlQ2kPCwZaX6U0rG2+NGHBKkA/A==}
@@ -12000,6 +12006,10 @@ snapshots:
   '@types/uuid@10.0.0': {}
 
   '@types/uuid@8.3.4': {}
+
+  '@types/web-push@3.6.4':
+    dependencies:
+      '@types/node': 22.17.0
 
   '@types/webxr@0.5.22': {}
 

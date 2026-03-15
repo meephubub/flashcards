@@ -159,6 +159,7 @@
     "@types/node": "^22.15.21",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
+    "@types/web-push": "^3.6.4",
     "baseline-browser-mapping": "^2.8.32",
     "next": "^16.1.0-canary.12",
     "patch-package": "^8.0.0",

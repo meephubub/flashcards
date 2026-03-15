@@ -3,17 +3,24 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import webpush from 'web-push'
 
-// Configure web-push with VAPID keys
-webpush.setVapidDetails(
-  'mailto:samthelegend68@gmail.com', // Corrected email or use a generic one
-  process.env.VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
-
 const ALLOWED_EMAIL = 'samthelegend68@gmail.com'
 
 export async function POST(req: Request) {
   try {
+    // Configure web-push with VAPID keys inside the handler
+    const publicKey = process.env.VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+    const privateKey = process.env.VAPID_PRIVATE_KEY
+
+    if (!publicKey || !privateKey) {
+      console.error('VAPID keys missing in environment')
+      return NextResponse.json({ error: 'Server configuration error (missing keys)' }, { status: 500 })
+    }
+
+    webpush.setVapidDetails(
+      'mailto:samthelegend68@gmail.com',
+      publicKey,
+      privateKey
+    )
     const cookieStore = await cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
