@@ -57,38 +57,21 @@ export async function POST(req: Request) {
       { auth: { persistSession: false } }
     )
 
-    // If userIds is null or empty, schedule for all users (user_id = null means all)
-    // If userIds has values, create one scheduled notification per user
-    const notifications = []
-
-    if (!userIds || userIds.length === 0) {
-      // Schedule for all users
-      notifications.push({
-        title,
-        body: body || null,
-        url: url || '/',
-        user_id: null,
-        scheduled_for: scheduledFor,
-        status: 'pending',
-      })
-    } else {
-      // Schedule for specific users
-      for (const userId of userIds) {
-        notifications.push({
-          title,
-          body: body || null,
-          url: url || '/',
-          user_id: userId,
-          scheduled_for: scheduledFor,
-          status: 'pending',
-        })
-      }
+    // Create a single scheduled notification with user_ids array
+    const notification = {
+      title,
+      body: body || null,
+      url: url || '/',
+      user_ids: userIds && userIds.length > 0 ? userIds : null, // null means all users
+      scheduled_for: scheduledFor,
+      status: 'pending',
     }
 
     const { data, error } = await supabaseAdmin
       .from('scheduled_notifications')
-      .insert(notifications)
+      .insert(notification)
       .select()
+      .single()
 
     if (error) {
       console.error('Error scheduling notification:', error)
@@ -97,8 +80,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      scheduled: data,
-      count: notifications.length
+      scheduled: data
     })
   } catch (error) {
     console.error('Error in schedule API:', error)

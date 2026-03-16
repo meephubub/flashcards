@@ -45,11 +45,11 @@ interface ScheduledNotification {
   title: string
   body: string | null
   url: string
-  user_id: string | null
+  user_ids: string[] | null
   scheduled_for: string
   status: 'pending' | 'sent' | 'failed' | 'cancelled'
   created_at: string
-  user_email?: string
+  user_emails?: string[]
 }
 
 export default function PushSender() {
@@ -583,7 +583,9 @@ export default function PushSender() {
                             </span>
                             <span className="flex items-center gap-1">
                               <User className="w-3 h-3" />
-                              {notification.user_id ? notification.user_email || 'Specific user' : 'All users'}
+                              {notification.user_ids && notification.user_ids.length > 0 
+                                ? (notification.user_emails?.length ? notification.user_emails.join(', ') : `${notification.user_ids.length} user(s)`)
+                                : 'All users'}
                             </span>
                           </div>
                         </div>

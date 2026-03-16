@@ -69,9 +69,9 @@ export async function GET(req: Request) {
           .from('push_subscriptions')
           .select('id, subscription, user_id')
 
-        // If user_id is specified, only send to that user
-        if (notification.user_id) {
-          query = query.eq('user_id', notification.user_id)
+        // If user_ids array is specified, only send to those users
+        if (notification.user_ids && Array.isArray(notification.user_ids) && notification.user_ids.length > 0) {
+          query = query.in('user_id', notification.user_ids)
         }
 
         const { data: subscriptions, error: subError } = await query

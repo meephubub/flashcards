@@ -54,13 +54,16 @@ export async function GET() {
     }
 
     // Fetch user emails for the notifications
-    const userIds = notifications
-      .filter(n => n.user_id)
-      .map(n => n.user_id)
+    const allUserIds = new Set<string>()
+    notifications.forEach(n => {
+      if (n.user_ids && Array.isArray(n.user_ids)) {
+        n.user_ids.forEach((id: string) => allUserIds.add(id))
+      }
+    })
 
     let userEmails: Record<string, string> = {}
     
-    if (userIds.length > 0) {
+    if (allUserIds.size > 0) {
       const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
       if (authUsers?.users) {
         authUsers.users.forEach(u => {
@@ -72,7 +75,9 @@ export async function GET() {
     // Enrich notifications with user emails
     const enrichedNotifications = notifications.map(n => ({
       ...n,
-      user_email: n.user_id ? userEmails[n.user_id] : null
+      user_emails: n.user_ids && Array.isArray(n.user_ids) 
+        ? n.user_ids.map((id: string) => userEmails[id]).filter(Boolean)
+        : null
     }))
 
     return NextResponse.json({ notifications: enrichedNotifications })
