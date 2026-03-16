@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import webpush from 'web-push'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 const ALLOWED_EMAIL = 'samthelegend68@gmail.com'
 
@@ -73,16 +74,25 @@ export async function POST(req: Request) {
 
     console.log(`Push send request authorized by: ${authorizedBy}`)
 
-    const { title, body, url } = await req.json()
+    const { title, body, url, targetUserIds } = await req.json()
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
 
-    // Fetch all subscriptions
-    const { data: subscriptions, error: fetchError } = await supabase
+    // Use admin client to bypass RLS for fetching subscriptions
+    const admin = createAdminClient()
+
+    // Build query — optionally filter by target user IDs
+    let query = admin
       .from('push_subscriptions')
-      .select('id, subscription')
+      .select('id, subscription, user_id')
+
+    if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+      query = query.in('user_id', targetUserIds)
+    }
+
+    const { data: subscriptions, error: fetchError } = await query
 
     if (fetchError) {
       console.error('Error fetching subscriptions:', fetchError)
@@ -99,7 +109,7 @@ export async function POST(req: Request) {
     })
 
     const results = await Promise.all(
-      subscriptions.map(async (subRecord: any) => {
+      (subscriptions || []).map(async (subRecord: any) => {
         try {
           await webpush.sendNotification(subRecord.subscription, payload)
           return { id: subRecord.id, status: 'success' }
@@ -108,7 +118,7 @@ export async function POST(req: Request) {
           
           // If subscription is expired or invalid, remove it from the database
           if (error.statusCode === 404 || error.statusCode === 410) {
-            await supabase
+            await admin
               .from('push_subscriptions')
               .delete()
               .match({ id: subRecord.id })

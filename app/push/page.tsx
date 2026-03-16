@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import PushSender from '@/components/push-sender'
+import { Bell } from 'lucide-react'
 
 const ALLOWED_EMAIL = 'samthelegend68@gmail.com'
 
@@ -22,8 +23,6 @@ export default async function PushPage() {
             )
           } catch {
             // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
           }
         },
       },
@@ -37,19 +36,23 @@ export default async function PushPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl mx-auto">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-extrabold tracking-tight">Push Notification Center</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Logged in as {user.email}
+    <div className="min-h-screen bg-background py-8 px-4 sm:px-6">
+      <div className="max-w-lg mx-auto">
+        <div className="mb-6 px-6">
+          <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+            <Bell className="w-5 h-5" />
+            Notifications
+          </h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            {user.email}
           </p>
         </div>
-        
-        <div className="bg-card shadow-sm border rounded-xl overflow-hidden">
+
+        <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
           <PushSender />
         </div>
       </div>
     </div>
   )
 }
+
