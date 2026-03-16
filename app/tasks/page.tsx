@@ -31,6 +31,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Bell } from "lucide-react"
 
 interface HomeworkRow {
   id: number
@@ -206,15 +207,8 @@ export default function TasksPage() {
         setAdding(false)
         return
       }
-      // Normalize due_date to noon UTC to avoid local->UTC day shifting
-      const dueIso = dueDate
-        ? (() => {
-          const y = dueDate.getUTCFullYear()
-          const m = dueDate.getUTCMonth()
-          const d = dueDate.getUTCDate()
-          return new Date(Date.UTC(y, m, d, 12, 0, 0, 0)).toISOString()
-        })()
-        : null
+      // Use the actual date and time selected by the user
+      const dueIso = dueDate ? dueDate.toISOString() : null
 
       // If requested, create a note first and capture its id
       let noteIdToAttach = selectedNoteId
@@ -377,14 +371,7 @@ export default function TasksPage() {
     if (!editing) return
     try {
       setSavingEdit(true)
-      const dueIso = editDueDate
-        ? (() => {
-          const y = editDueDate.getUTCFullYear()
-          const m = editDueDate.getUTCMonth()
-          const d = editDueDate.getUTCDate()
-          return new Date(Date.UTC(y, m, d, 12, 0, 0, 0)).toISOString()
-        })()
-        : null
+      const dueIso = editDueDate ? editDueDate.toISOString() : null
       const payload: any = {
         subject: editSubject || null,
         due_date: dueIso,
@@ -493,8 +480,8 @@ export default function TasksPage() {
                         <div className="md:col-span-3">
                           <Label>Due date</Label>
                           <Input
-                            type="date"
-                            value={dueDate ? format(dueDate, "yyyy-MM-dd") : ""}
+                            type="datetime-local"
+                            value={dueDate ? format(dueDate, "yyyy-MM-dd'T'HH:mm") : ""}
                             onChange={(e) => setDueDate(e.target.value ? new Date(e.target.value) : undefined)}
                           />
                           <div className="mt-1 h-4 text-xs invisible">spacer</div>
@@ -582,7 +569,7 @@ export default function TasksPage() {
                         {sortedTasks.map((t, index) => {
                           const urlGuess = taskExplicitOrGuessedLink(t)
                           const dueStatus = !t.done ? getDueStatus(t) : null
-                          const dueLabel = t.due_date ? `Due ${format(new Date(t.due_date), "dd/MM/yy")}` : "No due date"
+                          const dueLabel = t.due_date ? format(new Date(t.due_date), "MMM d, h:mm a") : "No due date"
                           const dueBadgeCls = !t.due_date
                             ? "bg-muted text-foreground/80 dark:text-foreground/70"
                             : dueStatus === 'overdue'
@@ -613,7 +600,10 @@ export default function TasksPage() {
                               <div className="flex-1 min-w-0">
                                 <div className={cn("text-sm font-medium", t.done ? "line-through text-muted-foreground" : "")}>{t.subject || "Homework"}</div>
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                                  <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", dueBadgeCls)}>{dueLabel}</span>
+                                  <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", dueBadgeCls)}>
+                                    {!t.done && t.due_date && <Bell className="w-3 h-3 mr-1" />}
+                                    {dueLabel}
+                                  </span>
                                   {priorityLabel && (
                                     <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", priorityCls)}>
                                       {priorityLabel} priority
@@ -659,8 +649,8 @@ export default function TasksPage() {
                   <Label htmlFor="edit-due">Due date</Label>
                   <Input
                     id="edit-due"
-                    type="date"
-                    value={editDueDate ? format(editDueDate, "yyyy-MM-dd") : ""}
+                    type="datetime-local"
+                    value={editDueDate ? format(editDueDate, "yyyy-MM-dd'T'HH:mm") : ""}
                     onChange={(e) => setEditDueDate(e.target.value ? new Date(e.target.value) : undefined)}
                   />
                 </div>
