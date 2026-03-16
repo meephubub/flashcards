@@ -221,6 +221,7 @@ export async function proxy(request: NextRequest) {
     '/home/terms-of-service',
     '/home/careers',
     '/home/pricing',
+    '/api/push',
   ]
 
   const isPublicRoute = publicRoutes.some(
