@@ -59,7 +59,7 @@ export function usePushNotifications() {
     return outputArray
   }
 
-  const subscribe = useCallback(async () => {
+  const subscribe = useCallback(async (silent = false) => {
     if (!isSupported) {
       console.warn("Push notifications not supported in this browser")
       return null
@@ -72,7 +72,7 @@ export function usePushNotifications() {
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
       if (!vapidPublicKey) {
         console.error("VAPID public key not found in env")
-        toast.error("Notification setup error: missing public key")
+        if (!silent) toast.error("Notification setup error: missing public key")
         return null
       }
 
@@ -98,11 +98,11 @@ export function usePushNotifications() {
         throw new Error(errorData.error || "Server failed to save subscription")
       }
 
-      toast.success("Push notifications enabled!")
+      if (!silent) toast.success("Push notifications enabled!")
       return sub
     } catch (error: any) {
       console.error("Failed to subscribe:", error)
-      toast.error(`Failed to enable notifications: ${error.message}`)
+      if (!silent) toast.error(`Failed to enable notifications: ${error.message}`)
       return null
     }
   }, [isSupported])

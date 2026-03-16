@@ -1,58 +1,78 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
-import PushSender from '@/components/push-sender'
-import { Bell } from 'lucide-react'
+"use client"
 
-const ALLOWED_EMAIL = 'samthelegend68@gmail.com'
+import { useAuth } from "@/context/auth-context"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
+import { AppSidebar } from "@/components/notes/app-sidebar"
+import { Separator } from "@/components/ui/separator"
+import {
+  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import PushSender from "@/components/push-sender"
+import { Bell } from "lucide-react"
 
-export default async function PushPage() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUB_API!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {
-            // The `setAll` method was called from a Server Component.
-          }
-        },
-      },
+const ALLOWED_EMAIL = "samthelegend68@gmail.com"
+
+export default function PushPage() {
+  const { user, isLoading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!isLoading && (!user || user.email !== ALLOWED_EMAIL)) {
+      router.push("/")
     }
-  )
+  }, [user, isLoading, router])
 
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user || user.email !== ALLOWED_EMAIL) {
-    redirect('/')
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-5 h-5 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" />
+      </div>
+    )
   }
 
-  return (
-    <div className="min-h-screen bg-background py-8 px-4 sm:px-6">
-      <div className="max-w-lg mx-auto">
-        <div className="mb-6 px-6">
-          <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
-            <Bell className="w-5 h-5" />
-            Notifications
-          </h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            {user.email}
-          </p>
-        </div>
+  if (!user || user.email !== ALLOWED_EMAIL) return null
 
-        <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
-          <PushSender />
-        </div>
-      </div>
-    </div>
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/80 backdrop-blur-sm px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="h-5" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/home">Home</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage className="flex items-center gap-1.5">
+                  <Bell className="w-3.5 h-3.5" />
+                  Notifications
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </header>
+
+        <main className="mx-auto w-full max-w-lg px-4 py-8">
+          <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
+            <PushSender />
+          </div>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
-

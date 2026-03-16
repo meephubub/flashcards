@@ -48,9 +48,9 @@ export default function PwaInit() {
         });
     }
 
-    // Auto-subscribe if standalone (PWA) and permission granted
+    // Auto-subscribe if standalone (PWA) and permission granted — silently (no toast)
     if (isStandalone && Notification.permission === 'granted') {
-      subscribe()
+      subscribe(true)
     }
 
     return () => {
