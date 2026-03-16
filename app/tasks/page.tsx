@@ -41,6 +41,7 @@ interface HomeworkRow {
   subject: string | null
   priority: number | null
   done: boolean | null
+  reminder_minutes: number | null
   metadata?: any | null
 }
 
@@ -62,6 +63,7 @@ export default function TasksPage() {
   const [subject, setSubject] = React.useState("")
   const [dueDate, setDueDate] = React.useState<Date | undefined>(undefined)
   const [priority, setPriority] = React.useState<number | null>(null)
+  const [reminderMinutes, setReminderMinutes] = React.useState<number>(0)
   const [createError, setCreateError] = React.useState<string | null>(null)
   const [adding, setAdding] = React.useState(false)
   const [showCreate, setShowCreate] = React.useState(true)
@@ -83,6 +85,7 @@ export default function TasksPage() {
   const [editSubject, setEditSubject] = React.useState<string>("")
   const [editDueDate, setEditDueDate] = React.useState<Date | undefined>(undefined)
   const [editPriority, setEditPriority] = React.useState<number | null>(null)
+  const [editReminderMinutes, setEditReminderMinutes] = React.useState<number>(0)
   const [editLinkUrl, setEditLinkUrl] = React.useState<string>("")
   const [editSelectedNoteId, setEditSelectedNoteId] = React.useState<string>("")
   const [savingEdit, setSavingEdit] = React.useState(false)
@@ -109,6 +112,7 @@ export default function TasksPage() {
           subject: c.subject,
           priority: c.priority,
           done: c.done,
+          reminder_minutes: 0,
           metadata: null,
         })))
       } finally {
@@ -118,7 +122,7 @@ export default function TasksPage() {
     }
     let q = supabase
       .from("homework")
-      .select('id, created_at, user_id, due_date, subject, priority, done, metadata')
+      .select('id, created_at, user_id, due_date, subject, priority, done, reminder_minutes, metadata')
       .eq("user_id", user.id)
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -227,6 +231,7 @@ export default function TasksPage() {
         subject: subject || null,
         due_date: dueIso,
         priority: priority,
+        reminder_minutes: reminderMinutes,
         // intentionally omit 'done' to avoid column mismatch if schema differs
         metadata: (linkUrl || noteIdToAttach)
           ? {
@@ -247,6 +252,7 @@ export default function TasksPage() {
       setSubject("")
       setDueDate(undefined)
       setPriority(null)
+      setReminderMinutes(0)
       setLinkUrl("")
       setSelectedNoteId("")
       setCreateNoteFromTask(false)
@@ -362,6 +368,7 @@ export default function TasksPage() {
       setEditDueDate(undefined)
     }
     setEditPriority(t.priority ?? null)
+    setEditReminderMinutes(t.reminder_minutes ?? 0)
     const meta = (t.metadata || {}) as any
     setEditLinkUrl(typeof meta?.link_url === 'string' ? meta.link_url : "")
     setEditSelectedNoteId(typeof meta?.note_id === 'string' ? meta.note_id : "")
@@ -376,6 +383,7 @@ export default function TasksPage() {
         subject: editSubject || null,
         due_date: dueIso,
         priority: editPriority,
+        reminder_minutes: editReminderMinutes,
         metadata: (editLinkUrl || editSelectedNoteId)
           ? {
             ...(editLinkUrl ? { link_url: editLinkUrl } : {}),
@@ -477,13 +485,31 @@ export default function TasksPage() {
                           />
                           <div className={cn("mt-1 text-xs h-4", subjectError ? "text-destructive" : "invisible")}>Task name is required.</div>
                         </div>
-                        <div className="md:col-span-3">
+                        <div className="md:col-span-4">
                           <Label>Due date</Label>
                           <Input
                             type="datetime-local"
                             value={dueDate ? format(dueDate, "yyyy-MM-dd'T'HH:mm") : ""}
                             onChange={(e) => setDueDate(e.target.value ? new Date(e.target.value) : undefined)}
+                            className="bg-background"
                           />
+                          <div className="mt-1 h-4 text-xs invisible">spacer</div>
+                        </div>
+                        <div className="md:col-span-3">
+                          <Label>Remind me</Label>
+                          <Select value={reminderMinutes.toString()} onValueChange={(v) => setReminderMinutes(parseInt(v))}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Remind me" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0">At time of event</SelectItem>
+                              <SelectItem value="5">5 mins before</SelectItem>
+                              <SelectItem value="10">10 mins before</SelectItem>
+                              <SelectItem value="30">30 mins before</SelectItem>
+                              <SelectItem value="60">1 hour before</SelectItem>
+                              <SelectItem value="1440">1 day before</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <div className="mt-1 h-4 text-xs invisible">spacer</div>
                         </div>
                         <div className="md:col-span-2">
@@ -644,7 +670,7 @@ export default function TasksPage() {
                 <Label htmlFor="edit-subject">Task</Label>
                 <Input id="edit-subject" value={editSubject} onChange={(e) => setEditSubject(e.target.value)} />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 items-end">
                 <div>
                   <Label htmlFor="edit-due">Due date</Label>
                   <Input
@@ -654,6 +680,24 @@ export default function TasksPage() {
                     onChange={(e) => setEditDueDate(e.target.value ? new Date(e.target.value) : undefined)}
                   />
                 </div>
+                <div>
+                  <Label>Remind me</Label>
+                  <Select value={editReminderMinutes.toString()} onValueChange={(v) => setEditReminderMinutes(parseInt(v))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Remind me" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">At time of event</SelectItem>
+                      <SelectItem value="5">5 mins before</SelectItem>
+                      <SelectItem value="10">10 mins before</SelectItem>
+                      <SelectItem value="30">30 mins before</SelectItem>
+                      <SelectItem value="60">1 hour before</SelectItem>
+                      <SelectItem value="1440">1 day before</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 items-end">
                 <div>
                   <Label>Priority</Label>
                   <Select value={editPriority?.toString() ?? ""} onValueChange={(v) => setEditPriority(v ? parseInt(v) : null)}>
