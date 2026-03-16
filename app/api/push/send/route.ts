@@ -73,23 +73,30 @@ export async function POST(req: Request) {
 
     console.log(`Push send request authorized by: ${authorizedBy}`)
 
-    const { title, body, url } = await req.json()
+    const { title, body, url, userIds } = await req.json()
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
 
-    // Fetch all subscriptions
-    const { data: subscriptions, error: fetchError } = await supabase
+    // Fetch subscriptions - optionally filter by user IDs
+    let query = supabase
       .from('push_subscriptions')
-      .select('id, subscription')
+      .select('id, subscription, user_id')
+
+    // If userIds is provided and not empty, filter by those users
+    if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+      query = query.in('user_id', userIds)
+    }
+
+    const { data: subscriptions, error: fetchError } = await query
 
     if (fetchError) {
       console.error('Error fetching subscriptions:', fetchError)
       return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 })
     }
 
-    console.log(`Sending notification to ${subscriptions?.length || 0} subscribers`)
+    console.log(`Sending notification to ${subscriptions?.length || 0} subscribers${userIds ? ` (filtered by ${userIds.length} users)` : ''}`)
 
     const payload = JSON.stringify({
       title,
