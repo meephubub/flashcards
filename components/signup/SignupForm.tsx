@@ -37,7 +37,8 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
       } catch (e) {
         console.warn("Post-signup wallet setup failed", e);
       }
-      router.push("/");
+      // Use window.location for full page refresh to ensure session is loaded
+      window.location.href = "/";
     } catch (err: any) {
       setError(err.message || "Signup failed");
     } finally {

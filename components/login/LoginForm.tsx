@@ -26,9 +26,11 @@ export function LoginForm({
     setIsSubmitting(true);
     try {
       await signIn(email, password);
-      router.push("/");
+      // Only redirect on success - signIn throws on error
+      window.location.href = "/";
     } catch (error) {
       console.error("Sign in error:", error);
+      // Error is already set by signIn, no redirect happens
     } finally {
       setIsSubmitting(false);
     }
