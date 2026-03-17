@@ -3,7 +3,7 @@
 import * as React from "react"
 import { createClient } from "@/lib/supabase/client"
 import { format } from "date-fns"
-import { Loader2, Mail, AlertTriangle, AlertCircle, Info, ChevronDown, ChevronRight, RefreshCw, Trash2 } from "lucide-react"
+import { Loader2, Mail, AlertTriangle, AlertCircle, Info, ChevronDown, ChevronRight, RefreshCw } from "lucide-react"
 
 // Notes layout components for consistent shell
 import { AppSidebar } from "@/components/notes/app-sidebar"
@@ -21,17 +21,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 
 interface EmailSummary {
   id: string
