@@ -106,8 +106,8 @@ const data = {
           url: "/question",
         },
         {
-          title: "Maths",
-          url: "/maths",
+          title: "Email Summaries",
+          url: "/summaries",
         },
       ],
     },
