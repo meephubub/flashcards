@@ -14,10 +14,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { Trash2 } from "lucide-react"
+import { ChevronDown, Trash2 } from "lucide-react"
 import { useAuth } from "@/context/auth-context"
 
 type DigestRow = {
@@ -78,6 +77,7 @@ export default function SummariesPage() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [deletingId, setDeletingId] = React.useState<string | number | null>(null)
+  const [openDigestKeys, setOpenDigestKeys] = React.useState<Set<string>>(() => new Set())
 
   React.useEffect(() => {
     if (!isLoading && !user) router.push("/login")
@@ -198,91 +198,187 @@ export default function SummariesPage() {
             ) : grouped.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">No digests yet.</div>
             ) : (
-              <Accordion type="multiple" className="divide-y">
+              <div className="divide-y">
                 {grouped.map(({ digest, dateKey, summaries }) => {
+                  const digestKey = String(digest.id ?? digest.date)
                   const count = digest.email_count ?? summaries.length
                   const title = formatDigestDate(dateKey === "unknown" ? digest.date : dateKey)
+                  const summariesCount = summaries.length
+                  const summariesLabel = summariesCount === 1 ? "summary" : "summaries"
+
+                  const isOpen = openDigestKeys.has(digestKey)
+
+                  const onToggle = () => {
+                    setOpenDigestKeys((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(digestKey)) next.delete(digestKey)
+                      else next.add(digestKey)
+                      return next
+                    })
+                  }
+
+                  const onDeleteDigest = async (e: React.MouseEvent) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+
+                    if (!digest.id) return
+                    const digestId = digest.id
+                    const summaryIds = summaries.map((s) => String(s.id))
+
+                    setDeletingId(digestId)
+                    try {
+                      const res = await fetch(`/api/daily-digests/${encodeURIComponent(String(digestId))}/delete`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ summaryIds }),
+                      })
+                      const json = (await res.json()) as any
+                      if (!res.ok) throw new Error(json?.error || "Failed to delete digest")
+
+                      setData((prev) => {
+                        if (!prev) return prev
+                        return {
+                          ...prev,
+                          digests: prev.digests.filter((d) => String(d.id ?? d.date) !== String(digestId)),
+                          summaries: prev.summaries.filter((s) => !summaryIds.includes(String(s.id))),
+                        }
+                      })
+
+                      setOpenDigestKeys((prev) => {
+                        const next = new Set(prev)
+                        next.delete(digestKey)
+                        return next
+                      })
+                    } catch (err) {
+                      console.error(err)
+                    } finally {
+                      setDeletingId(null)
+                    }
+                  }
+
                   return (
-                    <AccordionItem key={String(digest.id ?? digest.date)} value={String(digest.id ?? digest.date)} className="border-b-0">
-                      <AccordionTrigger className="px-5 py-4 hover:no-underline">
-                        <div className="flex w-full items-center justify-between gap-4">
-                          <div className="flex min-w-0 flex-col items-start gap-1">
-                            <div className="text-sm font-medium">{title}</div>
-                            <div className="text-[11px] text-muted-foreground">
-                              {count} email{count === 1 ? "" : "s"} • {summaries.length} summary{summaries.length === 1 ? "" : "ies"}
-                            </div>
+                    <div key={digestKey}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={onToggle}
+                        onKeyDown={(ev) => {
+                          if (ev.key === "Enter" || ev.key === " ") onToggle()
+                        }}
+                        className={cn(
+                          "px-5 py-4 cursor-pointer select-none",
+                          "flex w-full items-center justify-between gap-4 hover:bg-muted/20 transition-colors"
+                        )}
+                      >
+                        <div className="flex min-w-0 flex-col items-start gap-1">
+                          <div className="text-sm font-medium">{title}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {count} email{count === 1 ? "" : "s"} • {summariesCount} {summariesLabel}
                           </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
                           <div className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground">
                             Digest
                           </div>
+                          <ChevronDown
+                            className={cn(
+                              "h-4 w-4 text-muted-foreground transition-transform",
+                              isOpen ? "rotate-180" : "rotate-0"
+                            )}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "shrink-0",
+                              deletingId &&
+                                digest.id !== undefined &&
+                                String(deletingId) === String(digest.id)
+                                ? "opacity-60"
+                                : ""
+                            )}
+                            onClick={onDeleteDigest}
+                            disabled={deletingId !== null}
+                            title="Delete digest and its summaries"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                      </AccordionTrigger>
+                      </div>
 
-                      <AccordionContent className="px-5 pb-5">
-                        <div className="rounded-xl border bg-background p-4">
-                          <div className="text-xs uppercase tracking-wider text-muted-foreground">Daily digest</div>
-                          <div className="mt-2 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
-                            {digest.digest || "—"}
-                          </div>
-                        </div>
-
-                        <div className="mt-4">
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs uppercase tracking-wider text-muted-foreground">Email summaries</div>
-                            <div className="text-[11px] text-muted-foreground">{summaries.length} items</div>
-                          </div>
-
-                          {summaries.length === 0 ? (
-                            <div className="mt-2 text-sm text-muted-foreground">No summaries for this digest date.</div>
-                          ) : (
-                            <div className="mt-2 overflow-hidden rounded-xl border">
-                              <div className="divide-y">
-                                {summaries.map((s) => (
-                                  <div key={String(s.id)} className="group flex gap-3 p-3 bg-background hover:bg-muted/20 transition-colors">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                        <div className="text-sm font-medium truncate">{s.subject || "(No subject)"}</div>
-                                        <div className="text-[10px] rounded-full border px-2 py-0.5 text-muted-foreground">
-                                          {priorityLabel(s.priority)}
-                                        </div>
-                                      </div>
-                                      <div className="mt-1 text-[11px] text-muted-foreground truncate">
-                                        {s.sender || "Unknown sender"} {s.received_at ? `• ${s.received_at}` : ""}
-                                      </div>
-                                      <div className="mt-2 text-sm text-foreground/90 whitespace-pre-wrap">
-                                        {s.summary || "—"}
-                                      </div>
-                                      {s.priority_reason ? (
-                                        <div className="mt-2 text-[11px] text-muted-foreground">
-                                          Reason: {s.priority_reason}
-                                        </div>
-                                      ) : null}
-                                    </div>
-
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className={cn(
-                                        "shrink-0 opacity-0 group-hover:opacity-100 transition-opacity",
-                                        deletingId && String(deletingId) === String(s.id) ? "opacity-100" : ""
-                                      )}
-                                      onClick={() => onDeleteSummary(s.id)}
-                                      disabled={deletingId !== null}
-                                      title="Delete summary"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
+                      {isOpen ? (
+                        <div className="px-5 pb-5">
+                          <div className="rounded-xl border bg-background p-4">
+                            <div className="text-xs uppercase tracking-wider text-muted-foreground">Daily digest</div>
+                            <div className="mt-2 text-base md:text-lg leading-7 text-foreground/95 whitespace-pre-wrap break-words">
+                              {digest.digest || "—"}
                             </div>
-                          )}
+                          </div>
+
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs uppercase tracking-wider text-muted-foreground">Email summaries</div>
+                              <div className="text-[11px] text-muted-foreground">{summariesCount} items</div>
+                            </div>
+
+                            {summariesCount === 0 ? (
+                              <div className="mt-2 text-sm text-muted-foreground">No summaries for this digest date.</div>
+                            ) : (
+                              <div className="mt-2 overflow-hidden rounded-xl border">
+                                <div className="divide-y">
+                                  {summaries.map((s) => (
+                                    <div
+                                      key={String(s.id)}
+                                      className="group flex gap-3 p-3 bg-background hover:bg-muted/20 transition-colors"
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                          <div className="text-sm font-medium truncate">{s.subject || "(No subject)"}</div>
+                                          <div className="text-[10px] rounded-full border px-2 py-0.5 text-muted-foreground">
+                                            {priorityLabel(s.priority)}
+                                          </div>
+                                        </div>
+                                        <div className="mt-1 text-[11px] text-muted-foreground truncate">
+                                          {s.sender || "Unknown sender"} {s.received_at ? `• ${s.received_at}` : ""}
+                                        </div>
+                                        <div className="mt-2 text-sm text-foreground/90 whitespace-pre-wrap">
+                                          {s.summary || "—"}
+                                        </div>
+                                        {s.priority_reason ? (
+                                          <div className="mt-2 text-[11px] text-muted-foreground">Reason: {s.priority_reason}</div>
+                                        ) : null}
+                                      </div>
+
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn(
+                                          "shrink-0 opacity-0 group-hover:opacity-100 transition-opacity",
+                                          deletingId && String(deletingId) === String(s.id) ? "opacity-100" : ""
+                                        )}
+                                        onClick={(ev) => {
+                                          ev.preventDefault()
+                                          ev.stopPropagation()
+                                          onDeleteSummary(s.id)
+                                        }}
+                                        disabled={deletingId !== null}
+                                        title="Delete summary"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </AccordionContent>
-                    </AccordionItem>
+                      ) : null}
+                    </div>
                   )
                 })}
-              </Accordion>
+              </div>
             )}
           </div>
         </main>
