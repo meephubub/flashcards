@@ -8,6 +8,7 @@ from email.header import decode_header
 from datetime import date, datetime, timezone
 import os
 import groq
+from bs4 import BeautifulSoup
 from supabase import create_client, Client
 
 # --- Config from environment ---
@@ -21,7 +22,6 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
 PORT = int(os.environ.get("PORT", 8080))  # Render injects $PORT automatically
 
-# Priority levels
 PRIORITY_LEVELS = ("critical", "high", "medium", "low")
 
 # Global lock — prevents two simultaneous pipeline runs if pinged twice quickly
@@ -29,7 +29,52 @@ _pipeline_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
-# Email helpers
+# HTML cleaning (applied to ALL email bodies before storage or AI analysis)
+# ---------------------------------------------------------------------------
+
+def clean_html_body(raw: str) -> str:
+    """
+    Strip all CSS (style tags, link[rel=stylesheet], inline style attributes)
+    from an HTML email body and return clean text extracted from the remaining
+    markup. Falls back gracefully if the input is plain text.
+    """
+    if not raw:
+        return ""
+
+    # Detect whether the content looks like HTML at all
+    if "<" not in raw:
+        return raw.strip()
+
+    try:
+        soup = BeautifulSoup(raw, "lxml")
+    except Exception:
+        soup = BeautifulSoup(raw, "html.parser")
+
+    # Remove <style> blocks
+    for tag in soup.find_all("style"):
+        tag.decompose()
+
+    # Remove <link rel="stylesheet"> tags
+    for tag in soup.find_all("link", rel="stylesheet"):
+        tag.decompose()
+
+    # Strip inline style attributes from every element
+    for tag in soup.find_all(True):
+        tag.attrs.pop("style", None)
+
+    # Also drop <script> blocks — they add noise with no value
+    for tag in soup.find_all("script"):
+        tag.decompose()
+
+    # Extract readable text with whitespace normalised
+    text = soup.get_text(separator="\n")
+    # Collapse runs of blank lines to a single blank line
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+# ---------------------------------------------------------------------------
+# IMAP source
 # ---------------------------------------------------------------------------
 
 def decode_str(s):
@@ -44,25 +89,41 @@ def decode_str(s):
     return " ".join(result)
 
 
-def get_body(msg):
-    """Extract plain text body from an email message."""
+def get_raw_body(msg) -> str:
+    """Extract the raw body string from a parsed email.Message object."""
+    # Prefer plain text; fall back to HTML if that's all there is
+    plain, html = None, None
     if msg.is_multipart():
         for part in msg.walk():
             ct = part.get_content_type()
             cd = str(part.get("Content-Disposition", ""))
-            if ct == "text/plain" and "attachment" not in cd:
-                charset = part.get_content_charset() or "utf-8"
-                return part.get_payload(decode=True).decode(charset, errors="replace")
+            if "attachment" in cd:
+                continue
+            charset = part.get_content_charset() or "utf-8"
+            if ct == "text/plain" and plain is None:
+                plain = part.get_payload(decode=True).decode(charset, errors="replace")
+            elif ct == "text/html" and html is None:
+                html = part.get_payload(decode=True).decode(charset, errors="replace")
     else:
         charset = msg.get_content_charset() or "utf-8"
-        return msg.get_payload(decode=True).decode(charset, errors="replace")
+        payload = msg.get_payload(decode=True).decode(charset, errors="replace")
+        if msg.get_content_type() == "text/html":
+            html = payload
+        else:
+            plain = payload
+
+    # Return plain text if available; otherwise clean the HTML
+    if plain:
+        return plain
+    if html:
+        return clean_html_body(html)
     return ""
 
 
-def fetch_todays_emails():
-    """Connect via IMAP and return list of email dicts from today."""
-    today = date.today().strftime("%d-%b-%Y")  # e.g. 17-Mar-2026
-    print(f"Fetching emails since {today}...")
+def fetch_imap_emails() -> list[dict]:
+    """Fetch today's emails via IMAP and return normalised dicts."""
+    today = date.today().strftime("%d-%b-%Y")
+    print(f"[IMAP] Fetching emails since {today}...")
 
     mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
     mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
@@ -70,24 +131,79 @@ def fetch_todays_emails():
 
     _, data = mail.search(None, f'(SINCE "{today}")')
     email_ids = data[0].split()
-    print(f"Found {len(email_ids)} emails today.")
+    print(f"[IMAP] Found {len(email_ids)} emails.")
 
-    emails = []
+    results = []
     for eid in email_ids:
         _, msg_data = mail.fetch(eid, "(RFC822)")
         raw = msg_data[0][1]
         msg = email.message_from_bytes(raw)
-        full_body = get_body(msg)
-        emails.append({
-            "subject": decode_str(msg.get("Subject", "(No Subject)")),
-            "sender": decode_str(msg.get("From", "")),
-            "date": msg.get("Date", ""),
-            "body": full_body,
-            "body_truncated": full_body[:4000],  # capped for AI prompts
-        })
+        body = get_raw_body(msg)
+        results.append(_normalise(
+            subject=decode_str(msg.get("Subject", "(No Subject)")),
+            sender=decode_str(msg.get("From", "")),
+            received_at=msg.get("Date", ""),
+            body=body,
+            source="imap",
+        ))
 
     mail.logout()
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Supabase emails table source
+# ---------------------------------------------------------------------------
+
+def fetch_supabase_emails(supabase: Client) -> list[dict]:
+    """
+    Pull today's rows from the public.emails table.
+    Deduplication against email_summaries is handled by source+subject+sender
+    to avoid re-processing the same message on repeated runs within a day
+    (the daily digest gate already prevents full re-runs, but this is a
+    belt-and-braces guard for the source data).
+    """
+    today_start = date.today().isoformat()  # e.g. "2026-03-19"
+    print(f"[Supabase emails] Fetching rows with received_at >= {today_start}...")
+
+    result = (
+        supabase.table("emails")
+        .select("id, gmail_id, subject, sender, body, received_at")
+        .gte("received_at", today_start)
+        .execute()
+    )
+
+    rows = result.data or []
+    print(f"[Supabase emails] Found {len(rows)} rows.")
+
+    emails = []
+    for row in rows:
+        body = clean_html_body(row.get("body") or "")
+        emails.append(_normalise(
+            subject=row.get("subject") or "(No Subject)",
+            sender=row.get("sender") or "",
+            received_at=str(row.get("received_at") or ""),
+            body=body,
+            source="supabase",
+            source_id=str(row.get("gmail_id") or row.get("id") or ""),
+        ))
+
     return emails
+
+
+def _normalise(subject: str, sender: str, received_at: str, body: str,
+               source: str, source_id: str = "") -> dict:
+    """Return a consistent dict shape used throughout the pipeline."""
+    cleaned_body = clean_html_body(body) if source == "imap" else body  # supabase already cleaned above
+    return {
+        "subject": subject,
+        "sender": sender,
+        "received_at": received_at,
+        "body": cleaned_body,                    # full cleaned body → stored in DB
+        "body_truncated": cleaned_body[:4000],   # capped for AI prompt
+        "source": source,
+        "source_id": source_id,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -173,16 +289,15 @@ Respond with plain prose only — no bullet points, no headers.
 
 
 # ---------------------------------------------------------------------------
-# Supabase helpers
+# Supabase write helpers
 # ---------------------------------------------------------------------------
 
 def digest_exists_today(supabase: Client) -> bool:
     """Return True if a digest row already exists for today."""
-    today = date.today().isoformat()
     result = (
         supabase.table("daily_digests")
         .select("id")
-        .eq("date", today)
+        .eq("date", date.today().isoformat())
         .limit(1)
         .execute()
     )
@@ -190,15 +305,17 @@ def digest_exists_today(supabase: Client) -> bool:
 
 
 def save_email(supabase: Client, email_data: dict, analysis: dict):
-    """Insert a single email with its analysis."""
+    """Insert a single processed email into email_summaries."""
     record = {
         "sender": email_data["sender"],
         "subject": email_data["subject"],
-        "received_at": email_data["date"],
+        "received_at": email_data["received_at"],
         "body": email_data["body"],
         "summary": analysis["summary"],
         "priority": analysis["priority"],
         "priority_reason": analysis["priority_reason"],
+        "source": email_data["source"],
+        "source_id": email_data.get("source_id", ""),
     }
     result = supabase.table("email_summaries").insert(record).execute()
     return result.data[0]["id"] if result.data else None
@@ -221,9 +338,8 @@ def save_daily_digest(supabase: Client, digest: str, email_count: int):
 
 def run_pipeline() -> dict:
     """
-    Fetch, analyse, and store today's emails + digest.
-    Returns a status dict sent back as the HTTP response body.
-    Idempotent — skips silently if today's digest already exists.
+    Collect emails from IMAP + Supabase emails table, clean, analyse, and store.
+    Idempotent — skips entirely if today's digest already exists.
     """
     groq_client = groq.Groq(api_key=GROQ_API_KEY)
     supabase_client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -234,18 +350,26 @@ def run_pipeline() -> dict:
         print(msg)
         return {"status": "skipped", "reason": msg}
 
-    emails = fetch_todays_emails()
-    if not emails:
-        msg = "No emails today."
+    # --- Collect from both sources ---
+    imap_emails = fetch_imap_emails()
+    db_emails = fetch_supabase_emails(supabase_client)
+
+    all_emails = imap_emails + db_emails
+    print(f"\nTotal emails to process: {len(all_emails)} "
+          f"({len(imap_emails)} IMAP + {len(db_emails)} Supabase)\n")
+
+    if not all_emails:
+        msg = "No emails today from any source."
         print(msg)
-        # Write an empty digest so subsequent pings don't re-run
         save_daily_digest(supabase_client, msg, 0)
         return {"status": "done", "emails_processed": 0, "message": msg}
 
+    # --- Analyse and save each email ---
     analyses = []
     saved = 0
-    for i, em in enumerate(emails, 1):
-        print(f"[{i}/{len(emails)}] Analysing: {em['subject']}")
+    for i, em in enumerate(all_emails, 1):
+        label = f"[{em['source'].upper()}]"
+        print(f"[{i}/{len(all_emails)}] {label} Analysing: {em['subject']}")
         try:
             analysis = analyse_email(groq_client, em)
             row_id = save_email(supabase_client, em, analysis)
@@ -256,12 +380,19 @@ def run_pipeline() -> dict:
             print(f"  ✗ Error processing '{em['subject']}': {e}")
             analyses.append({"summary": "", "priority": "medium", "priority_reason": ""})
 
+    # --- Generate and save daily digest ---
     print("\nGenerating daily digest...")
-    digest = generate_daily_digest(groq_client, emails, analyses)
+    digest = generate_daily_digest(groq_client, all_emails, analyses)
     save_daily_digest(supabase_client, digest, saved)
     print(f"  ✓ Digest saved:\n\n{digest}\n")
 
-    return {"status": "done", "emails_processed": saved, "digest": digest}
+    return {
+        "status": "done",
+        "emails_processed": saved,
+        "imap_count": len(imap_emails),
+        "supabase_count": len(db_emails),
+        "digest": digest,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -270,8 +401,8 @@ def run_pipeline() -> dict:
 
 class Handler(BaseHTTPRequestHandler):
     """
-    GET /     → health check (Render uses this to confirm the service is up)
-    GET /run  → trigger the pipeline if no digest exists for today
+    GET /     → health check
+    GET /run  → trigger pipeline (idempotent, once per day)
     """
 
     def log_message(self, format, *args):
@@ -287,11 +418,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/":
-            # Health check — Render pings this to decide if the service is healthy
             self._send_json(200, {"status": "ok", "date": date.today().isoformat()})
 
         elif self.path == "/run":
-            # Non-blocking lock acquire — returns 409 if a run is already in progress
             acquired = _pipeline_lock.acquire(blocking=False)
             if not acquired:
                 self._send_json(409, {"status": "busy", "reason": "Pipeline already running."})
