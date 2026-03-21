@@ -1,44 +1,48 @@
-import imaplib
 import email
+import imaplib
 import json
 import logging
+import os
 import re
 import threading
 import traceback
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from email.header import decode_header
 from datetime import date, datetime, timezone
+from email.header import decode_header
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from logging.handlers import RotatingFileHandler
-from urllib.parse import urlparse, parse_qs
-import os
+from urllib.parse import parse_qs, urlparse
+
 import groq
 from bs4 import BeautifulSoup
-from supabase import create_client, Client
+from supabase import Client, create_client
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-IMAP_HOST     = os.environ["IMAP_HOST"]
-IMAP_PORT     = int(os.environ.get("IMAP_PORT", 993))
-EMAIL_ADDRESS = os.environ["EMAIL_ADDRESS"]
-EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
-GROQ_API_KEY  = os.environ["GROQ_API_KEY"]
-SUPABASE_URL  = os.environ["SUPABASE_URL"]
-SUPABASE_KEY  = os.environ["SUPABASE_KEY"]
-GROQ_MODEL    = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
-PORT          = int(os.environ.get("PORT", 8080))
-IS_DEV        = os.environ.get("ENVIRONMENT", "").lower() == "dev"
+IMAP_HOST = os.environ.get("IMAP_HOST", "imap.gmail.com")
+IMAP_PORT = int(os.environ.get("IMAP_PORT", 993))
+EMAIL_ADDRESS = "samthelegend68@gmail.com"
+EMAIL_PASSWORD = "lmka dwwl rzdp eeke"
+GROQ_API_KEY = "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"
+SUPABASE_URL = "https://jouowhbhiuuewfwpntex.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvdW93aGJoaXV1ZXdmd3BudGV4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Njk3NDA4MiwiZXhwIjoyMDYyNTUwMDgyfQ.Lg4h6dLSex0jtGVOZ3IKGE4yGffGZwDvFI20mFQCDwg"
+
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+PORT = int(os.environ.get("PORT", 8080))
+IS_DEV = os.environ.get("ENVIRONMENT", "").lower() == "dev"
 
 PRIORITY_LEVELS = ("critical", "high", "medium", "low")
 
 _pipeline_lock = threading.Lock()
 
 LOG_PATH = os.environ.get("LOG_PATH", "app.log")
-
+print(f"LOG_PATH={LOG_PATH}")
+print(f"GROQ_API_KEY={GROQ_API_KEY}, GROQ_MODEL={GROQ_MODEL}")
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
+
 
 def _build_logger() -> logging.Logger:
     """
@@ -62,7 +66,7 @@ def _build_logger() -> logging.Logger:
     # File handler — DEBUG and above (full detail for debugging)
     fh = RotatingFileHandler(
         LOG_PATH,
-        maxBytes=5 * 1024 * 1024,   # 5 MB per file
+        maxBytes=5 * 1024 * 1024,  # 5 MB per file
         backupCount=3,
         encoding="utf-8",
     )
@@ -80,6 +84,7 @@ log = _build_logger()
 # ---------------------------------------------------------------------------
 # HTML → plain text cleaning
 # ---------------------------------------------------------------------------
+
 
 def clean_body(raw: str) -> str:
     """
@@ -118,6 +123,7 @@ def clean_body(raw: str) -> str:
 # IMAP helpers
 # ---------------------------------------------------------------------------
 
+
 def decode_mime_str(value: str) -> str:
     """Decode an RFC 2047-encoded email header value."""
     if not value:
@@ -139,7 +145,7 @@ def extract_body_from_message(msg: email.message.Message) -> str:
     For non-multipart messages the single payload is used directly.
     """
     plain: str | None = None
-    html:  str | None = None
+    html: str | None = None
 
     if msg.is_multipart():
         for part in msg.walk():
@@ -186,7 +192,7 @@ def extract_body_from_message(msg: email.message.Message) -> str:
                 plain = decoded
 
     if plain:
-        return clean_body(plain)   # plain may still contain stray HTML tags
+        return clean_body(plain)  # plain may still contain stray HTML tags
     if html:
         return clean_body(html)
     return ""
@@ -194,7 +200,7 @@ def extract_body_from_message(msg: email.message.Message) -> str:
 
 def fetch_imap_emails() -> list[dict]:
     """Return today's inbox emails as normalised dicts."""
-    today_str = date.today().strftime("%d-%b-%Y")   # e.g. "21-Mar-2026"
+    today_str = date.today().strftime("%d-%b-%Y")  # e.g. "21-Mar-2026"
     print(f"[IMAP] Connecting to {IMAP_HOST}...")
 
     try:
@@ -226,23 +232,25 @@ def fetch_imap_emails() -> list[dict]:
                 raw_bytes = msg_data[0][1]
                 msg = email.message_from_bytes(raw_bytes)
 
-                subject    = decode_mime_str(msg.get("Subject", "(No Subject)"))
-                sender     = decode_mime_str(msg.get("From", ""))
-                recv       = msg.get("Date", "")
-                body       = extract_body_from_message(msg)
+                subject = decode_mime_str(msg.get("Subject", "(No Subject)"))
+                sender = decode_mime_str(msg.get("From", ""))
+                recv = msg.get("Date", "")
+                body = extract_body_from_message(msg)
 
                 print(f"[IMAP]   Parsed: {subject!r} | body_len={len(body)}")
 
-                results.append({
-                    "subject":      subject,
-                    "sender":       sender,
-                    "received_at":  recv,
-                    "body":         body,
-                    "body_truncated": body[:4000],
-                    "source":       "imap",
-                    "source_id":    "",
-                    "db_id":        None,
-                })
+                results.append(
+                    {
+                        "subject": subject,
+                        "sender": sender,
+                        "received_at": recv,
+                        "body": body,
+                        "body_truncated": body[:4000],
+                        "source": "imap",
+                        "source_id": "",
+                        "db_id": None,
+                    }
+                )
             except Exception as e:
                 print(f"[IMAP] Error parsing email id={eid}: {e}")
 
@@ -258,6 +266,7 @@ def fetch_imap_emails() -> list[dict]:
 # ---------------------------------------------------------------------------
 # Supabase emails table source
 # ---------------------------------------------------------------------------
+
 
 def fetch_supabase_emails(supabase: Client) -> list[dict]:
     """
@@ -283,17 +292,21 @@ def fetch_supabase_emails(supabase: Client) -> list[dict]:
     for row in rows:
         raw_body = row.get("body") or ""
         body = clean_body(raw_body)
-        print(f"[Supabase emails]   Row id={row['id']} subject={row.get('subject')!r} body_len={len(body)}")
-        emails.append({
-            "subject":      row.get("subject") or "(No Subject)",
-            "sender":       row.get("sender") or "",
-            "received_at":  str(row.get("received_at") or ""),
-            "body":         body,
-            "body_truncated": body[:4000],
-            "source":       "supabase",
-            "source_id":    str(row.get("gmail_id") or ""),
-            "db_id":        row["id"],
-        })
+        print(
+            f"[Supabase emails]   Row id={row['id']} subject={row.get('subject')!r} body_len={len(body)}"
+        )
+        emails.append(
+            {
+                "subject": row.get("subject") or "(No Subject)",
+                "sender": row.get("sender") or "",
+                "received_at": str(row.get("received_at") or ""),
+                "body": body,
+                "body_truncated": body[:4000],
+                "source": "supabase",
+                "source_id": str(row.get("gmail_id") or ""),
+                "db_id": row["id"],
+            }
+        )
 
     return emails
 
@@ -311,14 +324,15 @@ def delete_supabase_email(supabase: Client, db_id: int):
 # AI helpers
 # ---------------------------------------------------------------------------
 
+
 def analyse_email(client: groq.Groq, email_data: dict) -> dict:
     """
     Send a single email to Groq and return structured analysis.
     Returns {"summary": str, "priority": str, "priority_reason": str}.
     All Groq errors are logged in full to the log file.
     """
-    subject      = email_data["subject"]
-    sender       = email_data["sender"]
+    subject = email_data["subject"]
+    sender = email_data["sender"]
     body_preview = email_data["body_truncated"]
 
     if not body_preview.strip():
@@ -346,8 +360,12 @@ Body:
 {body_preview}
 """
 
-    log.debug("Groq request | call=analyse_email model=%s subject=%r body_chars=%d",
-              GROQ_MODEL, subject, len(body_preview))
+    log.debug(
+        "Groq request | call=analyse_email model=%s subject=%r body_chars=%d",
+        GROQ_MODEL,
+        subject,
+        len(body_preview),
+    )
 
     try:
         response = client.chat.completions.create(
@@ -359,8 +377,10 @@ Body:
         log.error(
             "Groq rate-limit | call=analyse_email model=%s subject=%r\n"
             "  status=%s  message=%s\n%s",
-            GROQ_MODEL, subject,
-            getattr(exc, "status_code", "?"), exc,
+            GROQ_MODEL,
+            subject,
+            getattr(exc, "status_code", "?"),
+            exc,
             traceback.format_exc(),
         )
         raise
@@ -368,7 +388,8 @@ Body:
         log.error(
             "Groq API error | call=analyse_email model=%s subject=%r\n"
             "  status=%s  body=%s\n%s",
-            GROQ_MODEL, subject,
+            GROQ_MODEL,
+            subject,
             getattr(exc, "status_code", "?"),
             getattr(exc, "body", str(exc)),
             traceback.format_exc(),
@@ -377,22 +398,30 @@ Body:
     except groq.APIConnectionError as exc:
         log.error(
             "Groq connection error | call=analyse_email model=%s subject=%r\n%s",
-            GROQ_MODEL, subject, traceback.format_exc(),
+            GROQ_MODEL,
+            subject,
+            traceback.format_exc(),
         )
         raise
     except Exception as exc:
         log.error(
             "Unexpected Groq error | call=analyse_email model=%s subject=%r\n"
             "  type=%s  error=%s\n%s",
-            GROQ_MODEL, subject,
-            type(exc).__name__, exc,
+            GROQ_MODEL,
+            subject,
+            type(exc).__name__,
+            exc,
             traceback.format_exc(),
         )
         raise
 
     raw = response.choices[0].message.content.strip()
-    log.debug("Groq response | call=analyse_email subject=%r raw_chars=%d raw_preview=%r",
-              subject, len(raw), raw[:120])
+    log.debug(
+        "Groq response | call=analyse_email subject=%r raw_chars=%d raw_preview=%r",
+        subject,
+        len(raw),
+        raw[:120],
+    )
 
     # Strip accidental markdown fences
     raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
@@ -404,7 +433,9 @@ Body:
         log.warning(
             "JSON parse failed | call=analyse_email subject=%r\n"
             "  json_error=%s\n  raw_response=%s",
-            subject, exc, raw,
+            subject,
+            exc,
+            raw,
         )
         parsed = {
             "summary": raw or "(no summary)",
@@ -415,15 +446,21 @@ Body:
     # Normalise priority
     parsed["priority"] = str(parsed.get("priority", "medium")).lower().strip()
     if parsed["priority"] not in PRIORITY_LEVELS:
-        log.warning("Unexpected priority value %r for subject=%r — defaulting to medium",
-                    parsed["priority"], subject)
+        log.warning(
+            "Unexpected priority value %r for subject=%r — defaulting to medium",
+            parsed["priority"],
+            subject,
+        )
         parsed["priority"] = "medium"
 
     parsed.setdefault("summary", "(no summary)")
     parsed.setdefault("priority_reason", "")
 
-    log.info("Groq OK | call=analyse_email subject=%r priority=%s",
-             subject, parsed["priority"])
+    log.info(
+        "Groq OK | call=analyse_email subject=%r priority=%s",
+        subject,
+        parsed["priority"],
+    )
     return parsed
 
 
@@ -451,8 +488,11 @@ Write a concise daily digest (3-6 sentences) that:
 Respond with plain prose only — no bullet points, no headers.
 """
 
-    log.debug("Groq request | call=generate_daily_digest model=%s email_count=%d",
-              GROQ_MODEL, len(lines))
+    log.debug(
+        "Groq request | call=generate_daily_digest model=%s email_count=%d",
+        GROQ_MODEL,
+        len(lines),
+    )
 
     try:
         response = client.chat.completions.create(
@@ -465,7 +505,8 @@ Respond with plain prose only — no bullet points, no headers.
             "Groq rate-limit | call=generate_daily_digest model=%s\n"
             "  status=%s  message=%s\n%s",
             GROQ_MODEL,
-            getattr(exc, "status_code", "?"), exc,
+            getattr(exc, "status_code", "?"),
+            exc,
             traceback.format_exc(),
         )
         raise
@@ -482,14 +523,17 @@ Respond with plain prose only — no bullet points, no headers.
     except groq.APIConnectionError as exc:
         log.error(
             "Groq connection error | call=generate_daily_digest model=%s\n%s",
-            GROQ_MODEL, traceback.format_exc(),
+            GROQ_MODEL,
+            traceback.format_exc(),
         )
         raise
     except Exception as exc:
         log.error(
             "Unexpected Groq error | call=generate_daily_digest model=%s\n"
             "  type=%s  error=%s\n%s",
-            GROQ_MODEL, type(exc).__name__, exc,
+            GROQ_MODEL,
+            type(exc).__name__,
+            exc,
             traceback.format_exc(),
         )
         raise
@@ -502,6 +546,7 @@ Respond with plain prose only — no bullet points, no headers.
 # ---------------------------------------------------------------------------
 # Supabase write helpers
 # ---------------------------------------------------------------------------
+
 
 def digest_exists_today(supabase: Client) -> bool:
     result = (
@@ -516,21 +561,25 @@ def digest_exists_today(supabase: Client) -> bool:
 
 def delete_todays_digest(supabase: Client):
     """Remove today's digest row so a forced re-run can insert a fresh one."""
-    supabase.table("daily_digests").delete().eq("date", date.today().isoformat()).execute()
+    supabase.table("daily_digests").delete().eq(
+        "date", date.today().isoformat()
+    ).execute()
     print("[Force] Deleted existing digest for today.")
 
 
-def save_email_summary(supabase: Client, email_data: dict, analysis: dict) -> int | None:
+def save_email_summary(
+    supabase: Client, email_data: dict, analysis: dict
+) -> int | None:
     record = {
-        "sender":          email_data["sender"],
-        "subject":         email_data["subject"],
-        "received_at":     email_data["received_at"],
-        "body":            email_data["body"],
-        "summary":         analysis["summary"],
-        "priority":        analysis["priority"],
+        "sender": email_data["sender"],
+        "subject": email_data["subject"],
+        "received_at": email_data["received_at"],
+        "body": email_data["body"],
+        "summary": analysis["summary"],
+        "priority": analysis["priority"],
         "priority_reason": analysis["priority_reason"],
-        "source":          email_data["source"],
-        "source_id":       email_data.get("source_id", ""),
+        "source": email_data["source"],
+        "source_id": email_data.get("source_id", ""),
     }
     result = supabase.table("email_summaries").insert(record).execute()
     return result.data[0]["id"] if result.data else None
@@ -538,10 +587,10 @@ def save_email_summary(supabase: Client, email_data: dict, analysis: dict) -> in
 
 def save_daily_digest(supabase: Client, digest: str, email_count: int):
     record = {
-        "date":          date.today().isoformat(),
-        "email_count":   email_count,
-        "digest":        digest,
-        "generated_at":  datetime.now(timezone.utc).isoformat(),
+        "date": date.today().isoformat(),
+        "email_count": email_count,
+        "digest": digest,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     supabase.table("daily_digests").insert(record).execute()
 
@@ -549,6 +598,7 @@ def save_daily_digest(supabase: Client, digest: str, email_count: int):
 # ---------------------------------------------------------------------------
 # Pipeline
 # ---------------------------------------------------------------------------
+
 
 def run_pipeline(force: bool = False) -> dict:
     """
@@ -558,8 +608,8 @@ def run_pipeline(force: bool = False) -> dict:
 
     force=True  bypasses the idempotency check (for testing).
     """
-    groq_client      = groq.Groq(api_key=GROQ_API_KEY)
-    supabase_client  = create_client(SUPABASE_URL, SUPABASE_KEY)
+    groq_client = groq.Groq(api_key=GROQ_API_KEY)
+    supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     # Idempotency gate
     if digest_exists_today(supabase_client):
@@ -574,8 +624,8 @@ def run_pipeline(force: bool = False) -> dict:
 
     # Collect
     imap_emails = fetch_imap_emails()
-    db_emails   = fetch_supabase_emails(supabase_client)
-    all_emails  = imap_emails + db_emails
+    db_emails = fetch_supabase_emails(supabase_client)
+    all_emails = imap_emails + db_emails
 
     print(
         f"\nTotal to process: {len(all_emails)} "
@@ -590,12 +640,12 @@ def run_pipeline(force: bool = False) -> dict:
 
     # Analyse and save
     analyses = []
-    saved    = 0
+    saved = 0
     for i, em in enumerate(all_emails, 1):
         print(f"[{i}/{len(all_emails)}] [{em['source'].upper()}] {em['subject']!r}")
         try:
             analysis = analyse_email(groq_client, em)
-            row_id   = save_email_summary(supabase_client, em, analysis)
+            row_id = save_email_summary(supabase_client, em, analysis)
             analyses.append(analysis)
             saved += 1
             print(
@@ -609,7 +659,9 @@ def run_pipeline(force: bool = False) -> dict:
 
         except Exception as e:
             print(f"  ✗ Error processing {em['subject']!r}: {e}")
-            analyses.append({"summary": "", "priority": "medium", "priority_reason": ""})
+            analyses.append(
+                {"summary": "", "priority": "medium", "priority_reason": ""}
+            )
 
     # Daily digest
     print("\nGenerating daily digest...")
@@ -622,14 +674,13 @@ def run_pipeline(force: bool = False) -> dict:
         print(f"  ✗ Digest generation failed: {e}")
 
     return {
-        "status":          "done",
-        "force":           force,
+        "status": "done",
+        "force": force,
         "emails_processed": saved,
-        "imap_count":      len(imap_emails),
-        "supabase_count":  len(db_emails),
-        "digest":          digest,
+        "imap_count": len(imap_emails),
+        "supabase_count": len(db_emails),
+        "digest": digest,
     }
-
 
 
 # ---------------------------------------------------------------------------
@@ -924,6 +975,7 @@ DEV_UI_HTML = """<!DOCTYPE html>
 # HTTP server
 # ---------------------------------------------------------------------------
 
+
 class Handler(BaseHTTPRequestHandler):
     """
     GET /                → dev UI (ENVIRONMENT=dev) or health check JSON
@@ -960,12 +1012,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(200, {"status": "ok", "date": date.today().isoformat()})
 
         elif parsed.path == "/run":
-            qs    = parse_qs(parsed.query)
+            qs = parse_qs(parsed.query)
             force = qs.get("force", ["false"])[0].lower() == "true"
 
             acquired = _pipeline_lock.acquire(blocking=False)
             if not acquired:
-                self._send_json(409, {"status": "busy", "reason": "Pipeline already running."})
+                self._send_json(
+                    409, {"status": "busy", "reason": "Pipeline already running."}
+                )
                 return
             try:
                 result = run_pipeline(force=force)
@@ -981,7 +1035,7 @@ class Handler(BaseHTTPRequestHandler):
             if not IS_DEV:
                 self._send_json(403, {"status": "forbidden"})
                 return
-            qs    = parse_qs(parsed.query)
+            qs = parse_qs(parsed.query)
             lines = int(qs.get("lines", ["200"])[0])
             try:
                 with open(LOG_PATH, "r", encoding="utf-8", errors="replace") as lf:
