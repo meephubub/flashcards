@@ -678,12 +678,12 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <div className="card-flip-inner relative h-[500px] md:h-[520px] w-full transition-transform duration-300 ease-in-out">
+            <div className="card-flip-inner relative h-[clamp(280px,50svh,520px)] w-full transition-transform duration-300 ease-in-out">
               <Card
-                className="card-front absolute w-full h-full flex items-center justify-center p-4 md:p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300"
+                className="card-front absolute w-full h-full flex items-center justify-center p-4 md:p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300 overflow-y-auto"
                 onClick={handleFlip}
               >
-                <div className="text-center text-2xl space-y-6 max-w-[88%]">
+                <div className="text-center text-xl sm:text-2xl space-y-4 sm:space-y-6 max-w-[88%]">
                   {currentCard.front_img_url && (
                     <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
                       <img
@@ -694,7 +694,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                     </div>
                   )}
                   <div className="w-full flex justify-center">
-                    <MarkdownCardContent content={currentCard.front} className="font-semibold text-2xl md:text-3xl leading-snug" />
+                    <MarkdownCardContent content={currentCard.front} className="font-semibold text-xl sm:text-2xl md:text-3xl leading-snug" />
                   </div>
                   <div className="hidden sm:block text-[11px] text-neutral-500 mt-4 absolute bottom-4 left-0 right-0 text-center">
                     Press <kbd className="px-1.5 py-0.5 border border-black/20 rounded text-[10px] bg-white">Space</kbd> to flip
@@ -725,7 +725,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                       {isSpacedRepetitionEnabled ? (
                         <>
                           <div className="text-sm text-neutral-600 mb-3">How well did you know this? (Press 0-5)</div>
-                          <div className="flex justify-center gap-3 flex-wrap">
+                          <div className="flex justify-center gap-2 sm:gap-3 flex-wrap">
                             {[0, 1, 2, 3, 4, 5].map((rating) => {
                               // Use different button variants based on rating
                               let variant = "outline"
@@ -738,10 +738,10 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                               if (rating === 5) extra = "bg-black text-white"
 
                               return (
-                                <Button
-                                  key={rating}
-                                  variant={variant as any}
-                                  className={`h-12 w-12 font-medium text-lg border border-black/20 ${extra} hover:scale-105 transition-all duration-150 flex-shrink-0`}
+<Button
+                                                  key={rating}
+                                                  variant={variant as any}
+                                                  className={`h-10 w-10 sm:h-12 sm:w-12 font-medium text-base sm:text-lg border border-black/20 ${extra} hover:scale-105 transition-all duration-150 flex-shrink-0`}
                                   disableHaptics
                                   onClick={(e) => {
                                     e.stopPropagation()
