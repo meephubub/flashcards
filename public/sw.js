@@ -7,7 +7,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // --- Simple but more robust offline-first service worker ---
-const SW_VERSION = 'v1.0.1';
+const SW_VERSION = 'v1.0.2';
 const PRECACHE = `precache-${SW_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -16,7 +16,9 @@ const PRECACHE_URLS = [
   '/manifest.json',
   '/favicon.png',
   '/IMG_2251.png',
-  '/IMG_2253.png', // apple-touch-icon (180x180)
+  '/IMG_2253.png',
+  '/favicon.ico',
+  '/logo.svg',
 ];
 
 self.addEventListener('install', (event) => {

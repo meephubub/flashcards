@@ -62,6 +62,11 @@ export async function syncAllMetadata(userId: string) {
     }
     for (const [deckId, cards] of byDeck.entries()) {
       await saveDeckCards(userId, deckId, cards)
+      // Pre-fetch images to populate service worker cache
+      for (const c of cards) {
+        if (c.front_img_url) fetch(c.front_img_url, { mode: 'no-cors' }).catch(() => {})
+        if (c.back_img_url) fetch(c.back_img_url, { mode: 'no-cors' }).catch(() => {})
+      }
     }
   }
   if (!foldersRes.error) {

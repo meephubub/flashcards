@@ -549,6 +549,14 @@ ${body}
       ; (async () => {
         setSelectLoading(true)
         setSelectError(null)
+        if (!isOnline()) {
+          const cached = await loadNotesMeta(user.id)
+          if (!cancelled) {
+            setUserNotes(cached.map(c => ({ id: c.id, title: c.title, updated_at: null, category: null })))
+            setSelectLoading(false)
+          }
+          return
+        }
         const { data, error } = await supabase
           .from("notes")
           .select("id, title, updated_at, category")

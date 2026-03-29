@@ -1,6 +1,8 @@
 {
+  "id": "flashcard-app-pwa",
   "name": "Flashcard App",
   "short_name": "Flashcards",
+  "description": "Learn anything with flashcards and notes, even offline.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
