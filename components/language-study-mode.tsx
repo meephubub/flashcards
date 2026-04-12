@@ -415,15 +415,23 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
       
       // Store the nextQuestionNumber in a ref or variable that won't be affected by React's state batching
       const questionToUse = nextQuestionNumber;
+      const currentCardIdForRef = currentCard?.id ?? null;
       
       // Determine delay: 0.5s for 100% similarity, 2.5s otherwise
       const delay = similarityScore === 1 ? 500 : 2500;
       setTimeout(() => {
         resetCardState();
-        if (cards.length > 0) {
-          // Use the stored question number to ensure we're using the correct value
-          selectAndSetNextCard(cards, currentCard?.id ?? null, questionToUse);
-        }
+        // Use setCards callback to ensure we have the latest cards state
+        setCards(currentCards => {
+          if (currentCards.length > 0) {
+            // Use the stored question number to ensure we're using the correct value
+            selectAndSetNextCard(currentCards, currentCardIdForRef, questionToUse);
+          } else {
+            // Fallback: if cards array is empty, complete the session
+            setSessionComplete(true);
+          }
+          return currentCards;
+        });
       }, delay); // Dynamic delay based on similarity
       
     } catch (error) {
