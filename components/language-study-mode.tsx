@@ -12,6 +12,7 @@ import { ArrowLeft, ArrowRight, RotateCw, CheckCircle, XCircle } from 'lucide-re
 import Link from 'next/link';
 import { Skeleton } from './ui/skeleton';
 import { SessionSummary } from './session-summary';
+import { calculateNextReview, DEFAULT_CARD_PROGRESS, type CardProgress, type ConfidenceRating } from '@/lib/spaced-repetition';
 import { useToast } from '@/hooks/use-toast';
 import Confetti from 'react-confetti';
 import { useWindowSize } from '@uidotdev/usehooks'; // A common hook for window size
@@ -28,7 +29,7 @@ interface Flashcard {
   back: string;
   front_img_url?: string | null;
   back_img_url?: string | null;
-  // Add other card properties if necessary
+  progress?: any;
 }
 
 export interface StudyCard extends Flashcard {
@@ -51,7 +52,7 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: LanguageStudyModeProps & { compactHeader?: boolean; onMetricsChange?: (m: { streak: number; current: number; total: number; progress: number; }) => void; }) {
-  const { getDeck, loading: decksLoading } = useDecks();
+  const { getDeck, loading: decksLoading, updateCardProgress } = useDecks();
   const { settings } = useSettings();
   const { toast } = useToast();
   const { width, height } = useWindowSize(); // For confetti
@@ -320,13 +321,41 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
       const isCorrect = score >= SIMILARITY_THRESHOLD;
       setIsAnswerChecked(true);
 
+      // SRS Update logic
+      let newProgress: CardProgress | undefined;
+      try {
+        const srsGrade: ConfidenceRating = isCorrect ? 3 : 1; // 3 for Good, 1 for Again
+        const currentProgressRaw = (currentCard as any).progress;
+        
+        // Normalize progress if it's in snake_case (from DB) or missing
+        const currentProgress: CardProgress = currentProgressRaw ? {
+          easeFactor: currentProgressRaw.easeFactor ?? currentProgressRaw.ease_factor ?? 2.5,
+          interval: currentProgressRaw.interval ?? currentProgressRaw.interval ?? 0,
+          repetitions: currentProgressRaw.repetitions ?? currentProgressRaw.repetitions ?? 0,
+          dueDate: currentProgressRaw.dueDate ?? currentProgressRaw.due_date ?? new Date().toISOString(),
+          lastReviewed: currentProgressRaw.lastReviewed ?? currentProgressRaw.last_reviewed ?? new Date().toISOString(),
+          fsrsState: currentProgressRaw.fsrsState ?? currentProgressRaw.fsrs_state ?? undefined,
+        } : DEFAULT_CARD_PROGRESS;
+
+        const fsrsParams = settings.studySettings?.fsrsParams;
+        newProgress = calculateNextReview(currentProgress, srsGrade, fsrsParams);
+        
+        // Update the card progress in the backend
+        if (typeof currentCard.id === 'number' && newProgress) {
+          void updateCardProgress(deckId, currentCard.id, newProgress);
+        }
+      } catch (srsError) {
+        console.error("Error updating SRS progress:", srsError);
+      }
+
       setCards(prevCards =>
         prevCards.map(card =>
           card.id === currentCard.id
             ? { 
                 ...card, 
                 incorrectAttempts: isCorrect ? card.incorrectAttempts : (card.incorrectAttempts || 0) + 1,
-                consecutiveCorrectAttempts: isCorrect ? (card.consecutiveCorrectAttempts || 0) + 1 : 0
+                consecutiveCorrectAttempts: isCorrect ? (card.consecutiveCorrectAttempts || 0) + 1 : 0,
+                progress: newProgress || card.progress // Update local progress for SRS
               }
             : card
         )

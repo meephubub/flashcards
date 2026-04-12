@@ -19,11 +19,33 @@ import {
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { Card } from "@/components/ui/card"
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts"
 import { FSRSControls, DEFAULT_FSRS_PARAMS, type FSRSParams } from "@/components/fsrs-controls"
 import { useSettings } from "@/context/settings-context"
-import { Flame, Calendar, BookOpen, BarChart3, Clock, Target } from "lucide-react"
+import { getUpcomingExamSessions, type ExamPlanSession } from "@/lib/exam-data"
+import { format, differenceInDays, parseISO } from "date-fns"
+import {
+    Flame,
+    Calendar,
+    BookOpen,
+    BarChart3,
+    Clock,
+    Target,
+    TrendingUp,
+    GraduationCap,
+    AlertCircle,
+    CheckCircle2,
+    Brain,
+    Layers
+} from "lucide-react"
+import Link from "next/link"
+
+interface ExamSessionWithDeck extends ExamPlanSession {
+    deck_name: string
+}
 
 export default function FSRSStatsPage() {
     const { user, isLoading: authLoading } = useAuth()
@@ -36,6 +58,8 @@ export default function FSRSStatsPage() {
     const [subjectDurations, setSubjectDurations] = useState<SubjectDuration[]>([])
     const [heatmapData, setHeatmapData] = useState<{ date: string; count: number }[]>([])
     const [streak, setStreak] = useState<{ currentStreak: number; longestStreak: number } | null>(null)
+    const [upcomingSessions, setUpcomingSessions] = useState<ExamSessionWithDeck[]>([])
+    const [activeExamsCount, setActiveExamsCount] = useState(0)
     const [loading, setLoading] = useState(true)
     const [days, setDays] = useState(30)
 
@@ -75,13 +99,14 @@ export default function FSRSStatsPage() {
 
             setLoading(true)
             try {
-                const [userStats, curveData, statesDist, durations, heatmap, streakData] = await Promise.all([
+                const [userStats, curveData, statesDist, durations, heatmap, streakData, sessions] = await Promise.all([
                     getUserStats(supabase, user.id),
                     getLearningCurveData(supabase, user.id, days),
                     getCardStateDistribution(supabase, user.id),
                     getSubjectDurations(supabase, user.id, days),
                     getUserHeatmap(supabase, user.id),
-                    getUserStreak(supabase, user.id)
+                    getUserStreak(supabase, user.id),
+                    getUpcomingExamSessions(supabase, user.id, 14)
                 ])
 
                 setStats(userStats)
@@ -90,6 +115,11 @@ export default function FSRSStatsPage() {
                 setSubjectDurations(durations)
                 setHeatmapData(heatmap)
                 setStreak(streakData)
+                setUpcomingSessions(sessions)
+
+                // Count unique active exam plans
+                const uniquePlans = new Set(sessions.map(s => s.exam_plan_id))
+                setActiveExamsCount(uniquePlans.size)
             } catch (error) {
                 console.error("Error fetching stats:", error)
             } finally {
@@ -103,7 +133,7 @@ export default function FSRSStatsPage() {
     if (authLoading || loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="w-8 h-8 border-4 border-black dark:border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-8 h-8 border-4 border-neutral-900 dark:border-neutral-100 border-t-transparent rounded-full animate-spin"></div>
             </div>
         )
     }
@@ -112,13 +142,20 @@ export default function FSRSStatsPage() {
         return null
     }
 
-    const pieData = cardStates
-        ? [
-            { name: "Learning", value: cardStates.learning, color: "#3b82f6" },
-            { name: "Review", value: cardStates.review, color: "#10b981" },
-            { name: "Relearning", value: cardStates.relearning, color: "#f59e0b" },
-        ]
-        : []
+    // Calculate workload forecast from upcoming sessions
+    const workloadData = upcomingSessions.slice(0, 7).map(session => ({
+        date: format(parseISO(session.session_date), "EEE"),
+        reviews: session.review_target,
+        new: session.new_target,
+        total: session.review_target + session.new_target
+    }))
+
+    // Card state data for bar chart (monochrome)
+    const stateData = cardStates ? [
+        { name: "Learning", value: cardStates.learning, fill: "#a3a3a3" },
+        { name: "Review", value: cardStates.review, fill: "#525252" },
+        { name: "Relearning", value: cardStates.relearning, fill: "#262626" },
+    ] : []
 
     return (
         <SidebarProvider>
@@ -145,191 +182,315 @@ export default function FSRSStatsPage() {
                 <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                     <div className="mx-auto w-full max-w-6xl space-y-6">
                         {/* Header */}
-                        <div>
-                            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-2">
-                                Learning Statistics
-                            </h1>
-                            <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                                Track your progress, consistency, and optimization.
-                            </p>
+                        <div className="flex items-end justify-between">
+                            <div>
+                                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-2">
+                                    Learning Statistics
+                                </h1>
+                                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                                    Track progress, exam readiness, and optimize your study schedule.
+                                </p>
+                            </div>
+                            {activeExamsCount > 0 && (
+                                <div className="text-right">
+                                    <div className="text-sm text-neutral-500">Active Exam Plans</div>
+                                    <div className="text-2xl font-semibold">{activeExamsCount}</div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Top Stats Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <Card className="p-4 border border-black/5 dark:border-white/5 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm shadow-sm">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
-                                        <BookOpen className="w-5 h-5" />
+                        {/* Top Stats Row - Monochrome */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            <Card className="border-neutral-200 dark:border-neutral-800">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <BookOpen className="w-4 h-4 text-neutral-500" />
+                                        <span className="text-xs text-neutral-500 uppercase tracking-wider">Cards</span>
                                     </div>
-                                    <div>
-                                        <div className="text-sm text-neutral-500 dark:text-neutral-400">Total Cards</div>
-                                        <div className="text-2xl font-bold">{stats?.totalCards || 0}</div>
-                                    </div>
-                                </div>
+                                    <div className="text-2xl font-bold">{stats?.totalCards || 0}</div>
+                                    <div className="text-xs text-neutral-400 mt-1">{stats?.totalDecks || 0} decks</div>
+                                </CardContent>
                             </Card>
-                            <Card className="p-4 border border-black/5 dark:border-white/5 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm shadow-sm">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg">
-                                        <Clock className="w-5 h-5" />
+
+                            <Card className="border-neutral-200 dark:border-neutral-800">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Clock className="w-4 h-4 text-neutral-500" />
+                                        <span className="text-xs text-neutral-500 uppercase tracking-wider">Due Today</span>
                                     </div>
-                                    <div>
-                                        <div className="text-sm text-neutral-500 dark:text-neutral-400">Due Today</div>
-                                        <div className="text-2xl font-bold">{stats?.cardsDueToday || 0}</div>
-                                    </div>
-                                </div>
+                                    <div className="text-2xl font-bold">{stats?.cardsDueToday || 0}</div>
+                                    <div className="text-xs text-neutral-400 mt-1">need review</div>
+                                </CardContent>
                             </Card>
-                            <Card className="p-4 border border-black/5 dark:border-white/5 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm shadow-sm">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
-                                        <Target className="w-5 h-5" />
+
+                            <Card className="border-neutral-200 dark:border-neutral-800">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Brain className="w-4 h-4 text-neutral-500" />
+                                        <span className="text-xs text-neutral-500 uppercase tracking-wider">Retention</span>
                                     </div>
-                                    <div>
-                                        <div className="text-sm text-neutral-500 dark:text-neutral-400">Retention</div>
-                                        <div className="text-2xl font-bold">{((stats?.averageRetentionRate || 0) * 100).toFixed(0)}%</div>
-                                    </div>
-                                </div>
+                                    <div className="text-2xl font-bold">{((stats?.averageRetentionRate || 0) * 100).toFixed(0)}%</div>
+                                    <div className="text-xs text-neutral-400 mt-1">avg recall</div>
+                                </CardContent>
                             </Card>
-                            <Card className="p-4 border border-black/5 dark:border-white/5 bg-white/50 dark:bg-neutral-900/50 backdrop-blur-sm shadow-sm">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-lg">
-                                        <Flame className="w-5 h-5" />
+
+                            <Card className="border-neutral-200 dark:border-neutral-800">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <TrendingUp className="w-4 h-4 text-neutral-500" />
+                                        <span className="text-xs text-neutral-500 uppercase tracking-wider">Reviews</span>
                                     </div>
-                                    <div>
-                                        <div className="text-sm text-neutral-500 dark:text-neutral-400">Streak</div>
-                                        <div className="text-2xl font-bold">{streak?.currentStreak || 0} <span className="text-xs font-normal text-neutral-400">days</span></div>
+                                    <div className="text-2xl font-bold">{stats?.totalReviews?.toLocaleString() || 0}</div>
+                                    <div className="text-xs text-neutral-400 mt-1">total</div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border-neutral-200 dark:border-neutral-800">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Flame className="w-4 h-4 text-neutral-500" />
+                                        <span className="text-xs text-neutral-500 uppercase tracking-wider">Streak</span>
                                     </div>
-                                </div>
+                                    <div className="text-2xl font-bold">{streak?.currentStreak || 0}</div>
+                                    <div className="text-xs text-neutral-400 mt-1">days</div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border-neutral-200 dark:border-neutral-800">
+                                <CardContent className="p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <GraduationCap className="w-4 h-4 text-neutral-500" />
+                                        <span className="text-xs text-neutral-500 uppercase tracking-wider">Sessions</span>
+                                    </div>
+                                    <div className="text-2xl font-bold">{upcomingSessions.length}</div>
+                                    <div className="text-xs text-neutral-400 mt-1">upcoming</div>
+                                </CardContent>
                             </Card>
                         </div>
 
-                        {/* Heatmap Section */}
-                        <Card className="p-6 border border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shadow-sm">
-                            <div className="flex items-center gap-2 mb-6">
-                                <Calendar className="w-5 h-5 text-neutral-500" />
-                                <h2 className="text-lg font-semibold">Activity Map</h2>
-                            </div>
-                            <ActivityHeatmap data={heatmapData} />
-                            <div className="mt-4 flex gap-6 text-sm text-neutral-500">
-                                <div>Current Streak: <span className="font-semibold text-neutral-900 dark:text-neutral-100">{streak?.currentStreak} days</span></div>
-                                <div>Longest Streak: <span className="font-semibold text-neutral-900 dark:text-neutral-100">{streak?.longestStreak} days</span></div>
-                            </div>
-                        </Card>
+                        {/* Main Content Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Left Column - Activity & Heatmap */}
+                            <div className="lg:col-span-2 space-y-6">
+                                {/* Activity Heatmap */}
+                                <Card className="border-neutral-200 dark:border-neutral-800">
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="w-4 h-4 text-neutral-500" />
+                                            <CardTitle className="text-base font-medium">Activity Map</CardTitle>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ActivityHeatmap data={heatmapData} />
+                                        <div className="mt-4 flex gap-6 text-sm">
+                                            <div>
+                                                <span className="text-neutral-500">Current:</span>{" "}
+                                                <span className="font-medium">{streak?.currentStreak} days</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-neutral-500">Longest:</span>{" "}
+                                                <span className="font-medium">{streak?.longestStreak} days</span>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
 
-                        {/* Charts Row */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Learning Curve */}
-                            <Card className="p-6 border border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shadow-sm">
-                                <div className="flex items-center justify-between mb-6">
-                                    <div className="flex items-center gap-2">
-                                        <BarChart3 className="w-5 h-5 text-neutral-500" />
-                                        <h2 className="text-lg font-semibold">Learning Curve</h2>
-                                    </div>
-                                    <select
-                                        value={days}
-                                        onChange={(e) => setDays(Number(e.target.value))}
-                                        className="text-xs font-medium border border-neutral-200 dark:border-neutral-800 rounded-lg px-2 py-1 bg-neutral-50 dark:bg-neutral-900 outline-none focus:ring-2 focus:ring-black/5"
-                                    >
-                                        <option value={7}>Last 7 days</option>
-                                        <option value={30}>Last 30 days</option>
-                                        <option value={90}>Last 90 days</option>
-                                    </select>
-                                </div>
-                                <ResponsiveContainer width="100%" height={250}>
-                                    <LineChart data={learningCurve}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5E5" opacity={0.5} />
-                                        <XAxis
-                                            dataKey="date"
-                                            tick={{ fontSize: 10, fill: '#888' }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                            tickMargin={10}
-                                            tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                        />
-                                        <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
-                                        <Tooltip
-                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                            labelStyle={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}
-                                        />
-                                        <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                                        <Line type="monotone" dataKey="reviews" stroke="#3b82f6" strokeWidth={2} dot={false} name="Reviews" />
-                                        <Line type="monotone" dataKey="newCards" stroke="#10b981" strokeWidth={2} dot={false} name="New Cards" />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </Card>
+                                {/* Learning Curve */}
+                                <Card className="border-neutral-200 dark:border-neutral-800">
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <BarChart3 className="w-4 h-4 text-neutral-500" />
+                                                <CardTitle className="text-base font-medium">Learning Curve</CardTitle>
+                                            </div>
+                                            <select
+                                                value={days}
+                                                onChange={(e) => setDays(Number(e.target.value))}
+                                                className="text-xs border border-neutral-200 dark:border-neutral-800 rounded px-2 py-1 bg-transparent"
+                                            >
+                                                <option value={7}>7 days</option>
+                                                <option value={30}>30 days</option>
+                                                <option value={90}>90 days</option>
+                                            </select>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="h-[200px]">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={learningCurve}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e5e5" />
+                                                    <XAxis
+                                                        dataKey="date"
+                                                        tick={{ fontSize: 10 }}
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                        tickFormatter={(value) => format(new Date(value), "MMM d")}
+                                                    />
+                                                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                    <Tooltip
+                                                        contentStyle={{ borderRadius: '6px', border: '1px solid #e5e5e5', fontSize: '12px' }}
+                                                    />
+                                                    <Line type="monotone" dataKey="reviews" stroke="#525252" strokeWidth={2} dot={false} name="Reviews" />
+                                                    <Line type="monotone" dataKey="newCards" stroke="#a3a3a3" strokeWidth={2} dot={false} name="New" />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </CardContent>
+                                </Card>
 
-                            {/* Card State Distribution */}
-                            <Card className="p-6 border border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shadow-sm">
-                                <h2 className="text-lg font-semibold mb-6">Card States</h2>
-                                <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
-                                    <div className="w-[180px] h-[180px]">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart>
-                                                <Pie
-                                                    data={pieData}
-                                                    cx="50%"
-                                                    cy="50%"
-                                                    innerRadius={60}
-                                                    outerRadius={80}
-                                                    paddingAngle={5}
-                                                    dataKey="value"
-                                                    stroke="none"
-                                                >
-                                                    {pieData.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                                    ))}
-                                                </Pie>
-                                                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                    <div className="flex flex-col gap-3">
-                                        {pieData.map((item) => (
-                                            <div key={item.name} className="flex items-center gap-3">
-                                                <div
-                                                    className="w-3 h-3 rounded-full"
-                                                    style={{ backgroundColor: item.color }}
-                                                ></div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-medium">{item.name}</span>
-                                                    <span className="text-xs text-neutral-500">{item.value} cards</span>
+                                {/* Card States Distribution */}
+                                <Card className="border-neutral-200 dark:border-neutral-800">
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <Layers className="w-4 h-4 text-neutral-500" />
+                                            <CardTitle className="text-base font-medium">Card States</CardTitle>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="h-[180px]">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={stateData} layout="vertical">
+                                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e5e5" />
+                                                    <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                    <YAxis
+                                                        dataKey="name"
+                                                        type="category"
+                                                        tick={{ fontSize: 11 }}
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                        width={70}
+                                                    />
+                                                    <Tooltip
+                                                        contentStyle={{ borderRadius: '6px', border: '1px solid #e5e5e5', fontSize: '12px' }}
+                                                        formatter={(value: number) => [`${value} cards`, '']}
+                                                    />
+                                                    <Bar dataKey="value" radius={[0, 4, 4, 0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Right Column - Exam Focus & Settings */}
+                            <div className="space-y-6">
+                                {/* Upcoming Exam Sessions */}
+                                <Card className="border-neutral-200 dark:border-neutral-800">
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <GraduationCap className="w-4 h-4 text-neutral-500" />
+                                            <CardTitle className="text-base font-medium">Upcoming Sessions</CardTitle>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {upcomingSessions.length === 0 ? (
+                                            <div className="text-sm text-neutral-500 text-center py-6">
+                                                No upcoming exam sessions
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {upcomingSessions.slice(0, 5).map((session) => {
+                                                    const daysUntil = differenceInDays(parseISO(session.session_date), new Date())
+                                                    return (
+                                                        <div
+                                                            key={session.id}
+                                                            className="flex items-center justify-between p-3 rounded-lg bg-neutral-50 dark:bg-neutral-900"
+                                                        >
+                                                            <div>
+                                                                <div className="font-medium text-sm">{session.deck_name}</div>
+                                                                <div className="text-xs text-neutral-500 mt-0.5">
+                                                                    {format(parseISO(session.session_date), "MMM d")} · {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil} days`}
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-xs font-medium">
+                                                                    {session.review_target + session.new_target} cards
+                                                                </div>
+                                                                <span className={`
+                                                                    text-[10px] px-1.5 py-0.5 rounded mt-1 inline-block
+                                                                    ${session.focus === 'learning' ? 'bg-neutral-200 dark:bg-neutral-700' : ''}
+                                                                    ${session.focus === 'maintenance' ? 'bg-neutral-300 dark:bg-neutral-600' : ''}
+                                                                    ${session.focus === 'retrievability' ? 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-black' : ''}
+                                                                `}>
+                                                                    {session.focus}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                                {upcomingSessions.length > 5 && (
+                                                    <Button variant="ghost" size="sm" className="w-full text-xs" asChild>
+                                                        <Link href="/tasks">View all {upcomingSessions.length} sessions</Link>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                {/* Workload Forecast */}
+                                {workloadData.length > 0 && (
+                                    <Card className="border-neutral-200 dark:border-neutral-800">
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Target className="w-4 h-4 text-neutral-500" />
+                                                <CardTitle className="text-base font-medium">7-Day Forecast</CardTitle>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="h-[120px]">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={workloadData}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e5e5" />
+                                                        <XAxis
+                                                            dataKey="date"
+                                                            tick={{ fontSize: 10 }}
+                                                            axisLine={false}
+                                                            tickLine={false}
+                                                        />
+                                                        <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                                                        <Tooltip
+                                                            contentStyle={{ borderRadius: '6px', border: '1px solid #e5e5e5', fontSize: '12px' }}
+                                                        />
+                                                        <Bar dataKey="reviews" stackId="a" fill="#525252" />
+                                                        <Bar dataKey="new" stackId="a" fill="#a3a3a3" />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                            <div className="flex gap-4 mt-3 text-xs">
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="w-2 h-2 rounded-full bg-neutral-600"></div>
+                                                    <span className="text-neutral-500">Reviews</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="w-2 h-2 rounded-full bg-neutral-400"></div>
+                                                    <span className="text-neutral-500">New</span>
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </Card>
+                                        </CardContent>
+                                    </Card>
+                                )}
 
-                            {/* Time Spent Chart */}
-                            <Card className="p-6 border border-black/5 dark:border-white/5 bg-white dark:bg-neutral-900 shadow-sm col-span-1 lg:col-span-2">
-                                <h2 className="text-lg font-semibold mb-6">Time Spent by Subject</h2>
-                                <div className="h-[250px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={subjectDurations.map(d => ({ ...d, minutes: Math.round(d.duration_seconds / 60) }))}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5E5" opacity={0.5} />
-                                            <XAxis dataKey="subject_name" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} tickMargin={10} />
-                                            <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
-                                            <Tooltip
-                                                formatter={(value: number) => [`${value} mins`, 'Time']}
-                                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                            />
-                                            <Line type="monotone" dataKey="minutes" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4, fill: '#8b5cf6' }} name="Time (mins)" />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </Card>
+                                {/* FSRS Settings */}
+                                <Card className="border-neutral-200 dark:border-neutral-800">
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <Brain className="w-4 h-4 text-neutral-500" />
+                                            <CardTitle className="text-base font-medium">FSRS Settings</CardTitle>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <p className="text-xs text-neutral-500 mb-4">
+                                            Customize the spaced repetition algorithm parameters.
+                                        </p>
+                                        <FSRSControls
+                                            params={fsrsParams}
+                                            onParamsChange={handleSaveFsrsParams}
+                                        />
+                                    </CardContent>
+                                </Card>
+                            </div>
                         </div>
-
-                        {/* FSRS Settings Panel */}
-                        <Card className="p-6 border border-black/10 dark:border-white/10">
-                            <h2 className="text-lg font-semibold mb-2">FSRS Settings</h2>
-                            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
-                                Customize the FSRS spaced repetition algorithm parameters. These settings apply globally to all your study sessions.
-                            </p>
-                            <FSRSControls
-                                params={fsrsParams}
-                                onParamsChange={handleSaveFsrsParams}
-                            />
-                        </Card>
                     </div>
                 </div>
             </SidebarInset>

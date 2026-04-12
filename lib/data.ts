@@ -251,6 +251,7 @@ export async function getDeck(supabase: SupabaseClient, deckId: number, userId: 
         .from("cards")
         .select("*")
         .eq("deck_id", deckId)
+        .limit(10000)
 
       if (cardsError) {
         console.error(`Error fetching cards for deck ${deckId} (user ${userId}):`, cardsError)
@@ -270,6 +271,7 @@ export async function getDeck(supabase: SupabaseClient, deckId: number, userId: 
               .select("*")
               .in("card_id", cardIds)
               .eq("user_id", userId)
+              .limit(10000)
 
             if (progressError) {
               console.warn(`Could not fetch progress data for deck ${deckId}:`, progressError)
@@ -947,7 +949,8 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
       .select("*, decks!inner(exclude_from_srs)")
       .eq("deck_id", deckId)
       .eq("exclude_from_srs", false) // Only get cards that are NOT excluded from SRS
-      .eq("decks.exclude_from_srs", false); // And deck is not excluded
+      .eq("decks.exclude_from_srs", false) // And deck is not excluded
+      .limit(10000);
 
     if (cardsError) {
       console.error(`Error fetching cards for deck ${deckId} (user ${user.id}):`, cardsError);
@@ -965,7 +968,8 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
       .from("card_progress")
       .select("*")
       .eq("user_id", user.id)
-      .in("card_id", cardIds);
+      .in("card_id", cardIds)
+      .limit(10000);
 
     if (progressError) {
       console.error(`Error fetching card progress for user ${user.id} and deck ${deckId}:`, progressError);

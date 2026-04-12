@@ -11,12 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { Loader2, Plus, Trash2, Link as LinkIcon, ChevronsUpDown, Check, Pencil } from "lucide-react"
+import { Loader2, Plus, Trash2, Link as LinkIcon, ChevronsUpDown, Check, Pencil, GraduationCap } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { isOnline, saveTasksMeta, loadTasksMeta, saveNotesMeta, loadNotesMeta, TaskMeta } from "@/lib/offline"
+import { NotificationSettings } from "@/components/notification-settings"
+import { getUpcomingExamSessions, type ExamPlanSession } from "@/lib/exam-data"
 
 // Notes layout components for consistent shell
 import { AppSidebar } from "@/components/notes/app-sidebar"
@@ -57,6 +59,7 @@ export default function TasksPage() {
 
   const [loading, setLoading] = React.useState(false)
   const [tasks, setTasks] = React.useState<HomeworkRow[]>([])
+  const [upcomingSessions, setUpcomingSessions] = React.useState<(ExamPlanSession & { deck_name: string })[]>([])
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(undefined)
 
   // New task form
@@ -101,6 +104,10 @@ export default function TasksPage() {
   const fetchTasks = React.useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
+
+    // Fetch upcoming exam sessions
+    const sessions = await getUpcomingExamSessions(supabase, user.id, 7)
+    setUpcomingSessions(sessions)
     if (!isOnline()) {
       try {
         const cached = await loadTasksMeta(user.id)
@@ -454,6 +461,44 @@ export default function TasksPage() {
                         {selectedDate ? <span>{format(selectedDate, "dd/MM/yy")}</span> : null}
                       </div>
                     </div>
+
+                    {/* Notification Settings */}
+                    <div className="mt-4 pt-4 border-t">
+                      <NotificationSettings />
+                    </div>
+
+                    {/* Upcoming Exam Sessions */}
+                    {upcomingSessions.length > 0 && (
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <GraduationCap className="h-4 w-4" />
+                          Upcoming Sessions
+                        </div>
+                        <div className="space-y-2">
+                          {upcomingSessions.slice(0, 3).map((session) => (
+                            <div
+                              key={session.id}
+                              className="text-xs p-2 rounded bg-neutral-50 dark:bg-neutral-900"
+                            >
+                              <div className="font-medium">{session.deck_name}</div>
+                              <div className="text-muted-foreground mt-0.5">
+                                {format(new Date(session.session_date), "MMM d")} · {session.review_target + session.new_target} cards
+                              </div>
+                              <div className="flex gap-1 mt-1">
+                                <span className={cn(
+                                  "px-1 py-0.5 rounded text-[10px]",
+                                  session.focus === 'learning' && "bg-neutral-200 dark:bg-neutral-700",
+                                  session.focus === 'maintenance' && "bg-neutral-300 dark:bg-neutral-600",
+                                  session.focus === 'retrievability' && "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-black"
+                                )}>
+                                  {session.focus}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -593,7 +638,12 @@ export default function TasksPage() {
                       )}
                       <div className="divide-y border-x border-t rounded-t-md">
                         {sortedTasks.map((t, index) => {
-                          const urlGuess = taskExplicitOrGuessedLink(t)
+                          // Check if this is an exam session task
+                          const isExamSession = t.metadata?.type === 'exam_session'
+                          const examMeta = isExamSession ? t.metadata : null
+                          const urlGuess = isExamSession
+                            ? `/deck/${examMeta?.deckId}/study`
+                            : taskExplicitOrGuessedLink(t)
                           const dueStatus = !t.done ? getDueStatus(t) : null
                           const dueLabel = t.due_date ? format(new Date(t.due_date), "MMM d, h:mm a") : "No due date"
                           const dueBadgeCls = !t.due_date
@@ -624,7 +674,14 @@ export default function TasksPage() {
                             )}>
                               <Checkbox checked={!!t.done} onCheckedChange={(v) => updateDone(t.id, !!v)} />
                               <div className="flex-1 min-w-0">
-                                <div className={cn("text-sm font-medium", t.done ? "line-through text-muted-foreground" : "")}>{t.subject || "Homework"}</div>
+                                <div className={cn("text-sm font-medium", t.done ? "line-through text-muted-foreground" : "")}>
+                                  {t.subject || "Homework"}
+                                  {isExamSession && (
+                                    <span className="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-neutral-800 text-white dark:bg-neutral-200 dark:text-black">
+                                      Exam Session
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                                   <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", dueBadgeCls)}>
                                     {!t.done && t.due_date && <Bell className="w-3 h-3 mr-1" />}
@@ -634,6 +691,24 @@ export default function TasksPage() {
                                     <span className={cn("inline-flex items-center rounded px-1.5 py-0.5", priorityCls)}>
                                       {priorityLabel} priority
                                     </span>
+                                  )}
+                                  {isExamSession && examMeta && (
+                                    <>
+                                      <span className="inline-flex items-center rounded px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-800">
+                                        {examMeta.reviewTarget} reviews
+                                      </span>
+                                      <span className="inline-flex items-center rounded px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-800">
+                                        {examMeta.newTarget} new
+                                      </span>
+                                      <span className={cn(
+                                        "inline-flex items-center rounded px-1.5 py-0.5",
+                                        examMeta.focus === 'learning' && "bg-neutral-200 dark:bg-neutral-700",
+                                        examMeta.focus === 'maintenance' && "bg-neutral-300 dark:bg-neutral-600",
+                                        examMeta.focus === 'retrievability' && "bg-neutral-800 text-white dark:bg-neutral-200 dark:text-black"
+                                      )}>
+                                        {examMeta.focus}
+                                      </span>
+                                    </>
                                   )}
                                 </div>
                               </div>

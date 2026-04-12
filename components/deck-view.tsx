@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Card as UICard, CardContent } from "@/components/ui/card"
-import { ArrowLeft, Play, Plus, Edit, Trophy, BookText, Download } from "lucide-react"
+import { ArrowLeft, Play, Plus, Edit, Trophy, BookText, Download, Calendar, Target } from "lucide-react"
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { useDecks } from "@/context/deck-context"
@@ -18,6 +18,8 @@ import { SpacedRepetitionStats } from "@/components/spaced-repetition-stats"
 import { getCachedExamData } from "@/lib/exam-cache"
 import type { Card } from "@/lib/supabase"
 import { formatDate } from "@/lib/date-utils"
+import { ScheduleExamModal } from "@/components/schedule-exam-modal"
+import { ExamPlanSummary } from "@/components/exam-plan-summary"
 
 interface DeckViewProps {
   deckId: number
@@ -59,6 +61,7 @@ export function DeckView({ deckId }: DeckViewProps) {
   }, [isSpacedRepetitionEnabled, deckId, getDueCards])
 
   const [hasInProgressExam, setHasInProgressExam] = useState(false)
+  const [isScheduleExamOpen, setIsScheduleExamOpen] = useState(false)
 
   // Check for in-progress exam
   useEffect(() => {
@@ -67,6 +70,12 @@ export function DeckView({ deckId }: DeckViewProps) {
       setHasInProgressExam(!!cachedExam)
     }
   }, [deckId])
+
+  const handleExamScheduled = () => {
+    setIsScheduleExamOpen(false)
+    // Force refresh the deck data to show updated state
+    window.location.reload()
+  }
 
   // Export handler with customizable options
   const handleExport = () => {
@@ -223,6 +232,10 @@ export function DeckView({ deckId }: DeckViewProps) {
             {hasInProgressExam ? "Resume Exam" : "Exam Mode"}
           </Link>
         </Button>
+        <Button variant="outline" onClick={() => setIsScheduleExamOpen(true)}>
+          <Calendar className="h-4 w-4 mr-2" />
+          Schedule Exam
+        </Button>
         <Button variant="outline" onClick={() => setIsCreateCardOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Card
@@ -245,12 +258,19 @@ export function DeckView({ deckId }: DeckViewProps) {
         </Button>
       </div>
 
-      {/* Spaced Repetition Stats */}
-      {isSpacedRepetitionEnabled && (
-        <div className="max-w-sm">
-          <SpacedRepetitionStats deckId={deckId} />
-        </div>
-      )}
+      {/* Exam Plan Summary & Spaced Repetition Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ExamPlanSummary
+          deckId={deckId}
+          cards={deck.cards || []}
+          onScheduleNew={() => setIsScheduleExamOpen(true)}
+        />
+        {isSpacedRepetitionEnabled && (
+          <div className="max-w-sm">
+            <SpacedRepetitionStats deckId={deckId} />
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {deck.cards?.map((card) => {
@@ -390,6 +410,17 @@ export function DeckView({ deckId }: DeckViewProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Schedule Exam Modal */}
+      {deck && (
+        <ScheduleExamModal
+          open={isScheduleExamOpen}
+          onOpenChange={setIsScheduleExamOpen}
+          deck={deck}
+          cards={deck.cards || []}
+          onScheduled={handleExamScheduled}
+        />
+      )}
     </div>
   )
 }
