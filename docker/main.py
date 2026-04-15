@@ -14,19 +14,22 @@ from urllib.parse import parse_qs, urlparse
 
 import groq
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 from supabase import Client, create_client
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
+load_dotenv()  # Load environment variables from .env if it exists
+
 IMAP_HOST = os.environ.get("IMAP_HOST", "imap.gmail.com")
 IMAP_PORT = int(os.environ.get("IMAP_PORT", 993))
-EMAIL_ADDRESS = "samthelegend68@gmail.com"
-EMAIL_PASSWORD = "lmka dwwl rzdp eeke"
-GROQ_API_KEY = "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"
-SUPABASE_URL = "https://jouowhbhiuuewfwpntex.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvdW93aGJoaXV1ZXdmd3BudGV4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Njk3NDA4MiwiZXhwIjoyMDYyNTUwMDgyfQ.Lg4h6dLSex0jtGVOZ3IKGE4yGffGZwDvFI20mFQCDwg"
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 PORT = int(os.environ.get("PORT", 8080))
@@ -38,7 +41,7 @@ _pipeline_lock = threading.Lock()
 
 LOG_PATH = os.environ.get("LOG_PATH", "app.log")
 print(f"LOG_PATH={LOG_PATH}")
-print(f"GROQ_API_KEY={GROQ_API_KEY}, GROQ_MODEL={GROQ_MODEL}")
+print(f"GROQ_API_KEY={'***' if GROQ_API_KEY else 'None'}, GROQ_MODEL={GROQ_MODEL}")
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
