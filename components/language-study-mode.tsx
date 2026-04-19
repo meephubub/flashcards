@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { LanguageCard } from "@/components/language-card";
-import { getSentenceEmbedding, cosineSimilarity, spellcheckAnswer, preloadModel, getModelInfo } from "@/lib/ai/xenova-similarity.client";
+import { getSentenceEmbedding, cosineSimilarity, spellcheckAnswer, preloadModel, getModelInfo, getBestSimilarity, normalizeSpanish } from "@/lib/ai/xenova-similarity.client";
 import { useDecks } from "@/context/deck-context";
 import { useSettings } from '@/context/settings-context';
 import { ArrowLeft, ArrowRight, RotateCw, CheckCircle, XCircle } from 'lucide-react';
@@ -58,8 +58,19 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
   const { width, height } = useWindowSize(); // For confetti
   const SIMILARITY_THRESHOLD = settings.studySettings.languageSimilarityThreshold ?? 0.75;
   const deck = getDeck(deckId);
+  
+  // Track the deck ID to detect actual deck changes vs just re-fetches
+  const deckIdRef = useRef<number | null>(null);
+  const selectAndSetNextCardRef = useRef<((currentCardsList: StudyCard[], previousCardId: string | number | null, answeredCount?: number) => void) | null>(null);
+  const resetCardStateRef = useRef<(() => void) | null>(null);
 
   const [cards, setCards] = useState<StudyCard[]>([]); // Holds all unique cards for the session with their state
+  const cardsRef = useRef<StudyCard[]>([]); // Ref to always access latest cards without closure issues
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    cardsRef.current = cards;
+  }, [cards]);
   const [currentCardId, setCurrentCardId] = useState<string | number | null>(null);
   const [userAnswer, setUserAnswer] = useState<string | null>(null);
   const [similarityScore, setSimilarityScore] = useState<number | null>(null);
@@ -126,6 +137,9 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
 
   // Track recently seen cards to avoid repetition
   const recentlySeenCards = useRef<(string | number)[]>([]);
+  
+  // Refs to avoid stale closures in setTimeout
+  const similarityScoreRef = useRef<number | null>(null);
   
   const selectAndSetNextCard = useCallback((currentCardsList: StudyCard[], previousCardId: string | number | null, answeredCount?: number) => {
     if (currentCardsList.length === 0) {
@@ -237,7 +251,14 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
 
     // We no longer update the progress bar here, as it's now handled in handleAnswerSubmit
     // This prevents the progress bar from being updated twice and potentially resetting
-  }, [setSessionComplete, setCurrentCardId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - uses refs and functional updates to avoid stale closures
+
+  // Keep callback refs in sync - must be after selectAndSetNextCard is defined
+  useEffect(() => {
+    selectAndSetNextCardRef.current = selectAndSetNextCard;
+    resetCardStateRef.current = resetCardState;
+  }, [selectAndSetNextCard, resetCardState]);
 
   // This function is now only used for manual navigation (e.g., skip button)
   // It's no longer called automatically after answering a question
@@ -259,46 +280,55 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
     }
   }, [resetCardState, questionsAnsweredThisSession, settings.studySettings.cardsPerSession, cards, currentCard, selectAndSetNextCard, setSessionComplete]);
 
+  // Initialize session when deck changes (by ID, not just reference)
   useEffect(() => {
-    if (deck) {
-      const allCardsFromDeck = deck.cards as Flashcard[];
-      const sessionSize = settings.studySettings.cardsPerSession || allCardsFromDeck.length;
-      
-      // Shuffle the cards first to ensure a random initial order
-      let shuffledCards = shuffleArray([...allCardsFromDeck]);
-      
-      // Take cards up to the session size
-      let initialSessionCardsRaw = shuffledCards.slice(0, sessionSize);
-
-      const initialStudyCards: StudyCard[] = initialSessionCardsRaw.map(card => ({
-        ...card,
-        incorrectAttempts: 0,
-        consecutiveCorrectAttempts: 0,
-      }));
-      setCards(initialStudyCards);
-      
-      // Reset the recently seen cards list
-      recentlySeenCards.current = [];
-      
-      // Initialize to 1 since we're showing the first card
-      setQuestionsAnsweredThisSession(1);
-      setCorrectAnswers(0);
-      setCurrentStreak(0);
-      setLongestSessionStreak(0);
-      resetCardState();
-
-      if (initialStudyCards.length > 0) {
-        // First, set the progress bar
-        setStudyProgress(1 / (sessionSize || initialStudyCards.length) * 100);
-        // Then select the first card
-        selectAndSetNextCard(initialStudyCards, null);
-        setSessionComplete(false);
-      } else {
-        setSessionComplete(true);
-        setStudyProgress(0);
-      }
+    // Only reinitialize if this is a different deck ID
+    if (!deck || deckIdRef.current === deckId) {
+      return;
     }
-  }, [deck, settings.studySettings.cardsPerSession, selectAndSetNextCard, resetCardState]);
+    
+    // Update the tracked deck ID
+    deckIdRef.current = deckId;
+    
+    const allCardsFromDeck = deck.cards as Flashcard[];
+    const sessionSize = settings.studySettings.cardsPerSession || allCardsFromDeck.length;
+    
+    // Shuffle the cards first to ensure a random initial order
+    let shuffledCards = shuffleArray([...allCardsFromDeck]);
+    
+    // Take cards up to the session size
+    let initialSessionCardsRaw = shuffledCards.slice(0, sessionSize);
+
+    const initialStudyCards: StudyCard[] = initialSessionCardsRaw.map(card => ({
+      ...card,
+      incorrectAttempts: 0,
+      consecutiveCorrectAttempts: 0,
+    }));
+    setCards(initialStudyCards);
+    
+    // Reset the recently seen cards list
+    recentlySeenCards.current = [];
+    
+    // Initialize to 1 since we're showing the first card
+    setQuestionsAnsweredThisSession(1);
+    setCorrectAnswers(0);
+    setCurrentStreak(0);
+    setLongestSessionStreak(0);
+    resetCardStateRef.current?.();
+
+    if (initialStudyCards.length > 0) {
+      // First, set the progress bar
+      setStudyProgress(1 / (sessionSize || initialStudyCards.length) * 100);
+      // Then select the first card
+      selectAndSetNextCardRef.current?.(initialStudyCards, null);
+      setSessionComplete(false);
+    } else {
+      setSessionComplete(true);
+      setStudyProgress(0);
+    }
+    // Only depend on deckId and cardsPerSession, not the deck object itself
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deckId, settings.studySettings.cardsPerSession]);
 
 
 
@@ -307,18 +337,24 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
     setIsSubmitting(true);
     setUserAnswer(submittedAnswer);
 
-    // Spellcheck the answer before grading
-    const spellcheckedAnswer = spellcheckAnswer(submittedAnswer, currentCard.back);
+    // Parse multiple valid answers from the card back (e.g., "coche, carro, auto")
+    const validAnswers = currentCard.back.split(/,|;|\/|\|/).map(a => a.trim()).filter(Boolean);
+    
+    // Spellcheck against all valid answers
+    const spellcheckedAnswer = spellcheckAnswer(submittedAnswer, validAnswers);
 
     try {
-      const [answerEmbedding, correctAnswerEmbedding] = await Promise.all([
-        getSentenceEmbedding(spellcheckedAnswer.toLowerCase()),
-        getSentenceEmbedding(currentCard.back.toLowerCase()),
-      ]);
-      const score = cosineSimilarity(answerEmbedding, correctAnswerEmbedding);
+      // Get best similarity score against all valid answers
+      const { score, matchedAnswer, isCorrect: similarityIsCorrect } = await getBestSimilarity(
+        spellcheckedAnswer,
+        validAnswers
+      );
+      
       setSimilarityScore(score);
+      similarityScoreRef.current = score; // Update ref for setTimeout access
 
-      const isCorrect = score >= SIMILARITY_THRESHOLD;
+      // Use the similarity result which has adaptive threshold
+      const isCorrect = similarityIsCorrect;
       setIsAnswerChecked(true);
 
       // SRS Update logic
@@ -370,14 +406,19 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
         }
         toast({
           title: "Correct!",
-          description: `Similarity: ${(score * 100).toFixed(1)}%`,
-          variant: "default", // Changed from "success"
+          description: validAnswers.length > 1 
+            ? `Matched: "${matchedAnswer}" (${(score * 100).toFixed(1)}%)`
+            : `Similarity: ${(score * 100).toFixed(1)}%`,
+          variant: "default",
         });
       } else {
         setCurrentStreak(0); // Reset streak on incorrect answer
+        const answerDisplay = validAnswers.length > 1 
+          ? `Acceptable answers: ${validAnswers.join(', ')}`
+          : `Correct answer: ${currentCard.back}`;
         toast({
           title: "Try again!",
-          description: `Similarity: ${(score * 100).toFixed(1)}%. Correct answer: ${currentCard.back}`,
+          description: `Similarity: ${(score * 100).toFixed(1)}%. ${answerDisplay}`,
           variant: "destructive",
         });
       }
@@ -413,17 +454,15 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
       const questionToUse = nextQuestionNumber;
       
       // Determine delay: 0.5s for 100% similarity, 2.5s otherwise
-      const delay = similarityScore === 1 ? 500 : 2500;
+      // Use ref to get the latest similarity score (avoid stale closure)
+      const delay = similarityScoreRef.current === 1 ? 500 : 2500;
       const previousCardId = currentCard?.id ?? null;
       setTimeout(() => {
         resetCardState();
-        // Use functional state update to always get latest cards array
-        setCards(currentCards => {
-          if (currentCards.length > 0) {
-            selectAndSetNextCard(currentCards, previousCardId, questionToUse);
-          }
-          return currentCards;
-        });
+        // Use ref to always get the latest cards array (avoid stale closure)
+        if (cardsRef.current.length > 0) {
+          selectAndSetNextCard(cardsRef.current, previousCardId, questionToUse);
+        }
       }, delay); // Dynamic delay based on similarity
       
     } catch (error) {

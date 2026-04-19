@@ -236,39 +236,150 @@ export async function getSentenceEmbedding(
   }
 }
 
-/** Spellcheck a string against a reference string. */
-export function spellcheckAnswer(input: string, reference: string): string {
-  if (!input || !reference) return input;
+/** 
+ * Normalize Spanish text for comparison - handle common variations
+ */
+export function normalizeSpanish(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    // Remove accent marks for more lenient matching
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    // Normalize punctuation
+    .replace(/[¿¡]/g, '')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    // Handle common contractions/possessives
+    .replace(/\bdel\b/g, 'de el')
+    .replace(/\bal\b/g, 'a el');
+}
 
-  const inputLower = input.toLowerCase().trim();
-  const referenceLower = reference.toLowerCase().trim();
-
-  if (inputLower === referenceLower) return input;
-
-  const inputWords = inputLower.split(/\s+/);
-  const referenceWords = referenceLower.split(/\s+/);
-
-  if (Math.abs(inputWords.length - referenceWords.length) > 2) return input;
-
-  const correctedWords = inputWords.map((inputWord) => {
-    let closestWord = inputWord;
-    let minDistance = Infinity;
-    for (const refWord of referenceWords) {
-      const dist = levenshteinDistance(inputWord, refWord);
-      const maxAllowedDistance = Math.max(1, Math.floor(refWord.length / 4));
-      if (dist < minDistance && dist <= maxAllowedDistance) {
-        minDistance = dist;
-        closestWord = refWord;
-      }
-    }
-    return closestWord;
-  });
-
-  const correctedInput = correctedWords.join(' ');
-  if (correctedInput !== inputLower) {
-    console.log(`[spellcheck] Corrected "${inputLower}" to "${correctedInput}"`);
+/**
+ * Check if answer contains key Spanish articles that should match
+ */
+function hasMatchingArticles(input: string, reference: string): boolean {
+  const articles = ['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas'];
+  const inputArticles = articles.filter(a => input.includes(` ${a} `) || input.startsWith(`${a} `));
+  const refArticles = articles.filter(a => reference.includes(` ${a} `) || reference.startsWith(`${a} `));
+  
+  // If reference has articles, input should have at least one matching
+  if (refArticles.length > 0 && inputArticles.length === 0) {
+    return false;
   }
-  return correctedInput;
+  return true;
+}
+
+/** 
+ * Spellcheck a string against a reference string or multiple reference strings.
+ * Returns the best-matched version against all references.
+ */
+export function spellcheckAnswer(input: string, reference: string | string[]): string {
+  if (!input) return input;
+  
+  // Handle multiple valid answers (e.g., "coche, carro, auto")
+  const references = Array.isArray(reference) ? reference : reference.split(/,|;|\/|\|/);
+  const normalizedRefs = references.map(r => normalizeSpanish(r.trim())).filter(Boolean);
+  
+  if (normalizedRefs.length === 0) return input;
+  
+  const inputLower = normalizeSpanish(input);
+  
+  // Check exact match first
+  for (const ref of normalizedRefs) {
+    if (inputLower === ref) return input;
+  }
+  
+  // Try spellchecking against each reference and pick best result
+  let bestResult = input;
+  let bestScore = -1;
+  
+  for (const referenceLower of normalizedRefs) {
+    const inputWords = inputLower.split(/\s+/);
+    const referenceWords = referenceLower.split(/\s+/);
+    
+    // Word count tolerance: allow difference up to 2 words or 30%
+    const wordCountDiff = Math.abs(inputWords.length - referenceWords.length);
+    const wordCountTolerance = Math.max(2, Math.floor(referenceWords.length * 0.3));
+    
+    if (wordCountDiff > wordCountTolerance) continue;
+    
+    const correctedWords = inputWords.map((inputWord) => {
+      let closestWord = inputWord;
+      let minDistance = Infinity;
+      for (const refWord of referenceWords) {
+        const dist = levenshteinDistance(inputWord, refWord);
+        // More lenient for Spanish: allow up to 40% of word length
+        const maxAllowedDistance = Math.max(1, Math.floor(refWord.length * 0.4));
+        if (dist < minDistance && dist <= maxAllowedDistance) {
+          minDistance = dist;
+          closestWord = refWord;
+        }
+      }
+      return closestWord;
+    });
+    
+    const correctedInput = correctedWords.join(' ');
+    // Score based on how many words were corrected
+    const corrections = correctedWords.filter((w, i) => w !== inputWords[i]).length;
+    const score = -corrections; // Fewer corrections = higher score
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestResult = correctedInput === inputLower ? input : correctedInput;
+    }
+  }
+  
+  if (bestResult !== input && bestResult !== normalizeSpanish(input)) {
+    console.log(`[spellcheck] Corrected "${input}" to "${bestResult}"`);
+  }
+  return bestResult;
+}
+
+/**
+ * Get the best similarity score against multiple valid answers
+ */
+export async function getBestSimilarity(
+  userAnswer: string,
+  validAnswers: string[],
+  modelName?: string
+): Promise<{ score: number; matchedAnswer: string; isCorrect: boolean }> {
+  const normalizedUser = normalizeSpanish(userAnswer);
+  const normalizedAnswers = validAnswers.map(a => normalizeSpanish(a.trim())).filter(Boolean);
+  
+  let bestScore = 0;
+  let bestMatch = normalizedAnswers[0] || '';
+  
+  // Get embeddings for all
+  const userEmbedding = await getSentenceEmbedding(normalizedUser, modelName);
+  
+  for (const answer of normalizedAnswers) {
+    const answerEmbedding = await getSentenceEmbedding(answer, modelName);
+    const score = cosineSimilarity(userEmbedding, answerEmbedding);
+    
+    // Bonus for keyword overlap
+    const userWords = new Set(normalizedUser.split(/\s+/));
+    const answerWords = new Set(answer.split(/\s+/));
+    const overlap = [...userWords].filter(w => answerWords.has(w)).length;
+    const overlapBonus = overlap / Math.max(userWords.size, answerWords.size) * 0.1;
+    
+    const finalScore = score + overlapBonus;
+    
+    if (finalScore > bestScore) {
+      bestScore = finalScore;
+      bestMatch = answer;
+    }
+  }
+  
+  // Adaptive threshold based on answer length
+  const wordCount = normalizedUser.split(/\s+/).length;
+  const threshold = wordCount <= 2 ? 0.7 : 0.75;
+  
+  return {
+    score: bestScore,
+    matchedAnswer: bestMatch,
+    isCorrect: bestScore >= threshold
+  };
 }
 
 /** Compute the cosine similarity between two vectors. */
