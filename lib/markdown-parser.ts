@@ -2,6 +2,8 @@ interface ParsedCard {
   id: number
   front: string
   back: string
+  front_img_url?: string | null
+  back_img_url?: string | null
 }
 
 interface ParsedDeck {
@@ -87,6 +89,8 @@ export function parseTabDelimitedToFlashcards(text: string): ParsedDeck {
   // Split the text by lines
   const lines = text.split("\n")
   let cardId = 1
+  let headers: string[] | null = null
+  let headerMap: { [key: string]: number } = {}
 
   // Process each line
   for (let i = 0; i < lines.length; i++) {
@@ -94,23 +98,56 @@ export function parseTabDelimitedToFlashcards(text: string): ParsedDeck {
     if (!line) continue
 
     // Split the line by tabs
-    const [front, back] = line.split("\t").map(part => part.trim())
+    const parts = line.split("\t").map(part => part.trim())
+
+    if (i === 0) {
+      // Check for headers
+      const lowerParts = parts.map(p => p.toLowerCase())
+      const isHeader = lowerParts.some(p => 
+        p === "front" || p === "back" || p === "question" || p === "answer" || 
+        p === "img_url" || p === "image" || p === "front_img_url" || p === "back_img_url"
+      )
+
+      if (isHeader) {
+        headers = lowerParts
+        headers.forEach((h, index) => {
+          headerMap[h] = index
+        })
+        continue
+      } else if (!parts[0].includes("?") && !parts[0].includes(":")) {
+        // Legacy behavior: first line is deck title and description
+        deckName = parts[0] || deckName
+        deckDescription = parts[1] || deckDescription
+        continue
+      }
+    }
+
+    let front = ""
+    let back = ""
+    let front_img_url: string | null = null
+    let back_img_url: string | null = null
+
+    if (headers) {
+      front = parts[headerMap["front"] ?? headerMap["question"] ?? 0] || ""
+      back = parts[headerMap["back"] ?? headerMap["answer"] ?? 1] || ""
+      front_img_url = parts[headerMap["front_img_url"] ?? headerMap["img_url"] ?? headerMap["image"] ?? -1] || null
+      back_img_url = parts[headerMap["back_img_url"] ?? -1] || null
+    } else {
+      front = parts[0] || ""
+      back = parts[1] || ""
+      front_img_url = parts[2] || null
+    }
 
     // Skip if we don't have both front and back
-    if (!front || !back) continue
-
-    // If this is the first line and it looks like a header, use it as the deck name
-    if (i === 0 && !front.includes("?") && !front.includes(":")) {
-      deckName = front
-      deckDescription = back
-      continue
-    }
+    if (!front && !back) continue
 
     // Add the card
     cards.push({
       id: cardId++,
       front,
       back,
+      front_img_url,
+      back_img_url
     })
   }
 
@@ -130,13 +167,11 @@ export function parseCSVToFlashcards(text: string): ParsedDeck {
   // Split the text by lines
   const lines = text.split("\n")
   let cardId = 1
+  let headers: string[] | null = null
+  let headerMap: { [key: string]: number } = {}
 
-  // Process each line
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (!line) continue
-
-    // Parse CSV line properly, handling quoted values
+  // Helper to parse CSV line properly, handling quoted values
+  const parseCSVLine = (line: string): string[] => {
     const parts: string[] = []
     let current = ""
     let inQuotes = false
@@ -145,7 +180,13 @@ export function parseCSVToFlashcards(text: string): ParsedDeck {
       const char = line[j]
       
       if (char === '"') {
-        inQuotes = !inQuotes
+        // Handle escaped quotes (double quotes "")
+        if (inQuotes && line[j + 1] === '"') {
+          current += '"'
+          j++ // Skip the next quote
+        } else {
+          inQuotes = !inQuotes
+        }
       } else if (char === ',' && !inQuotes) {
         parts.push(current.trim())
         current = ""
@@ -153,28 +194,66 @@ export function parseCSVToFlashcards(text: string): ParsedDeck {
         current += char
       }
     }
-    
-    // Add the last part
     parts.push(current.trim())
-    
-    // Remove quotes from parts
-    const [front, back] = parts.map(part => part.replace(/^"|"$/g, "").trim())
+    return parts
+  }
 
-    // Skip if we don't have both front and back
-    if (!front || !back) continue
+  // Process each line
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    const parts = parseCSVLine(line)
 
     if (i === 0) {
-      // First line is deck title and description
-      deckName = front
-      deckDescription = back
-    } else {
-      // All other lines are cards
-      cards.push({
-        id: cardId++,
-        front,
-        back,
-      })
+      // Check for headers
+      const lowerParts = parts.map(p => p.toLowerCase())
+      const isHeader = lowerParts.some(p => 
+        p === "front" || p === "back" || p === "question" || p === "answer" || 
+        p === "img_url" || p === "image" || p === "front_img_url" || p === "back_img_url"
+      )
+
+      if (isHeader) {
+        headers = lowerParts
+        headers.forEach((h, index) => {
+          headerMap[h] = index
+        })
+        continue
+      } else {
+        // First line is deck title and description
+        deckName = parts[0] || deckName
+        deckDescription = parts[1] || deckDescription
+        continue
+      }
     }
+
+    let front = ""
+    let back = ""
+    let front_img_url: string | null = null
+    let back_img_url: string | null = null
+
+    if (headers) {
+      front = parts[headerMap["front"] ?? headerMap["question"] ?? 0] || ""
+      back = parts[headerMap["back"] ?? headerMap["answer"] ?? 1] || ""
+      front_img_url = parts[headerMap["front_img_url"] ?? headerMap["img_url"] ?? headerMap["image"] ?? -1] || null
+      back_img_url = parts[headerMap["back_img_url"] ?? -1] || null
+    } else {
+      front = parts[0] || ""
+      back = parts[1] || ""
+      front_img_url = parts[2] || null
+    }
+
+    // Skip if we don't have both front and back
+    if (!front && !back) continue
+
+    // All other lines are cards
+    cards.push({
+      id: cardId++,
+      front,
+      back,
+      front_img_url: front_img_url || null,
+      back_img_url: back_img_url || null,
+    })
   }
 
   return {
