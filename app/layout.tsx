@@ -42,6 +42,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { CookieBannerWrapper } from "@/components/cookie-banner-wrapper";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -61,15 +63,18 @@ export default function RootLayout({
         {/* PWA init (service worker) */}
         <EnvBannerClient />
         {/* Dev environment banner */}
+
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
+
           <AuthProvider>
             <SettingsProvider>
               <DeckProvider>
+
                 <FolderProvider>
                   {/* Mobile-only palette trigger */}
                   <MobilePaletteButton />
@@ -80,6 +85,7 @@ export default function RootLayout({
                   <SpeedInsights />
                   <Analytics />
                   <PwaInit />
+                  <CookieBannerWrapper />
                 </FolderProvider>
               </DeckProvider>
             </SettingsProvider>

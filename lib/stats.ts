@@ -26,6 +26,15 @@ export interface CardStateDistribution {
     relearning: number
 }
 
+export interface GCSEAnalytics {
+    predictedForgetCount: number
+    forgetPercentage: number
+    weakestTopic: string
+    weakestTopicAccuracy: number
+    examDateStr: string
+}
+
+
 /**
  * Get user statistics for the stats dashboard
  */
@@ -245,6 +254,96 @@ export async function getCardStateDistribution(
             learning: 0,
             review: 0,
             relearning: 0,
+        }
+    }
+}
+/**
+ * Get GCSE specific analytics: forgetfulness prediction and weakest topic
+ */
+export async function getGCSEAnalytics(
+    supabase: SupabaseClient,
+    userId: string,
+    examDate: Date = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Default to 30 days
+): Promise<GCSEAnalytics> {
+    try {
+        const { data: progressRecords } = await supabase
+            .from('card_progress')
+            .select('*, cards(deck_id, decks(tag))')
+            .eq('user_id', userId)
+
+        if (!progressRecords || progressRecords.length === 0) {
+            return {
+                predictedForgetCount: 0,
+                forgetPercentage: 0,
+                weakestTopic: "None",
+                weakestTopicAccuracy: 0,
+                examDateStr: examDate.toLocaleDateString()
+            }
+        }
+
+        const today = new Date()
+        const daysToExam = (examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        
+        let predictedForgetCount = 0
+        const topicStats = new Map<string, { total: number; correct: number }>()
+
+        progressRecords.forEach((record: any) => {
+            // 1. Forgetfulness prediction
+            if (record.fsrs_state) {
+                const stability = record.fsrs_state.stability
+                const lastReviewed = new Date(record.last_reviewed)
+                const elapsedDaysToExam = (examDate.getTime() - lastReviewed.getTime()) / (1000 * 60 * 60 * 24)
+                
+                if (stability > 0) {
+                    const retrievabilityAtExam = Math.pow(0.9, elapsedDaysToExam / stability)
+                    if (retrievabilityAtExam < 0.9) { // Threshold for "likely to forget"
+                        predictedForgetCount++
+                    }
+                }
+            }
+
+            // 2. Topic analytics
+            const tag = record.cards?.decks?.tag || "General"
+            const topic = tag.split('/')[0] // Get top-level tag as topic
+            const stats = topicStats.get(topic) || { total: 0, correct: 0 }
+            
+            stats.total++
+            // Assume "correct" if repetitions > 0 and easeFactor is decent
+            // or just use latest rating if we had logs. 
+            // Here we'll use a heuristic: stability > 5 days = "strong"
+            if ((record.fsrs_state?.stability || 0) > 5) {
+                stats.correct++
+            }
+            
+            topicStats.set(topic, stats)
+        })
+
+        let weakestTopic = "General"
+        let minAccuracy = 1.1
+
+        topicStats.forEach((stats, topic) => {
+            const accuracy = stats.correct / stats.total
+            if (accuracy < minAccuracy) {
+                minAccuracy = accuracy
+                weakestTopic = topic
+            }
+        })
+
+        return {
+            predictedForgetCount,
+            forgetPercentage: Math.round((predictedForgetCount / progressRecords.length) * 100),
+            weakestTopic,
+            weakestTopicAccuracy: Math.round(minAccuracy * 100),
+            examDateStr: examDate.toLocaleDateString()
+        }
+    } catch (error) {
+        console.error('Error fetching GCSE analytics:', error)
+        return {
+            predictedForgetCount: 0,
+            forgetPercentage: 0,
+            weakestTopic: "General",
+            weakestTopicAccuracy: 0,
+            examDateStr: examDate.toLocaleDateString()
         }
     }
 }

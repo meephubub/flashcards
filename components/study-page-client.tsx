@@ -150,14 +150,14 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
-              <div className="ml-auto flex items-center gap-2 pr-1">
+              <div className="ml-auto flex items-center gap-3 pr-1">
                 {progressInfo && (
-                  <div className="text-xs text-neutral-600 border border-black/10 rounded-md px-2 py-1">
-                    Remaining: {progressInfo.remaining}
-                    <span className="mx-1">•</span>
-                    Correct: {progressInfo.correct}
-                    <span className="mx-1">•</span>
-                    Wrong: {progressInfo.wrong}
+                  <div className="flex items-center gap-3 text-xs text-neutral-500 tabular-nums">
+                    <span>{progressInfo.remaining} left</span>
+                    <span className="h-3 w-px bg-black/10" />
+                    <span className="text-neutral-800">{progressInfo.correct} ✓</span>
+                    <span className="h-3 w-px bg-black/10" />
+                    <span className="text-neutral-400">{progressInfo.wrong} ✗</span>
                   </div>
                 )}
                 <Select value={initialSide} onValueChange={(v) => setInitialSide(v as any)}>
@@ -173,16 +173,9 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
               </div>
             </div>
           </header>
-          <div className="flex-1 overflow-auto">
-            <div className="mx-auto w-full max-w-4xl px-4 py-8">
-              <div className="mb-6">
-                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">{deckTitle || `Deck #${deckId}`}</h1>
-              </div>
-              <div className="rounded-lg border border-black/10 shadow-sm">
-                <div className="p-4 md:p-8">
-                  <StudyMode deckId={deckId} onProgressInfo={setProgressInfo} initialSide={initialSide} />
-                </div>
-              </div>
+          <div className="flex-1 overflow-auto flex flex-col">
+            <div className="mx-auto w-full max-w-5xl px-4 py-6 md:py-10 flex-1 flex flex-col justify-center">
+              <StudyMode deckId={deckId} onProgressInfo={setProgressInfo} initialSide={initialSide} />
             </div>
           </div>
         </SidebarInset>

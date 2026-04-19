@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect, Suspense } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { AppSidebar } from "@/components/notes/app-sidebar"
@@ -63,82 +63,78 @@ export default function HomeClient() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-black/5">
-                <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+            <div className="flex items-center justify-center min-h-screen bg-white dark:bg-black">
+                <div className="w-5 h-5 border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100 rounded-full animate-spin"></div>
             </div>
         );
     }
 
     return (
-        <div className="relative flex h-screen bg-[#f5f5f7]">
+        <div className="relative flex h-screen bg-white dark:bg-black">
             {showAuthModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
-                    <div className="w-full max-w-md p-8 mx-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                {isSignUp ? 'Create Account' : 'Welcome Back'}
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/80">
+                    <div className="w-full max-w-sm p-8 mx-4">
+                        <div className="text-center mb-8">
+                            <h2 className="text-lg font-medium tracking-tight text-zinc-900 dark:text-zinc-100">
+                                {isSignUp ? 'Create account' : 'Welcome back'}
                             </h2>
-                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                {isSignUp ? 'Sign up to start creating flashcards' : 'Sign in to access your flashcard decks'}
+                            <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">
+                                {isSignUp ? 'Sign up to start studying' : 'Sign in to continue'}
                             </p>
                         </div>
 
                         {(formError || authError) && (
-                            <div className="p-3 mt-4 text-sm text-red-700 bg-red-100 rounded-md dark:bg-red-200 dark:text-red-800">
+                            <div className="p-3 mb-4 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
                                 {formError || authError}
                             </div>
                         )}
 
-                        <form className="mt-6 space-y-6" onSubmit={handleAuth}>
+                        <form className="space-y-4" onSubmit={handleAuth}>
                             <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    Email address
+                                <label htmlFor="email" className="block text-[11px] uppercase tracking-widest font-bold text-zinc-400 dark:text-zinc-600 mb-2">
+                                    Email
                                 </label>
-                                <div className="mt-1">
-                                    <input
-                                        id="email"
-                                        name="email"
-                                        type="email"
-                                        autoComplete="email"
-                                        required
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-black dark:focus:border-white sm:text-sm"
-                                    />
-                                </div>
+                                <input
+                                    id="email"
+                                    name="email"
+                                    type="email"
+                                    autoComplete="email"
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="block w-full h-10 px-3 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 transition-colors"
+                                />
                             </div>
 
                             <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                                <label htmlFor="password" className="block text-[11px] uppercase tracking-widest font-bold text-zinc-400 dark:text-zinc-600 mb-2">
                                     Password
                                 </label>
-                                <div className="mt-1">
-                                    <input
-                                        id="password"
-                                        name="password"
-                                        type="password"
-                                        autoComplete={isSignUp ? "new-password" : "current-password"}
-                                        required
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-black dark:focus:border-white sm:text-sm"
-                                    />
-                                </div>
+                                <input
+                                    id="password"
+                                    name="password"
+                                    type="password"
+                                    autoComplete={isSignUp ? "new-password" : "current-password"}
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="block w-full h-10 px-3 text-sm border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600 transition-colors"
+                                />
                             </div>
 
                             <button
                                 type="submit"
-                                className="flex w-full justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-black dark:bg-white dark:text-black hover:bg-gray-900 dark:hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black dark:focus:ring-white"
+                                className="flex w-full justify-center h-10 items-center rounded-lg text-sm font-medium text-white bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 transition-colors"
                             >
                                 {isSignUp ? 'Sign up' : 'Sign in'}
                             </button>
                         </form>
 
-                        <p className="mt-4 text-sm text-center text-gray-600 dark:text-gray-300">
+                        <p className="mt-6 text-xs text-center text-zinc-400 dark:text-zinc-600">
                             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
                             <button
                                 onClick={() => setIsSignUp(!isSignUp)}
-                                className="font-medium text-black dark:text-white hover:text-gray-700 dark:hover:text-gray-200"
+                                className="font-medium text-zinc-900 dark:text-zinc-100 hover:underline"
                             >
                                 {isSignUp ? 'Sign in' : 'Sign up'}
                             </button>
@@ -150,14 +146,14 @@ export default function HomeClient() {
             <SidebarProvider>
                 <AppSidebar />
                 <SidebarInset>
-                    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+                    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-zinc-100 dark:border-zinc-900 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2 px-4">
                             <SidebarTrigger className="-ml-1" />
                             <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem className="hidden md:block">
-                                        <BreadcrumbLink href="#">Decks</BreadcrumbLink>
+                                        <BreadcrumbLink href="/">Decks</BreadcrumbLink>
                                     </BreadcrumbItem>
                                     <BreadcrumbSeparator className="hidden md:block" />
                                     <BreadcrumbItem>
@@ -167,8 +163,10 @@ export default function HomeClient() {
                             </Breadcrumb>
                         </div>
                     </header>
-                    <div className={`flex-1 p-6 overflow-auto ${!session ? 'opacity-30 pointer-events-none' : ''}`}>
-                        <DeckGrid />
+                    <div className={`flex-1 p-6 overflow-auto ${!session ? 'opacity-20 pointer-events-none' : ''}`}>
+                        <Suspense fallback={<div className="flex items-center justify-center h-32 text-zinc-400 text-sm">Loading decks…</div>}>
+                            <DeckGrid />
+                        </Suspense>
                     </div>
                 </SidebarInset>
             </SidebarProvider>

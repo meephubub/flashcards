@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, Play, FileUp, Sparkles, X, Clock, Hash } from "lucide-react"
+import { PlusCircle, Play, FileUp, Sparkles, Clock, ChevronRight, Folder } from "lucide-react"
 import { CreateDeckDialog } from "@/components/create-deck-dialog"
 import { ImportMarkdownDialog } from "@/components/import-markdown-dialog"
 import { GenerateFlashcardsDialog } from "@/components/generate-flashcards-dialog"
@@ -11,295 +10,312 @@ import { DeckOptionsMenu } from "@/components/deck-options-menu"
 import { useDecks } from "@/context/deck-context"
 import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { motion } from "framer-motion"
 import { formatDate } from "@/lib/date-utils"
+import { useSearchParams } from "next/navigation"
 
-// Card component with hover effect
-function DeckCard({ deck, index }: { deck: any, index: number }) {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isHovering, setIsHovering] = useState(false);
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setPosition({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    });
-  };
-
+// ── Deck card ──
+function DeckCard({ deck, index }: { deck: any; index: number }) {
   return (
-    <motion.div
-      key={deck.id}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 400, damping: 25, delay: index * 0.05 }}
-      className="h-full"
-    >
-      <div
-        className={`relative h-full rounded-2xl group cursor-pointer overflow-hidden transition-all duration-300 ${isHovering ? 'transform -translate-y-1 scale-[1.02]' : ''}`}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-      >
-        {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/80 to-white/30 dark:from-gray-800/80 dark:to-gray-900/30 rounded-2xl"></div>
+    <Link href={`/deck/${deck.id}`} className="group block">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+        <div className="p-5">
+          <div className="flex justify-between items-start">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate pr-2">
+              {deck.name}
+            </h2>
+            <DeckOptionsMenu deckId={deck.id} />
+          </div>
 
-        {/* Animated highlight effect */}
-        <div
-          className="absolute inset-0 rounded-2xl transition-opacity duration-300 pointer-events-none"
-          style={{
-            opacity: isHovering ? 0.7 : 0,
-            background: isHovering
-              ? `radial-gradient(circle at ${position.x}px ${position.y}px, rgba(255,255,255,0.8) 0%, transparent 60%)`
-              : 'none',
-          }}
-        />
-
-        <Card className="overflow-hidden rounded-2xl bg-white/50 dark:bg-gray-900/50 backdrop-blur-xl h-full flex flex-col shadow-[0_10px_20px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_20px_-15px_rgba(0,0,0,0.3)] border border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300/70 dark:hover:border-gray-700/70 transition-colors">
-          <Link href={`/deck/${deck.id}`} className="flex-1">
-            <CardContent className="p-6 cursor-pointer">
-              <div className="flex justify-between items-start">
-                <h2 className="text-xl font-medium text-gray-900 dark:text-gray-100">{deck.name}</h2>
-                <DeckOptionsMenu deckId={deck.id} />
-              </div>
-              <div className="mt-6 space-y-3 text-sm text-gray-600 dark:text-gray-400">
-                {deck.tag && (
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100/80 text-gray-700 dark:bg-gray-800/80 dark:text-gray-300 backdrop-blur-sm">
-                    {deck.tag}
-                  </span>
-                )}
-                <div className="flex items-center pt-2">
-                  <Hash className="h-4 w-4 mr-2 opacity-60" />
-                  <p>{deck.card_count || 0} cards</p>
-                </div>
-                <div className="flex items-center">
-                  <Clock className="h-4 w-4 mr-2 opacity-60" />
-                  <p>Last studied: {formatDate(deck.last_studied, 'relative')}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Link>
-          <CardFooter className="border-t border-gray-200/30 dark:border-white/10 p-4 flex justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="rounded-full text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-200"
-            >
-              <Link href={`/deck/${deck.id}/edit`}>Edit Cards</Link>
-            </Button>
-            <Button
-              size="sm"
-              asChild
-              className="rounded-full bg-gray-900/90 hover:bg-black text-white dark:bg-white/90 dark:text-black dark:hover:bg-white transition-all duration-200"
-            >
-              <Link href={`/deck/${deck.id}/study`}>
-                <Play className="h-4 w-4 mr-2" />
-                Study
-              </Link>
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-    </motion.div>
-  );
-}
-
-// Create New Deck card component with hover effect
-function CreateNewDeckCard({ onClick, index }: { onClick: () => void, index: number }) {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isHovering, setIsHovering] = useState(false);
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setPosition({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    });
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 400, damping: 25, delay: index * 0.05 }}
-      className="h-full"
-    >
-      <div
-        onClick={onClick}
-        className={`relative h-full rounded-2xl group cursor-pointer overflow-hidden transition-all duration-300 ${isHovering ? 'transform -translate-y-1 scale-[1.02]' : ''}`}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-      >
-        {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-50/90 to-gray-100/70 dark:from-gray-800/90 dark:to-gray-900/70 rounded-2xl"></div>
-
-        {/* Cursor following glow effect */}
-        <div
-          className="absolute inset-0 rounded-2xl transition-opacity duration-300 pointer-events-none"
-          style={{
-            opacity: isHovering ? 0.7 : 0,
-            background: isHovering
-              ? `radial-gradient(circle at ${position.x}px ${position.y}px, rgba(255,255,255,0.8) 0%, transparent 60%)`
-              : 'none',
-          }}
-        />
-
-        <div className="relative h-full rounded-xl bg-gray-50/50 dark:bg-gray-900/50 border border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300 dark:hover:border-gray-700 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-center min-h-[240px] group">
-          <div className="text-center flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-lg bg-gray-200/60 dark:bg-gray-800/60 flex items-center justify-center mb-3 group-hover:bg-gray-300/60 dark:group-hover:bg-gray-700/60 transition-colors duration-200">
-              <PlusCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+          <div className="mt-4 space-y-2">
+            {deck.tag && (
+              <span className="inline-block text-[10px] uppercase tracking-widest font-bold text-zinc-400 dark:text-zinc-600">
+                {deck.tag}
+              </span>
+            )}
+            <div className="flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-500">
+              <span className="tabular-nums">{deck.card_count || 0} cards</span>
+              <span>{formatDate(deck.last_studied, 'relative')}</span>
             </div>
-            <p className="font-medium text-gray-800 dark:text-gray-200 text-base">Create New Deck</p>
-            <p className="text-gray-500 dark:text-gray-500 text-xs mt-1">Start a new collection</p>
           </div>
         </div>
+
+        <div className="border-t border-zinc-100 dark:border-zinc-800 px-5 py-3 flex justify-between items-center">
+          <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-300 dark:text-zinc-700">
+            deck
+          </span>
+          <Button
+            size="sm"
+            asChild
+            className="h-7 rounded-full px-4 text-xs bg-zinc-900 hover:bg-black text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            <Link href={`/deck/${deck.id}/study`}>
+              <Play className="h-3 w-3 mr-1.5 fill-current" />
+              Study
+            </Link>
+          </Button>
+        </div>
       </div>
-    </motion.div>
-  );
+    </Link>
+  )
 }
 
+// ── Folder card ──
+function FolderCard({
+  name,
+  count,
+  weakness,
+  onClick,
+}: {
+  name: string
+  count: number
+  weakness: number
+  onClick: () => void
+}) {
+  return (
+    <button onClick={onClick} className="group block w-full text-left">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+        <div className="p-5">
+          <div className="flex items-start justify-between mb-4">
+            <div className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-700 transition-colors">
+              <Folder className="h-5 w-5 text-zinc-500 dark:text-zinc-400" />
+            </div>
+            {weakness < 0.6 && (
+              <span className="text-[9px] uppercase tracking-widest font-bold text-zinc-400 dark:text-zinc-600">
+                needs work
+              </span>
+            )}
+          </div>
+
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{name}</h3>
+
+          <div className="mt-3 flex items-center gap-4">
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 tabular-nums">{count} items</span>
+            <div className="flex-1 max-w-[64px]">
+              <div className="h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-zinc-400 dark:bg-zinc-600 transition-all"
+                  style={{ width: `${Math.round(weakness * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-zinc-100 dark:border-zinc-800 px-5 py-3 flex justify-between items-center">
+          <span className="text-[10px] uppercase tracking-widest font-bold text-zinc-300 dark:text-zinc-700">
+            folder
+          </span>
+          <ChevronRight className="h-3.5 w-3.5 text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 transition-colors" />
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ── Create card ──
+function CreateNewDeckCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="group block w-full text-left h-full">
+      <div className="h-full rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors flex items-center justify-center min-h-[180px]">
+        <div className="text-center">
+          <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-3 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-700 transition-colors">
+            <PlusCircle className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+          </div>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">New Deck</p>
+          <p className="text-[10px] text-zinc-300 dark:text-zinc-700 mt-1">Start a new collection</p>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ── Main grid ──
 export function DeckGrid() {
+  const searchParams = useSearchParams()
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isGenerateOpen, setIsGenerateOpen] = useState(false)
-  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+
+  const [currentPath, setCurrentPath] = useState<string[]>(() => {
+    const pathParam = searchParams.get('path')
+    return pathParam ? pathParam.split('/') : []
+  })
+
   const { decks, loading } = useDecks()
 
-  // Get unique tags from all decks
-  const uniqueTags = Array.from(new Set(decks.filter(deck => deck.tag).map(deck => deck.tag)))
+  // Sync URL with folder path
+  useEffect(() => {
+    const path = currentPath.join('/')
+    const url = path ? `/?path=${path}` : '/'
+    window.history.replaceState(null, '', url)
+  }, [currentPath])
 
-  // Filter decks by selected tag
-  const filteredDecks = selectedTag
-    ? decks.filter(deck => deck.tag === selectedTag)
-    : decks
-
-  const handleTagChange = (value: string) => {
-    setSelectedTag(value === "all" ? null : value)
+  // Weakness helper
+  const getDeckWeakness = (deck: any) => {
+    if (!deck.cards || deck.cards.length === 0) return 1.0
+    const progressCards = deck.cards.filter((c: any) => c.progress)
+    if (progressCards.length === 0) return 0.5
+    const totalEase = progressCards.reduce((acc: number, c: any) => acc + (c.progress.ease_factor || 2.5), 0)
+    return totalEase / (progressCards.length * 5)
   }
 
+
+
+  // Get items at current level
+  const getItemsAtLevel = () => {
+    const items: any[] = []
+    const seenFolders = new Set<string>()
+
+    decks.forEach(deck => {
+      // If deck has no tag, it's effectively at the root ([])
+      const tags = deck.tag ? deck.tag.split('/') : []
+      
+      // Check if the deck's path starts with the current path
+      const isMatch = currentPath.every((part, i) => tags[i] === part)
+      if (!isMatch) return
+
+      if (tags.length > currentPath.length) {
+        // It's in a subfolder relative to the current path
+        const folderName = tags[currentPath.length]
+        if (!seenFolders.has(folderName)) {
+          seenFolders.add(folderName)
+          
+          // Calculate folder stats
+          const folderDecks = decks.filter(d => {
+            const dTags = d.tag ? d.tag.split('/') : []
+            const dMatch = currentPath.every((p, i) => dTags[i] === p)
+            return dMatch && dTags[currentPath.length] === folderName
+          })
+          
+          const weakness = folderDecks.reduce((acc, d) => acc + getDeckWeakness(d), 0) / folderDecks.length
+          
+          items.push({
+            id: `folder-${currentPath.join('-')}-${folderName}`,
+            name: folderName,
+            isFolder: true,
+            count: folderDecks.length,
+            weakness
+          })
+        }
+      } else if (tags.length === currentPath.length) {
+        // It's a deck at this exact level
+        items.push({ ...deck, isFolder: false })
+      }
+    })
+
+    return items
+  }
+
+  const items = getItemsAtLevel()
+
+  // ── Loading ──
   if (loading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 w-full">
         <div className="flex items-center justify-between">
-          <Skeleton className="h-12 w-72" />
-          <div className="flex gap-3">
-            <Skeleton className="h-10 w-32 rounded-full" />
-            <Skeleton className="h-10 w-32 rounded-full" />
-            <Skeleton className="h-10 w-32 rounded-full" />
+          <Skeleton className="h-7 w-40" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-24 rounded-full" />
+            <Skeleton className="h-9 w-24 rounded-full" />
           </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="relative">
-              <Card className="overflow-hidden border border-gray-200/30 dark:border-gray-700/30 rounded-2xl bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl shadow-[0_10px_20px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_20px_-15px_rgba(0,0,0,0.3)]">
-                <CardContent className="p-6">
-                  <Skeleton className="h-7 w-3/4 mb-6" />
-                  <div className="space-y-3">
-                    <Skeleton className="h-4 w-1/2" />
-                    <Skeleton className="h-4 w-1/3" />
-                  </div>
-                </CardContent>
-                <CardFooter className="border-t border-gray-200/30 dark:border-gray-700/30 p-4 flex justify-between">
-                  <Skeleton className="h-9 w-24 rounded-full" />
-                  <Skeleton className="h-9 w-24 rounded-full" />
-                </CardFooter>
-              </Card>
-            </div>
+            <Skeleton key={i} className="h-[180px] rounded-2xl" />
           ))}
         </div>
       </div>
     )
   }
 
+  // ── Render ──
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 w-full">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h1 className="text-3xl font-medium tracking-tight text-gray-900 dark:text-gray-100">
-          Collections
-        </h1>
-        <div className="flex flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+            {currentPath.length > 0 ? currentPath[currentPath.length - 1] : "Collections"}
+          </h1>
+
+          {currentPath.length > 0 && (
+            <div className="flex items-center mt-1.5 text-xs text-zinc-400 dark:text-zinc-600">
+              <button onClick={() => setCurrentPath([])} className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+                Collections
+              </button>
+              {currentPath.map((part, i) => (
+                <span key={i} className="flex items-center">
+                  <ChevronRight className="h-3 w-3 mx-1.5 opacity-40" />
+                  <button
+                    onClick={() => setCurrentPath(currentPath.slice(0, i + 1))}
+                    className={`hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors ${i === currentPath.length - 1 ? 'text-zinc-900 dark:text-zinc-100 font-medium' : ''}`}
+                  >
+                    {part}
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
             asChild
-            className="rounded-full border-gray-200/50 hover:border-gray-300/70 hover:bg-white/70 dark:border-gray-700/50 dark:hover:border-gray-600/70 dark:hover:bg-gray-800/70 transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] backdrop-blur-sm"
+            className="h-8 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium"
           >
             <Link href="/study/all-due">
-              <Clock className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
-              Study all due
+              <Clock className="h-3.5 w-3.5 mr-1.5" />
+              All due
             </Link>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setIsGenerateOpen(true)}
-            className="rounded-full border-gray-200/50 hover:border-gray-300/70 hover:bg-white/70 dark:border-gray-700/50 dark:hover:border-gray-600/70 dark:hover:bg-gray-800/70 transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] backdrop-blur-sm"
+            className="h-8 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium"
           >
-            <Sparkles className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
             AI Generate
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setIsImportOpen(true)}
-            className="rounded-full border-gray-200/50 hover:border-gray-300/70 hover:bg-white/70 dark:border-gray-700/50 dark:hover:border-gray-600/70 dark:hover:bg-gray-800/70 transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] backdrop-blur-sm"
+            className="h-8 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium"
           >
-            <FileUp className="h-4 w-4 mr-2 text-gray-500 dark:text-gray-400" />
+            <FileUp className="h-3.5 w-3.5 mr-1.5" />
             Import
           </Button>
           <Button
             onClick={() => setIsCreateDeckOpen(true)}
             size="sm"
-            className="rounded-full bg-gray-900/90 hover:bg-black text-white dark:bg-white/90 dark:text-black dark:hover:bg-white transition-all duration-200 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] dark:shadow-[0_2px_10px_-5px_rgba(255,255,255,0.2)]"
+            className="h-8 rounded-full px-4 text-xs font-medium bg-zinc-900 hover:bg-black text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
           >
-            <PlusCircle className="h-4 w-4 mr-2" />
+            <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
             New Deck
           </Button>
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <Select value={selectedTag || "all"} onValueChange={handleTagChange}>
-            <SelectTrigger className="w-[200px] rounded-full border-gray-200/50 bg-white/70 dark:bg-gray-800/70 dark:border-gray-700/50 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_10px_-5px_rgba(0,0,0,0.2)] backdrop-blur-sm">
-              <SelectValue placeholder="Filter by tag" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl border-gray-200/50 dark:border-gray-700/50 shadow-lg backdrop-blur-md bg-white/80 dark:bg-gray-800/80">
-              <SelectItem value="all">All decks</SelectItem>
-              {uniqueTags.map((tag) => (
-                <SelectItem key={tag} value={tag || ""}>
-                  {tag}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {selectedTag && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelectedTag(null)}
-            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-full"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Clear filter
-          </Button>
+      {/* Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {items.map((item, index) =>
+          item.isFolder ? (
+            <FolderCard
+              key={item.id}
+              name={item.name}
+              count={item.count}
+              weakness={item.weakness}
+              onClick={() => setCurrentPath([...currentPath, item.name])}
+            />
+          ) : (
+            <DeckCard key={item.id} deck={item} index={index} />
+          )
         )}
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredDecks.map((deck, index) => (
-          <DeckCard key={deck.id} deck={deck} index={index} />
-        ))}
-
-        <CreateNewDeckCard
-          onClick={() => setIsCreateDeckOpen(true)}
-          index={filteredDecks.length}
-        />
+        <CreateNewDeckCard onClick={() => setIsCreateDeckOpen(true)} />
       </div>
 
       <CreateDeckDialog open={isCreateDeckOpen} onOpenChange={setIsCreateDeckOpen} />

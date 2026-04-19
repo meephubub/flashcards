@@ -1,5 +1,7 @@
 import { supabase } from "./supabase"
 
+export type StudyMode = "chill" | "normal" | "exam"
+
 export interface StudySettings {
   cardsPerSession: number
   showProgressBar: boolean
@@ -7,11 +9,27 @@ export interface StudySettings {
   autoFlip: boolean
   autoFlipDelay: number // in seconds
   languageSimilarityThreshold: number // for language study mode, 0.0 to 1.0
+  studyMode: StudyMode
   fsrsParams?: {
     request_retention: number
     maximum_interval: number
     w?: number[]
   }
+}
+
+export const STUDY_MODE_PARAMS: Record<StudyMode, any> = {
+  chill: {
+    request_retention: 0.85,
+    maximum_interval: 36500,
+  },
+  normal: {
+    request_retention: 0.9,
+    maximum_interval: 36500,
+  },
+  exam: {
+    request_retention: 0.97,
+    maximum_interval: 30,
+  },
 }
 
 export interface AppSettings {
@@ -35,12 +53,11 @@ const defaultSettings: AppSettings = {
     autoFlip: false,
     autoFlipDelay: 5,
     languageSimilarityThreshold: 0.75,
-    fsrsParams: {
-      request_retention: 0.9,
-      maximum_interval: 36500,
-    },
+    studyMode: "normal",
+    fsrsParams: STUDY_MODE_PARAMS.normal,
   },
 }
+
 
 // Get settings
 export async function getSettings(supabase: any): Promise<AppSettings> {

@@ -633,6 +633,15 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     : cards[currentCardIndex]
   const isLastCard = currentCardIndex === cards.length - 1
 
+  // Helper for Cloze deletion
+  const parseCloze = (text: string, isFlipped: boolean) => {
+    const clozeRegex = /\{\{c(\d+)::(.*?)\}\}/g;
+    if (isFlipped) {
+      return text.replace(clozeRegex, "$2");
+    }
+    return text.replace(clozeRegex, " [...] ");
+  };
+
   if (!currentCard) {
     return (
       <div className="text-center py-12">
@@ -650,68 +659,127 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 text-black">
-      {/* Top bar simplified: remove internal title 'Studying: ...' and count (moved to page header) */}
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          {reviewMode && (
-            <div className="text-[11px] uppercase tracking-wider text-neutral-500">Review mode</div>
-          )}
+    <div className="w-full mx-auto space-y-4 text-black">
+      {reviewMode && (
+        <div className="flex items-center gap-2 mb-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+          <span className="text-[11px] uppercase tracking-widest text-neutral-400 font-medium">Review mode</span>
         </div>
-        {/* SR status indicator removed per request */}
-      </div>
+      )}
 
       {normalizedStudy.showProgressBar && (
-        <div className="mb-2">
-          <div className="flex justify-between text-[11px] text-neutral-500 mb-1">
-            <span>Progress</span>
-            <span>{Math.round(progress)}%</span>
+        <div className="mb-1">
+          <div className="w-full h-0.5 bg-neutral-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-black rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
           </div>
-          <Progress value={progress} className="h-1.5 bg-neutral-200" />
         </div>
       )}
       {!studyComplete && (
         <>
           <div
-            className={`card-flip ${isFlipped ? "flipped" : ""} transition-all duration-300 mb-6`}
+            className={`card-flip ${isFlipped ? "flipped" : ""} transition-all duration-300 mb-4`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <div className="card-flip-inner relative h-[500px] md:h-[520px] w-full transition-transform duration-300 ease-in-out">
+            <div className="card-flip-inner relative h-[550px] md:h-[650px] lg:h-[700px] w-full">
               <Card
-                className="card-front absolute w-full h-full flex items-center justify-center p-4 md:p-10 cursor-pointer bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300"
+                className="card-front absolute w-full h-full flex items-center justify-center p-6 md:p-12 cursor-pointer bg-white border border-neutral-200 hover:border-neutral-300 rounded-2xl transition-colors duration-200"
                 onClick={handleFlip}
               >
-                <div className="text-center text-2xl space-y-6 max-w-[88%]">
+                <div className="text-center text-2xl space-y-6 max-w-[88%] w-full">
                   {currentCard.front_img_url && (
                     <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
                       <img
                         src={currentCard.front_img_url}
                         alt="Front side image"
-                        className="max-h-[30vh] md:max-h-[240px] w-auto object-contain rounded-md"
+                        className="max-h-[40vh] md:max-h-[400px] w-auto object-contain rounded-md"
                       />
+                      {/* Diagram Occlusion Boxes (Front) */}
+                      {currentCard.occlusion_data && (
+                        <div className="absolute inset-0 m-3 overflow-hidden rounded-md pointer-events-none">
+                          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                            {currentCard.occlusion_data.map((rect: any) => (
+                              <rect
+                                key={rect.id}
+                                x={rect.x}
+                                y={rect.y}
+                                width={rect.w}
+                                height={rect.h}
+                                className="fill-blue-500/80 backdrop-blur-md"
+                              />
+                            ))}
+                          </svg>
+                        </div>
+                      )}
                     </div>
                   )}
+                  {currentCard.audio_url && !isFlipped && (
+                    <audio controls className="mx-auto h-8 opacity-70">
+                      <source src={currentCard.audio_url} />
+                    </audio>
+                  )}
                   <div className="w-full flex justify-center">
-                    <MarkdownCardContent content={currentCard.front} className="font-semibold text-2xl md:text-3xl leading-snug" />
+                    <MarkdownCardContent 
+                      content={parseCloze(currentCard.front, isFlipped)} 
+                      className="font-semibold text-2xl md:text-3xl leading-snug" 
+                    />
                   </div>
-                  <div className="hidden sm:block text-[11px] text-neutral-500 mt-4 absolute bottom-4 left-0 right-0 text-center">
-                    Press <kbd className="px-1.5 py-0.5 border border-black/20 rounded text-[10px] bg-white">Space</kbd> to flip
+                  <div className="hidden sm:block text-[10px] text-neutral-300 absolute bottom-5 left-0 right-0 text-center">
+                    Press <kbd className="px-1 py-0.5 border border-neutral-200 rounded text-[10px] bg-neutral-50 text-neutral-400">Space</kbd> to flip
                   </div>
                 </div>
               </Card>
               <Card
-                className="card-back absolute w-full h-full flex flex-col items-center justify-center p-4 md:p-8 bg-white border border-black/10 hover:border-black/30 rounded-xl shadow-sm hover:shadow transition-all duration-300 overflow-y-auto cursor-pointer"
+                className="card-back absolute w-full h-full flex flex-col items-center justify-center p-6 md:p-10 bg-white border border-neutral-200 hover:border-neutral-300 rounded-2xl transition-colors duration-200 overflow-y-auto cursor-pointer"
                 onClick={handleFlip}
               >
                 <div className="text-center space-y-4 w-full max-w-[88%] flex-shrink-0">
+                  {currentCard.front_img_url && (
+                    <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
+                      <img
+                        src={currentCard.front_img_url}
+                        alt="Front side image"
+                        className="max-h-[200px] w-auto object-contain rounded-md opacity-50"
+                      />
+                      {/* Diagram Occlusion Boxes (Back - Revealed) */}
+                      {currentCard.occlusion_data && (
+                        <div className="absolute inset-0 m-3 overflow-hidden rounded-md pointer-events-none">
+                          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                            {currentCard.occlusion_data.map((rect: any) => (
+                              <rect
+                                key={rect.id}
+                                x={rect.x}
+                                y={rect.y}
+                                width={rect.w}
+                                height={rect.h}
+                                className="fill-blue-500/20 stroke-blue-500 stroke-2"
+                              />
+                            ))}
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {currentCard.back_img_url && (
                     <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
                       <img
                         src={currentCard.back_img_url}
                         alt="Back side image"
-                        className="max-h-[200px] w-auto object-contain rounded-md"
+                        className="max-h-[300px] w-auto object-contain rounded-md"
+                      />
+                    </div>
+                  )}
+                  {currentCard.video_url && isFlipped && (
+                    <div className="w-full rounded-xl overflow-hidden bg-black aspect-video">
+                      <iframe 
+                        src={currentCard.video_url} 
+                        className="w-full h-full border-0"
+                        allow="autoplay; encrypted-media"
+                        allowFullScreen
                       />
                     </div>
                   )}
@@ -721,27 +789,25 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
 
                   {/* Show confidence rating buttons directly on the back of the card when using spaced repetition */}
                   {isFlipped && (
-                    <div className="mt-4 animate-fadeIn">
+                    <div className="mt-6 animate-fadeIn">
                       {isSpacedRepetitionEnabled ? (
                         <>
-                          <div className="text-sm text-neutral-600 mb-3">How well did you know this? (Press 0-5)</div>
-                          <div className="flex justify-center gap-3 flex-wrap">
+                          <div className="text-xs text-neutral-400 mb-3">Rate your recall (0–5)</div>
+                          <div className="flex justify-center gap-2 flex-wrap">
                             {[0, 1, 2, 3, 4, 5].map((rating) => {
-                              // Use different button variants based on rating
-                              let variant = "outline"
-                              let extra = ""
-                              if (rating === 0) extra = "bg-neutral-100"
-                              if (rating === 1) extra = "bg-neutral-200"
-                              if (rating === 2) extra = "bg-neutral-300"
-                              if (rating === 3) extra = "bg-neutral-400 text-white"
-                              if (rating === 4) extra = "bg-neutral-600 text-white"
-                              if (rating === 5) extra = "bg-black text-white"
+                              let extra = "border-neutral-200 text-neutral-500 hover:border-neutral-400"
+                              if (rating === 0) extra = "border-neutral-200 text-neutral-400 hover:border-neutral-400"
+                              if (rating === 1) extra = "border-neutral-200 text-neutral-500 hover:border-neutral-400"
+                              if (rating === 2) extra = "border-neutral-300 text-neutral-600 hover:border-neutral-400"
+                              if (rating === 3) extra = "border-neutral-300 bg-neutral-50 text-neutral-700 hover:bg-neutral-100"
+                              if (rating === 4) extra = "border-neutral-400 bg-neutral-100 text-neutral-800 hover:bg-neutral-200"
+                              if (rating === 5) extra = "border-black bg-black text-white hover:bg-neutral-800"
 
                               return (
                                 <Button
                                   key={rating}
-                                  variant={variant as any}
-                                  className={`h-12 w-12 font-medium text-lg border border-black/20 ${extra} hover:scale-105 transition-all duration-150 flex-shrink-0`}
+                                  variant="outline"
+                                  className={`h-9 w-9 text-sm font-medium ${extra} transition-colors duration-150 flex-shrink-0`}
                                   disableHaptics
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -759,7 +825,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                               )
                             })}
                           </div>
-                          <div className="mt-3 text-xs text-neutral-500 min-h-[20px]">
+                          <div className="mt-2 text-[11px] text-neutral-400 min-h-[16px]">
                             {hoveredRating !== null && (
                               <div className="animate-fadeIn">{getRatingDescription(hoveredRating)}</div>
                             )}
@@ -773,28 +839,28 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
             </div>
           </div>
 
-          <div className="flex justify-between items-center mt-4 border border-black/10 p-3 rounded-xl bg-white sticky bottom-0 z-10">
+          <div className="flex justify-between items-center mt-2 py-3 sticky bottom-0 z-10 bg-white/80 backdrop-blur-sm">
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={handlePrevious}
               disabled={currentCardIndex === 0}
-              className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150 h-11"
+              className="text-neutral-500 hover:text-black hover:bg-neutral-100 transition-colors duration-150 h-9 text-sm"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Previous
+              <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+              Prev
             </Button>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1.5">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="icon"
                       onClick={resetStudySession}
-                      className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150 h-11 w-11"
+                      className="text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors duration-150 h-9 w-9"
                     >
-                      <RotateCw className="h-4 w-4" />
+                      <RotateCw className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -806,12 +872,12 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="icon"
                       onClick={() => setFocusMode(!focusMode)}
-                      className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150 h-11 w-11"
+                      className="text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors duration-150 h-9 w-9"
                     >
-                      {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                      {focusMode ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -819,25 +885,21 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              <Button
-                variant="outline"
-                onClick={finishSession}
-                className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150 h-11"
-              >
-                Finish
-              </Button>
+
+              <div className="w-px h-5 bg-neutral-200 mx-1" />
+
               {isFlipped && !isSpacedRepetitionEnabled && (
                 <>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                          variant="default"
+                          variant="outline"
                           size="icon"
                           onClick={handleCardKnown}
-                          className="bg-black text-white hover:bg-neutral-800 hover:scale-105 transition-all duration-150 h-11 w-11"
+                          className="border-neutral-200 text-black hover:bg-black hover:text-white hover:border-black transition-colors duration-150 h-9 w-9"
                         >
-                          <Check className="h-4 w-4" />
+                          <Check className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -852,9 +914,9 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                           variant="outline"
                           size="icon"
                           onClick={handleCardNeedsReview}
-                          className="border border-black/20 text-black hover:bg-black hover:text-white hover:scale-105 transition-all duration-150 h-11 w-11"
+                          className="border-neutral-200 text-neutral-500 hover:bg-black hover:text-white hover:border-black transition-colors duration-150 h-9 w-9"
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -862,8 +924,17 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  <div className="w-px h-5 bg-neutral-200 mx-1" />
                 </>
               )}
+
+              <Button
+                variant="ghost"
+                onClick={finishSession}
+                className="text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors duration-150 h-9 text-sm"
+              >
+                End
+              </Button>
             </div>
 
             <Button
@@ -871,18 +942,18 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
               onClick={isFlipped ? (isSpacedRepetitionEnabled ? undefined : handleCardKnown) : handleFlip}
               disabled={(isLastCard && isFlipped && studyComplete) || (isFlipped && isSpacedRepetitionEnabled)}
               className={isFlipped ?
-                "group bg-black text-white hover:bg-neutral-800 hover:shadow transition-all duration-150 h-11 w-full sm:w-auto" :
-                "group border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150 h-11 w-full sm:w-auto"}
+                "bg-black text-white hover:bg-neutral-800 transition-colors duration-150 h-9 text-sm" :
+                "border-neutral-200 text-black hover:bg-black hover:text-white hover:border-black transition-colors duration-150 h-9 text-sm"}
             >
               {isFlipped ? (
                 <>
                   {isLastCard ? "Finish" : "Next"}
-                  {!isLastCard && <ArrowRight className="h-4 w-4 ml-2" />}
+                  {!isLastCard && <ArrowRight className="h-3.5 w-3.5 ml-1.5" />}
                 </>
               ) : (
                 <>
                   Flip
-                  <kbd className="ml-2 px-1.5 py-0.5 border border-black/20 rounded text-[10px] bg-white text-black hidden sm:inline">Space</kbd>
+                  <kbd className="ml-2 px-1 py-0.5 border border-neutral-200 rounded text-[10px] bg-neutral-50 text-neutral-400 hidden sm:inline">Space</kbd>
                 </>
               )}
             </Button>
@@ -891,94 +962,58 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       )}
 
       {studyComplete && (
-        <div className="text-center p-6 bg-white border border-black/10 rounded-xl shadow-sm mt-6 animate-fadeIn">
-          <div className="flex items-center justify-center mb-2">
-            <div className="bg-black text-white p-2 rounded-full">
-              <Check className="h-6 w-6" />
-            </div>
-            <h3 className="font-semibold text-xl ml-2">Study Session Complete</h3>
+        <div className="text-center py-12 animate-fadeIn">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-neutral-200 mb-4">
+            <Check className="h-4 w-4 text-black" />
           </div>
-          <p className="text-neutral-600 mt-1">
+          <h3 className="font-semibold text-lg tracking-tight">Session complete</h3>
+          <p className="text-sm text-neutral-400 mt-1 max-w-sm mx-auto">
             {reviewMode
               ? "You've completed reviewing all marked cards."
               : cardsToReview.length > 0
-                ? `You've completed the initial review. ${cardsToReview.length} cards marked for further review.`
-                : "You've reviewed all cards in this session."}
+                ? `${cardsToReview.length} card${cardsToReview.length === 1 ? '' : 's'} marked for further review.`
+                : "All cards reviewed this session."}
           </p>
 
-          {/* Study Statistics */}
-          <div className="mt-6 grid grid-cols-2 gap-4 text-sm bg-white p-4 rounded-xl">
-            <div className="stats-card bg-white border border-black/10 p-3 rounded-md">
-              <div className="flex flex-col items-center">
-                <span className="text-neutral-500 text-xs uppercase tracking-wide">Cards Studied</span>
-                <span className="font-bold text-2xl mt-1">{stats.cardsStudied}</span>
-                <span className="text-xs text-neutral-500">of {stats.totalCards}</span>
-              </div>
+          {/* Inline stats */}
+          <div className="mt-8 flex flex-wrap justify-center gap-8 text-sm">
+            <div className="flex flex-col items-center">
+              <span className="text-2xl font-semibold tabular-nums">{stats.cardsStudied}<span className="text-neutral-300 font-normal">/{stats.totalCards}</span></span>
+              <span className="text-[11px] text-neutral-400 uppercase tracking-wider mt-1">Studied</span>
             </div>
-
-            <div className="stats-card bg-white border border-black/10 p-3 rounded-md">
-              <div className="flex flex-col items-center">
-                <span className="text-neutral-500 text-xs uppercase tracking-wide">Success Rate</span>
-                <span className="font-bold text-2xl mt-1">
-                  {stats.cardsStudied > 0
-                    ? `${Math.round((stats.knownCards / stats.cardsStudied) * 100)}%`
-                    : '0%'}
-                </span>
-              </div>
+            <div className="flex flex-col items-center">
+              <span className="text-2xl font-semibold tabular-nums">
+                {stats.cardsStudied > 0
+                  ? `${Math.round((stats.knownCards / stats.cardsStudied) * 100)}%`
+                  : '0%'}
+              </span>
+              <span className="text-[11px] text-neutral-400 uppercase tracking-wider mt-1">Accuracy</span>
             </div>
-
-            <div className="stats-card bg-white border border-black/10 p-3 rounded-md">
-              <div className="flex flex-col items-center">
-                <span className="text-neutral-500 text-xs uppercase tracking-wide">Known Cards</span>
-                <div className="flex items-center mt-1">
-                  <span className="font-bold text-2xl text-black">{stats.knownCards}</span>
-                  <Check className="h-4 w-4 text-black ml-1" />
-                </div>
-              </div>
+            <div className="flex flex-col items-center">
+              <span className="text-2xl font-semibold tabular-nums text-black">{stats.knownCards}</span>
+              <span className="text-[11px] text-neutral-400 uppercase tracking-wider mt-1">Known</span>
             </div>
-
-            <div className="stats-card bg-white border border-black/10 p-3 rounded-md">
-              <div className="flex flex-col items-center">
-                <span className="text-neutral-500 text-xs uppercase tracking-wide">Need Review</span>
-                <div className="flex items-center mt-1">
-                  <span className="font-bold text-2xl text-neutral-700">{stats.unknownCards}</span>
-                  <X className="h-4 w-4 text-neutral-700 ml-1" />
-                </div>
-              </div>
-            </div>
-
-            {stats.endTime && (
-              <div className="stats-card bg-white border border-black/10 p-3 rounded-md col-span-2">
-                <div className="flex items-center justify-center">
-                  <div>
-                    <span className="text-neutral-500 text-xs uppercase tracking-wide">Total Time</span>
-                    <div className="font-bold text-xl mt-1">
-                      {Math.round((stats.endTime.getTime() - stats.startTime.getTime()) / 1000)} seconds
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="stats-card bg-white border border-black/10 p-3 rounded-md col-span-2">
-              <div className="flex items-center justify-center">
-                <div>
-                  <span className="text-neutral-500 text-xs uppercase tracking-wide">Avg. Time per Card</span>
-                  <div className="font-bold text-xl mt-1">
-                    {Math.round(stats.averageTimePerCard / 1000)} seconds
-                  </div>
-                </div>
-              </div>
+            <div className="flex flex-col items-center">
+              <span className="text-2xl font-semibold tabular-nums text-neutral-400">{stats.unknownCards}</span>
+              <span className="text-[11px] text-neutral-400 uppercase tracking-wider mt-1">Review</span>
             </div>
           </div>
 
-          <div className="mt-6 flex justify-center gap-3">
+          {/* Time stats */}
+          <div className="mt-6 flex justify-center gap-6 text-xs text-neutral-400">
+            {stats.endTime && (
+              <span>{Math.round((stats.endTime.getTime() - stats.startTime.getTime()) / 1000)}s total</span>
+            )}
+            <span>{Math.round(stats.averageTimePerCard / 1000)}s per card</span>
+          </div>
+
+          <div className="mt-8 flex justify-center gap-2">
             <Button
               variant="outline"
               onClick={resetStudySession}
-              className="border border-black/20 text-black hover:bg-black hover:text-white transition-all duration-150"
+              className="border-neutral-200 text-black hover:bg-black hover:text-white hover:border-black transition-colors duration-150 h-9 text-sm"
             >
-              <RotateCw className="h-4 w-4 mr-2" />
+              <RotateCw className="h-3.5 w-3.5 mr-1.5" />
               Study Again
             </Button>
             {!reviewMode && cardsToReview.length > 0 && (
@@ -992,16 +1027,17 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
                   setIsFlipped(false)
                   setStudyComplete(false)
                 }}
-                className="bg-black text-white hover:bg-neutral-800 transition-all duration-150"
+                className="bg-black text-white hover:bg-neutral-800 transition-colors duration-150 h-9 text-sm"
               >
-                Review Marked Cards ({cardsToReview.length})
+                Review {cardsToReview.length} card{cardsToReview.length === 1 ? '' : 's'}
               </Button>
             )}
             <Button
+              variant="ghost"
               asChild
-              className="bg-black text-white hover:bg-neutral-800 transition-all duration-150"
+              className="text-neutral-500 hover:text-black transition-colors duration-150 h-9 text-sm"
             >
-              <Link href={`/deck/${deckId}`}>Return to Deck</Link>
+              <Link href={`/deck/${deckId}`}>Back to Deck</Link>
             </Button>
           </div>
         </div>

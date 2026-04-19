@@ -63,6 +63,8 @@ const WEIGHT_DESCRIPTIONS: Record<number, { name: string; description: string }>
     18: { name: "ST1", description: "Short-term memory decay factor" },
 }
 
+import { StudyMode, STUDY_MODE_PARAMS } from "@/lib/settings"
+
 export function FSRSControls({
     params,
     onParamsChange,
@@ -72,6 +74,7 @@ export function FSRSControls({
     const [weightsInput, setWeightsInput] = useState("")
     const [weightsError, setWeightsError] = useState<string | null>(null)
     const [showWeightHelp, setShowWeightHelp] = useState(false)
+    const [showAdvanced, setShowAdvanced] = useState(false)
 
     // Initialize weights input from params
     useEffect(() => {
@@ -86,7 +89,6 @@ export function FSRSControls({
         setWeightsInput(value)
         setWeightsError(null)
 
-        // Try to parse weights
         const weights = value
             .split(",")
             .map((s) => parseFloat(s.trim()))
@@ -114,234 +116,171 @@ export function FSRSControls({
         }
     }
 
+    const setStudyMode = (mode: StudyMode) => {
+        const modeParams = STUDY_MODE_PARAMS[mode];
+        onParamsChange({
+            ...params,
+            ...modeParams
+        });
+    }
+
     const retentionPercent = Math.round(params.request_retention * 100)
 
     return (
         <TooltipProvider delayDuration={100}>
-            <div className="space-y-6">
-                {/* Request Retention */}
-                <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                            <Label htmlFor="fsrs-retention" className="font-medium">
-                                Target Retention
-                            </Label>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <HelpCircle className="h-4 w-4 text-neutral-400 cursor-help" />
-                                </TooltipTrigger>
-                                <TooltipContent side="right" className="max-w-xs">
-                                    <p className="text-xs leading-relaxed">
-                                        The percentage of cards FSRS will aim to have you remember correctly. 
-                                        Higher values (90%+) mean more frequent reviews to maintain better recall. 
-                                        Lower values (80-85%) reduce daily review load but increase forgetting.
-                                    </p>
-                                    <p className="text-xs text-neutral-400 mt-2">
-                                        Recommended: 85-90% for most learners
-                                    </p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-                        <span className="text-sm font-medium tabular-nums">{retentionPercent}%</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                        <span className="text-xs text-neutral-400 w-8">70%</span>
-                        <Slider
-                            id="fsrs-retention"
-                            min={0.7}
-                            max={0.99}
-                            step={0.01}
-                            value={[params.request_retention]}
-                            onValueChange={(value) =>
-                                onParamsChange({
-                                    ...params,
-                                    request_retention: value[0],
-                                })
-                            }
-                            className="flex-1"
-                        />
-                        <span className="text-xs text-neutral-400 w-10">99%</span>
-                    </div>
-
-                    <div className="flex gap-2 text-xs">
-                        <span className={`px-2 py-1 rounded ${retentionPercent < 85 ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600' : ''}`}>
-                            Lower workload
-                        </span>
-                        <span className={`px-2 py-1 rounded ${retentionPercent >= 85 && retentionPercent <= 90 ? 'bg-neutral-200 dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100' : ''}`}>
-                            Balanced
-                        </span>
-                        <span className={`px-2 py-1 rounded ${retentionPercent > 90 ? 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-black' : ''}`}>
-                            Higher retention
-                        </span>
-                    </div>
-                </div>
-
-                {/* Maximum Interval */}
-                <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                            <Label htmlFor="fsrs-max-interval" className="font-medium">
-                                Maximum Interval
-                            </Label>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <HelpCircle className="h-4 w-4 text-neutral-400 cursor-help" />
-                                </TooltipTrigger>
-                                <TooltipContent side="right" className="max-w-xs">
-                                    <p className="text-xs leading-relaxed">
-                                        The longest time FSRS will schedule between reviews. 
-                                        Even if the algorithm calculates a longer interval, 
-                                        it will be capped at this value.
-                                    </p>
-                                    <p className="text-xs text-neutral-400 mt-2">
-                                        Default: ~100 years (effectively unlimited)
-                                        <br />
-                                        For exams: Consider 30-90 days before exam date
-                                    </p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-                        <span className="text-sm font-medium tabular-nums">
-                            {params.maximum_interval >= 365 ? `${Math.round(params.maximum_interval / 365)}y` : `${params.maximum_interval}d`}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <span className="text-xs text-neutral-400 w-8">30d</span>
-                        <Slider
-                            id="fsrs-max-interval"
-                            min={30}
-                            max={3650}
-                            step={30}
-                            value={[Math.min(params.maximum_interval, 3650)]}
-                            onValueChange={(value) =>
-                                onParamsChange({
-                                    ...params,
-                                    maximum_interval: value[0],
-                                })
-                            }
-                            className="flex-1"
-                        />
-                        <span className="text-xs text-neutral-400 w-10">10y</span>
-                    </div>
-
-                    <div className="flex gap-2 flex-wrap">
-                        {[30, 90, 180, 365, 730, 3650].map((days) => (
+            <div className="space-y-8">
+                {/* Study Mode Selector */}
+                <div className="space-y-4">
+                    <Label className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">Revision Intensity</Label>
+                    <div className="grid grid-cols-3 gap-3">
+                        {(["chill", "normal", "exam"] as StudyMode[]).map((mode) => (
                             <Button
-                                key={days}
-                                variant="ghost"
-                                size="sm"
-                                className={`text-xs h-7 px-2 ${params.maximum_interval === days ? 'bg-neutral-200 dark:bg-neutral-700' : ''}`}
-                                onClick={() => onParamsChange({ ...params, maximum_interval: days })}
+                                key={mode}
+                                variant={params.request_retention === STUDY_MODE_PARAMS[mode].request_retention && params.maximum_interval === STUDY_MODE_PARAMS[mode].maximum_interval ? "default" : "outline"}
+                                className="flex flex-col h-20 rounded-2xl gap-1 transition-all"
+                                onClick={() => setStudyMode(mode)}
                             >
-                                {days >= 365 ? `${days / 365}y` : `${days}d`}
+                                <span className="capitalize font-bold">{mode}</span>
+                                <span className="text-[10px] opacity-70">
+                                    {mode === "chill" && "Lower workload"}
+                                    {mode === "normal" && "Balanced"}
+                                    {mode === "exam" && "Maximum recall"}
+                                </span>
                             </Button>
                         ))}
                     </div>
                 </div>
 
-                {/* Advanced Weights */}
-                <Collapsible
-                    open={isOpen}
-                    onOpenChange={setIsOpen}
-                    className="border rounded-lg overflow-hidden"
-                >
-                    <CollapsibleTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            className="flex w-full justify-between px-4 py-3 h-auto hover:bg-neutral-50 dark:hover:bg-neutral-900"
-                        >
-                            <div className="flex items-center gap-2">
-                                <Info className="h-4 w-4 text-neutral-500" />
-                                <span className="font-medium text-sm">Advanced: FSRS Weights</span>
-                            </div>
-                            {isOpen ? (
-                                <ChevronDown className="h-4 w-4 text-neutral-400" />
-                            ) : (
-                                <ChevronRight className="h-4 w-4 text-neutral-400" />
-                            )}
-                        </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="px-4 pb-4 space-y-4">
-                        <div className="text-xs text-neutral-500 leading-relaxed bg-neutral-50 dark:bg-neutral-900 p-3 rounded">
-                            <p className="font-medium text-neutral-700 dark:text-neutral-300 mb-1">About FSRS Weights</p>
-                            <p>
-                                The 19 weights are machine learning parameters that control how FSRS calculates 
-                                card stability and schedules reviews. They are typically optimized from your 
-                                review history using the FSRS optimizer. Only modify if you understand the algorithm.
-                            </p>
-                        </div>
+                <div className="pt-2">
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setShowAdvanced(!showAdvanced)}
+                        className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    >
+                        {showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings"}
+                    </Button>
+                </div>
 
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                                <Label htmlFor="fsrs-weights" className="text-xs font-medium">
-                                    Weights (comma separated, 19 values)
-                                </Label>
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={() => setShowWeightHelp(!showWeightHelp)}
-                                    >
-                                        {showWeightHelp ? "Hide" : "Show"} Help
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={handleResetWeights}
-                                    >
-                                        <RotateCcw className="h-3 w-3 mr-1" />
-                                        Reset
-                                    </Button>
+                {showAdvanced && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -10 }} 
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-6 pt-4 border-t border-zinc-100 dark:border-zinc-800"
+                    >
+                        {/* Request Retention */}
+                        <div className="space-y-3">
+                            <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Label htmlFor="fsrs-retention" className="font-medium text-sm">
+                                        Target Retention
+                                    </Label>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <HelpCircle className="h-4 w-4 text-neutral-400 cursor-help" />
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right" className="max-w-xs">
+                                            <p className="text-xs leading-relaxed">
+                                                The percentage of cards FSRS will aim to have you remember correctly. 
+                                            </p>
+                                        </TooltipContent>
+                                    </Tooltip>
                                 </div>
+                                <span className="text-sm font-medium tabular-nums">{retentionPercent}%</span>
                             </div>
-                            <Input
-                                id="fsrs-weights"
-                                value={weightsInput}
-                                onChange={(e) => handleWeightChange(e.target.value)}
-                                className={`font-mono text-xs ${weightsError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                                placeholder="0.40255, 1.18385, 3.173, ..."
+                            
+                            <Slider
+                                id="fsrs-retention"
+                                min={0.7}
+                                max={0.99}
+                                step={0.01}
+                                value={[params.request_retention]}
+                                onValueChange={(value) =>
+                                    onParamsChange({
+                                        ...params,
+                                        request_retention: value[0],
+                                    })
+                                }
                             />
-                            {weightsError ? (
-                                <p className="text-xs text-red-500">{weightsError}</p>
-                            ) : (
-                                <p className="text-xs text-neutral-500">
-                                    {params.w ? `${params.w.length} weights configured` : "Using defaults"}
-                                </p>
-                            )}
                         </div>
 
-                        {/* Weight Help Table */}
-                        {showWeightHelp && (
-                            <div className="border rounded overflow-hidden">
-                                <div className="bg-neutral-100 dark:bg-neutral-800 px-3 py-2 text-xs font-medium">
-                                    Weight Reference (w[0] to w[18])
-                                </div>
-                                <div className="max-h-48 overflow-y-auto">
-                                    <table className="w-full text-xs">
-                                        <tbody>
-                                            {Array.from({ length: 19 }, (_, i) => (
-                                                <tr key={i} className="border-b last:border-0">
-                                                    <td className="px-3 py-1.5 w-12 text-neutral-500 font-mono">w[{i}]</td>
-                                                    <td className="px-3 py-1.5 w-20 font-medium">
-                                                        {WEIGHT_DESCRIPTIONS[i]?.name || `Param ${i}`}
-                                                    </td>
-                                                    <td className="px-3 py-1.5 text-neutral-500">
-                                                        {WEIGHT_DESCRIPTIONS[i]?.description || "Algorithm parameter"}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                        {/* Maximum Interval */}
+                        <div className="space-y-3">
+                            <div className="flex items-start justify-between">
+                                <Label htmlFor="fsrs-max-interval" className="font-medium text-sm">
+                                    Maximum Interval
+                                </Label>
+                                <span className="text-sm font-medium tabular-nums">
+                                    {params.maximum_interval >= 365 ? `${Math.round(params.maximum_interval / 365)}y` : `${params.maximum_interval}d`}
+                                </span>
                             </div>
-                        )}
-                    </CollapsibleContent>
-                </Collapsible>
+
+                            <Slider
+                                id="fsrs-max-interval"
+                                min={30}
+                                max={3650}
+                                step={30}
+                                value={[Math.min(params.maximum_interval, 3650)]}
+                                onValueChange={(value) =>
+                                    onParamsChange({
+                                        ...params,
+                                        maximum_interval: value[0],
+                                    })
+                                }
+                            />
+                        </div>
+
+                        {/* Advanced Weights */}
+                        <Collapsible
+                            open={isOpen}
+                            onOpenChange={setIsOpen}
+                            className="border rounded-xl overflow-hidden"
+                        >
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="flex w-full justify-between px-4 py-3 h-auto hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Info className="h-4 w-4 text-neutral-500" />
+                                        <span className="font-medium text-sm">FSRS Weights</span>
+                                    </div>
+                                    {isOpen ? (
+                                        <ChevronDown className="h-4 w-4 text-neutral-400" />
+                                    ) : (
+                                        <ChevronRight className="h-4 w-4 text-neutral-400" />
+                                    )}
+                                </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="px-4 pb-4 space-y-4">
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <Label htmlFor="fsrs-weights" className="text-xs font-medium">
+                                            Weights (comma separated, 19 values)
+                                        </Label>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-xs"
+                                            onClick={handleResetWeights}
+                                        >
+                                            <RotateCcw className="h-3 w-3 mr-1" />
+                                            Reset
+                                        </Button>
+                                    </div>
+                                    <Input
+                                        id="fsrs-weights"
+                                        value={weightsInput}
+                                        onChange={(e) => handleWeightChange(e.target.value)}
+                                        className={`font-mono text-xs ${weightsError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                                    />
+                                </div>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    </motion.div>
+                )}
             </div>
         </TooltipProvider>
     )
 }
+

@@ -31,6 +31,7 @@ const footerSections = [
       { name: "Contact", href: "/home/contact" },
       { name: "Privacy Policy", href: "/home/privacy-policy" },
       { name: "Terms of Service", href: "/home/terms-of-service" },
+      { name: "Cookies Policy", href: "/home/cookies-policy" },
     ],
   },
 ];
@@ -134,7 +135,7 @@ export function Footer() {
                   Terms
                 </a>
                 <a
-                  href="#cookies"
+                  href="/home/cookies-policy"
                   className="text-sm text-gray-400 hover:text-white transition-colors"
                 >
                   Cookies

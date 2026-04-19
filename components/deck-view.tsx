@@ -6,8 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Card as UICard, CardContent } from "@/components/ui/card"
-import { ArrowLeft, Play, Plus, Edit, Trophy, BookText, Download, Calendar, Target } from "lucide-react"
+import { ArrowLeft, Play, Plus, Edit, Trophy, BookText, Download, Calendar, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { CreateCardDialog } from "@/components/create-card-dialog"
 import { useDecks } from "@/context/deck-context"
@@ -159,31 +158,18 @@ export function DeckView({ deckId }: DeckViewProps) {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10" />
-          <div>
-            <Skeleton className="h-8 w-48 mb-1" />
-            <Skeleton className="h-4 w-24" />
-          </div>
+      <div className="space-y-8 w-full">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-24" />
         </div>
-
-        <Skeleton className="h-5 w-full max-w-lg" />
-
         <div className="flex gap-3">
-          <Skeleton className="h-10 w-24" />
-          <Skeleton className="h-10 w-24" />
-          <Skeleton className="h-10 w-24" />
+          <Skeleton className="h-10 w-28 rounded-full" />
+          <Skeleton className="h-10 w-28 rounded-full" />
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
-            <UICard key={i} className="overflow-hidden">
-              <CardContent className="p-6">
-                <Skeleton className="h-6 w-full mb-4" />
-                <Skeleton className="h-20 w-full mt-4" />
-              </CardContent>
-            </UICard>
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
         </div>
       </div>
@@ -192,73 +178,86 @@ export function DeckView({ deckId }: DeckViewProps) {
 
   if (!deck) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold mb-2">Deck not found</h2>
-        <p className="text-gray-500 mb-6">The deck you're looking for doesn't exist or has been deleted.</p>
-        <Button asChild>
-          <Link href="/">Return to Home</Link>
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <p className="text-sm text-zinc-400 mb-4">Deck not found</p>
+        <Button variant="outline" size="sm" asChild className="rounded-full">
+          <Link href="/">Return home</Link>
         </Button>
       </div>
     )
   }
 
+  const totalCards = deck.cards?.length || deck.card_count || 0
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/">
-            <ArrowLeft className="h-4 w-4" />
+    <div className="space-y-8 w-full">
+      {/* ── Header ── */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild className="h-8 w-8 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
+          </Button>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              {deck.name}
+            </h1>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              {totalCards} card{totalCards !== 1 && "s"}
+              {deck.tag && <span className="ml-2 text-zinc-300 dark:text-zinc-700">· {deck.tag}</span>}
+            </p>
+          </div>
+        </div>
+        {deck.description && (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 pl-11">{deck.description}</p>
+        )}
+      </div>
+
+      {/* ── Primary action ── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button asChild className="h-10 rounded-full px-6 bg-zinc-900 hover:bg-black text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white shadow-sm font-medium text-sm">
+          <Link href={`/deck/${deckId}/study`}>
+            <Play className="h-3.5 w-3.5 mr-2 fill-current" />
+            {isSpacedRepetitionEnabled ? `Study · ${dueCards.length} due` : "Study"}
           </Link>
         </Button>
-        <div>
-          <h1 className="text-2xl font-semibold">{deck.name}</h1>
-          <p className="text-gray-500">{deck.cards?.length || deck.card_count || 0} cards</p>
+
+        <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" asChild className="h-9 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium">
+            <Link href={`/deck/${deckId}/exam`}>
+              <Trophy className="h-3.5 w-3.5 mr-1.5" />
+              {hasInProgressExam ? "Resume Exam" : "Exam"}
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsScheduleExamOpen(true)} className="h-9 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium">
+            <Calendar className="h-3.5 w-3.5 mr-1.5" />
+            Schedule
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsCreateCardOpen(true)} className="h-9 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium">
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Add Card
+          </Button>
+          <Button variant="outline" size="sm" asChild className="h-9 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium">
+            <Link href={`/deck/${deckId}/edit`}>
+              <Edit className="h-3.5 w-3.5 mr-1.5" />
+              Edit
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)} className="h-9 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium">
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            Export
+          </Button>
+          <Button variant="outline" size="sm" asChild className="h-9 rounded-full border-zinc-200 dark:border-zinc-800 text-xs font-medium">
+            <Link href={`/deck/${deckId}/language-study`}>
+              <BookText className="h-3.5 w-3.5 mr-1.5" />
+              Language
+            </Link>
+          </Button>
         </div>
       </div>
 
-      {deck.description && <p className="text-gray-600 dark:text-gray-300">{deck.description}</p>}
-
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-2">
-        <Button asChild>
-          <Link href={`/deck/${deckId}/study`}>
-            <Play className="h-4 w-4 mr-2" />
-            {isSpacedRepetitionEnabled ? `Study (${dueCards.length} due)` : "Study"}
-          </Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href={`/deck/${deckId}/exam`}>
-            <Trophy className="h-4 w-4 mr-2" />
-            {hasInProgressExam ? "Resume Exam" : "Exam Mode"}
-          </Link>
-        </Button>
-        <Button variant="outline" onClick={() => setIsScheduleExamOpen(true)}>
-          <Calendar className="h-4 w-4 mr-2" />
-          Schedule Exam
-        </Button>
-        <Button variant="outline" onClick={() => setIsCreateCardOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Card
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href={`/deck/${deckId}/edit`}>
-            <Edit className="h-4 w-4 mr-2" />
-            Edit Deck
-          </Link>
-        </Button>
-        <Button variant="outline" onClick={() => setIsExportDialogOpen(true)}>
-          <Download className="h-4 w-4 mr-2" />
-          Export
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href={`/deck/${deckId}/language-study`}>
-            <BookText className="h-4 w-4 mr-2" />
-            Language Study
-          </Link>
-        </Button>
-      </div>
-
-      {/* Exam Plan Summary & Spaced Repetition Stats */}
+      {/* ── Stats strip ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ExamPlanSummary
           deckId={deckId}
@@ -266,118 +265,127 @@ export function DeckView({ deckId }: DeckViewProps) {
           onScheduleNew={() => setIsScheduleExamOpen(true)}
         />
         {isSpacedRepetitionEnabled && (
-          <div className="max-w-sm">
-            <SpacedRepetitionStats deckId={deckId} />
-          </div>
+          <SpacedRepetitionStats deckId={deckId} />
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {deck.cards?.map((card) => {
-          const progress = (card as any).progress
-          let borderColor = ""
-          let stateLabel = ""
+      {/* ── Card list ── */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between px-1 pb-3">
+          <p className="text-[11px] uppercase tracking-widest font-bold text-zinc-400 dark:text-zinc-600">
+            Cards
+          </p>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-600 tabular-nums">
+            {totalCards}
+          </p>
+        </div>
 
-          if (isSpacedRepetitionEnabled && progress?.fsrs_state) {
-            const state = progress.fsrs_state.state
-            // 0=New, 1=Learning, 2=Review, 3=Relearning
-            if (state === 0) {
-              borderColor = "border-blue-400 dark:border-blue-600"
-              stateLabel = "New"
-            } else if (state === 1 || state === 3) {
-              borderColor = "border-orange-400 dark:border-orange-600"
-              stateLabel = state === 1 ? "Learning" : "Relearning"
-            } else if (state === 2) {
-              borderColor = "border-green-400 dark:border-green-600"
-              stateLabel = "Review"
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+          {deck.cards?.map((card) => {
+            const progress = (card as any).progress
+            let stateLabel = ""
+            let dotColor = "bg-zinc-300 dark:bg-zinc-700"
+
+            if (isSpacedRepetitionEnabled && progress?.fsrs_state) {
+              const state = progress.fsrs_state.state
+              if (state === 0) {
+                dotColor = "bg-zinc-400"
+                stateLabel = "New"
+              } else if (state === 1 || state === 3) {
+                dotColor = "bg-zinc-500"
+                stateLabel = state === 1 ? "Learning" : "Relearning"
+              } else if (state === 2) {
+                dotColor = "bg-zinc-900 dark:bg-zinc-100"
+                stateLabel = "Review"
+              }
             }
-          }
 
-          return (
-            <UICard
-              key={card.id}
-              className={`overflow-hidden hover:shadow-md transition-shadow ${borderColor ? `border-2 ${borderColor}` : ""}`}
-            >
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="font-medium">{card.front}</div>
-                  {stateLabel && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${stateLabel === "New" ? "bg-blue-50 text-blue-600 border-blue-200" :
-                      stateLabel === "Review" ? "bg-green-50 text-green-600 border-green-200" :
-                        "bg-orange-50 text-orange-600 border-orange-200"
-                      }`}>
-                      {stateLabel}
-                    </span>
-                  )}
+            return (
+              <div
+                key={card.id}
+                className="group flex items-start gap-3 px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+              >
+                {/* state dot */}
+                <div className="pt-1.5 shrink-0">
+                  <div className={`w-2 h-2 rounded-full ${dotColor}`} />
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-300 pt-4 border-t">{card.back}</div>
-                {isSpacedRepetitionEnabled && progress && (
-                  <div className="mt-2 pt-2 border-t text-xs text-gray-500 flex justify-between">
-                    <span>Next: {formatDate(progress.due_date, 'short')}</span>
-                    <span>Ease: {progress.ease_factor?.toFixed(2) || "2.50"}</span>
-                  </div>
-                )}
-              </CardContent>
-            </UICard>
-          )
-        }) || []}
+
+                {/* content */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                    {card.front}
+                  </p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 truncate">
+                    {card.back}
+                  </p>
+                </div>
+
+                {/* meta */}
+                <div className="shrink-0 flex items-center gap-3 text-[10px] text-zinc-400 dark:text-zinc-600">
+                  {stateLabel && (
+                    <span className="uppercase tracking-wider font-bold">{stateLabel}</span>
+                  )}
+                  {isSpacedRepetitionEnabled && progress?.due_date && (
+                    <span className="tabular-nums hidden sm:inline">{formatDate(progress.due_date, 'short')}</span>
+                  )}
+                  <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </div>
+            )
+          }) || []}
+
+          {totalCards === 0 && (
+            <div className="py-16 text-center">
+              <p className="text-sm text-zinc-400">No cards yet</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 rounded-full text-xs"
+                onClick={() => setIsCreateCardOpen(true)}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                Add your first card
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <CreateCardDialog open={isCreateCardOpen} onOpenChange={setIsCreateCardOpen} deckId={deckId} />
 
       {/* Export Options Dialog */}
       <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[400px] rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Export Deck</DialogTitle>
-            <DialogDescription>
-              Choose which columns to include and the export format.
+            <DialogTitle className="text-base font-semibold">Export Deck</DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500">
+              Choose columns and format.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-5 py-4">
             <div className="space-y-3">
-              <Label className="text-sm font-medium">Columns to Include</Label>
-              <div className="space-y-2">
+              <Label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400">Columns</Label>
+              <div className="space-y-2.5">
                 <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="front"
-                    checked={exportOptions.includeFront}
-                    onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeFront: checked as boolean }))}
-                  />
+                  <Checkbox id="front" checked={exportOptions.includeFront} onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeFront: checked as boolean }))} />
                   <Label htmlFor="front" className="text-sm font-normal cursor-pointer">Front</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="back"
-                    checked={exportOptions.includeBack}
-                    onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeBack: checked as boolean }))}
-                  />
+                  <Checkbox id="back" checked={exportOptions.includeBack} onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeBack: checked as boolean }))} />
                   <Label htmlFor="back" className="text-sm font-normal cursor-pointer">Back</Label>
                 </div>
                 {isSpacedRepetitionEnabled && (
                   <>
                     <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="state"
-                        checked={exportOptions.includeState}
-                        onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeState: checked as boolean }))}
-                      />
-                      <Label htmlFor="state" className="text-sm font-normal cursor-pointer">State (New/Learning/Review)</Label>
+                      <Checkbox id="state" checked={exportOptions.includeState} onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeState: checked as boolean }))} />
+                      <Label htmlFor="state" className="text-sm font-normal cursor-pointer">State</Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="nextReview"
-                        checked={exportOptions.includeNextReview}
-                        onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeNextReview: checked as boolean }))}
-                      />
-                      <Label htmlFor="nextReview" className="text-sm font-normal cursor-pointer">Next Review Date</Label>
+                      <Checkbox id="nextReview" checked={exportOptions.includeNextReview} onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeNextReview: checked as boolean }))} />
+                      <Label htmlFor="nextReview" className="text-sm font-normal cursor-pointer">Next Review</Label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="easeFactor"
-                        checked={exportOptions.includeEaseFactor}
-                        onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeEaseFactor: checked as boolean }))}
-                      />
+                      <Checkbox id="easeFactor" checked={exportOptions.includeEaseFactor} onCheckedChange={(checked) => setExportOptions(prev => ({ ...prev, includeEaseFactor: checked as boolean }))} />
                       <Label htmlFor="easeFactor" className="text-sm font-normal cursor-pointer">Ease Factor</Label>
                     </div>
                   </>
@@ -385,26 +393,23 @@ export function DeckView({ deckId }: DeckViewProps) {
               </div>
             </div>
             <div className="space-y-3">
-              <Label className="text-sm font-medium">Export Format</Label>
-              <RadioGroup
-                value={exportOptions.format}
-                onValueChange={(value) => setExportOptions(prev => ({ ...prev, format: value as 'csv' | 'tsv' }))}
-              >
+              <Label className="text-[10px] uppercase tracking-widest font-bold text-zinc-400">Format</Label>
+              <RadioGroup value={exportOptions.format} onValueChange={(value) => setExportOptions(prev => ({ ...prev, format: value as 'csv' | 'tsv' }))}>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="csv" id="csv" />
-                  <Label htmlFor="csv" className="text-sm font-normal cursor-pointer">CSV (Comma-separated)</Label>
+                  <Label htmlFor="csv" className="text-sm font-normal cursor-pointer">CSV</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="tsv" id="tsv" />
-                  <Label htmlFor="tsv" className="text-sm font-normal cursor-pointer">TSV (Tab-separated)</Label>
+                  <Label htmlFor="tsv" className="text-sm font-normal cursor-pointer">TSV</Label>
                 </div>
               </RadioGroup>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleExport} disabled={!exportOptions.includeFront && !exportOptions.includeBack}>
-              <Download className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(false)} className="rounded-full text-xs">Cancel</Button>
+            <Button size="sm" onClick={handleExport} disabled={!exportOptions.includeFront && !exportOptions.includeBack} className="rounded-full text-xs bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900">
+              <Download className="h-3.5 w-3.5 mr-1.5" />
               Export
             </Button>
           </DialogFooter>
