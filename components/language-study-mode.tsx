@@ -368,10 +368,6 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
         if (newCalculatedStreak > longestSessionStreak) {
           setLongestSessionStreak(newCalculatedStreak);
         }
-        if (newCalculatedStreak > 0 && (newCalculatedStreak % 3 === 0 || newCalculatedStreak % 5 === 0)) {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 4000);
-        }
         toast({
           title: "Correct!",
           description: `Similarity: ${(score * 100).toFixed(1)}%`,
@@ -418,12 +414,16 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
       
       // Determine delay: 0.5s for 100% similarity, 2.5s otherwise
       const delay = similarityScore === 1 ? 500 : 2500;
+      const previousCardId = currentCard?.id ?? null;
       setTimeout(() => {
         resetCardState();
-        if (cards.length > 0) {
-          // Use the stored question number to ensure we're using the correct value
-          selectAndSetNextCard(cards, currentCard?.id ?? null, questionToUse);
-        }
+        // Use functional state update to always get latest cards array
+        setCards(currentCards => {
+          if (currentCards.length > 0) {
+            selectAndSetNextCard(currentCards, previousCardId, questionToUse);
+          }
+          return currentCards;
+        });
       }, delay); // Dynamic delay based on similarity
       
     } catch (error) {
