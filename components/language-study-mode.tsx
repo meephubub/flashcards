@@ -85,6 +85,9 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
   // Initialize with 1 since we're showing the first card
   const [questionsAnsweredThisSession, setQuestionsAnsweredThisSession] = useState(1);
 
+  // Track recent answers for the progress bar (last 10: true = correct, false = wrong)
+  const [recentAnswers, setRecentAnswers] = useState<boolean[]>([]);
+
   // Preload the similarity model and show toasts
   const modelPreloadedRef = useRef(false);
   useEffect(() => {
@@ -137,7 +140,10 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
 
   // Track recently seen cards to avoid repetition
   const recentlySeenCards = useRef<(string | number)[]>([]);
-  
+
+  // Track cards that were just answered wrong to re-insert them immediately
+  const forcedReinsertionCards = useRef<{ cardId: string | number; remainingSlots: number }[]>([]);
+
   // Refs to avoid stale closures in setTimeout
   const similarityScoreRef = useRef<number | null>(null);
   
@@ -146,7 +152,30 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
       setSessionComplete(true);
       return;
     }
-    
+
+    // Decrement all forced reinsertion counters
+    forcedReinsertionCards.current = forcedReinsertionCards.current.map(item => ({
+      ...item,
+      remainingSlots: item.remainingSlots - 1
+    }));
+
+    // Check if any card is ready for forced re-insertion
+    const readyForReinsertion = forcedReinsertionCards.current.filter(item => item.remainingSlots <= 0);
+    if (readyForReinsertion.length > 0) {
+      // Select the first card that's ready for re-insertion
+      const cardToReinsert = readyForReinsertion[0];
+      const targetCard = currentCardsList.find(c => c.id === cardToReinsert.cardId);
+      if (targetCard && targetCard.id !== previousCardId) {
+        setCurrentCardId(targetCard.id);
+        // Remove this card from forced reinsertion list
+        forcedReinsertionCards.current = forcedReinsertionCards.current.filter(
+          item => item.cardId !== cardToReinsert.cardId
+        );
+        console.log(`Forced re-insertion of card: ${targetCard.id}`);
+        return;
+      }
+    }
+
     // Update recently seen cards list
     if (previousCardId) {
       // Add the previous card to recently seen
@@ -155,7 +184,7 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
         ...recentlySeenCards.current.filter((id: string | number) => id !== previousCardId)
       ].slice(0, Math.min(5, Math.floor(currentCardsList.length / 2))); // Keep track of last N cards, where N depends on deck size
     }
-    
+
     // First, filter out the previous card and reduce probability of recently seen cards
     const eligibleCards = currentCardsList.filter(card => {
       // Always filter out the immediately previous card if we have more than one card
@@ -308,7 +337,9 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
     
     // Reset the recently seen cards list
     recentlySeenCards.current = [];
-    
+    // Reset forced reinsertion queue
+    forcedReinsertionCards.current = [];
+
     // Initialize to 1 since we're showing the first card
     setQuestionsAnsweredThisSession(1);
     setCorrectAnswers(0);
@@ -423,6 +454,29 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
         });
       }
       
+      // Track answer in history
+      setRecentAnswers(prev => {
+        const newAnswers = [...prev, isCorrect];
+        return newAnswers.slice(-10);
+      });
+
+      // If answer was wrong, add to forced reinsertion queue (appears again in 2-4 cards)
+      if (!isCorrect && currentCard) {
+        const existingIndex = forcedReinsertionCards.current.findIndex(
+          item => item.cardId === currentCard.id
+        );
+        if (existingIndex >= 0) {
+          // Update existing entry with new delay
+          forcedReinsertionCards.current[existingIndex].remainingSlots = Math.floor(Math.random() * 3) + 2;
+        } else {
+          // Add new entry with random delay (2-4 cards)
+          forcedReinsertionCards.current.push({
+            cardId: currentCard.id,
+            remainingSlots: Math.floor(Math.random() * 3) + 2
+          });
+        }
+      }
+
       // We're now incrementing the counter to the NEXT card number
       const nextQuestionNumber = questionsAnsweredThisSession + 1;
       
@@ -495,6 +549,9 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
     setCurrentStreak(0);
     setLongestSessionStreak(0);
     setSessionComplete(false);
+    setRecentAnswers([]);
+    forcedReinsertionCards.current = [];
+    recentlySeenCards.current = [];
     // Initialize to 1 since we're showing the first card
     setQuestionsAnsweredThisSession(1);
 
@@ -593,6 +650,29 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
           </div>
 
           <Progress value={studyProgress} className="w-full" />
+
+          {/* Recent answers bar (last 10: green = correct, red = wrong) */}
+          {recentAnswers.length > 0 && (
+            <div className="mt-2">
+              <div className="flex gap-0.5 h-1">
+                {Array.from({ length: 10 }).map((_, i) => {
+                  const answer = recentAnswers[i];
+                  return (
+                    <div
+                      key={i}
+                      className={`flex-1 rounded-sm transition-colors duration-300 ${
+                        answer === undefined
+                          ? 'bg-neutral-100'
+                          : answer
+                            ? 'bg-emerald-500'
+                            : 'bg-rose-500'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
 

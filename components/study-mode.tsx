@@ -80,9 +80,6 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     lastCardTime: new Date()
   })
 
-  // Track recent answers for the progress bar (last 10: true = correct, false = wrong)
-  const [recentAnswers, setRecentAnswers] = useState<boolean[]>([])
-
   // For rating button hover effect
   const [hoveredRating, setHoveredRating] = useState<ConfidenceRating | null>(null)
 
@@ -212,7 +209,6 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     setReviewMode(false)
     setReviewIndices([])
     setReviewCurrent(0)
-    setRecentAnswers([])
     setStats({
       totalCards: cards.length,
       cardsStudied: 0,
@@ -603,17 +599,6 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
 
   // These functions are now defined earlier in the component
 
-  // These functions are now defined earlier in the component
-
-  // Helper to add answer to recent history
-  const addToRecentAnswers = (isCorrect: boolean) => {
-    setRecentAnswers(prev => {
-      const newAnswers = [...prev, isCorrect];
-      // Keep only last 10
-      return newAnswers.slice(-10);
-    });
-  };
-
   // Update statistics based on user response
   const updateStats = (isKnown: boolean) => {
     const now = new Date();
@@ -640,8 +625,6 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
         endTime: cardsStudied === prev.totalCards ? now : prev.endTime
       };
     });
-
-    addToRecentAnswers(isKnown);
   };
 
   const handleRating = async (rating: ConfidenceRating) => {
@@ -754,28 +737,6 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
         </div>
       )}
 
-      {/* Recent answers bar (last 10: green = correct, red = wrong) */}
-      {recentAnswers.length > 0 && (
-        <div className="mb-3">
-          <div className="flex gap-0.5 h-1">
-            {Array.from({ length: 10 }).map((_, i) => {
-              const answer = recentAnswers[i];
-              return (
-                <div
-                  key={i}
-                  className={`flex-1 rounded-sm transition-colors duration-300 ${
-                    answer === undefined
-                      ? 'bg-neutral-100'
-                      : answer
-                        ? 'bg-emerald-500'
-                        : 'bg-rose-500'
-                  }`}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
       {!studyComplete && (
         <>
           <div
