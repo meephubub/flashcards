@@ -80,6 +80,9 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     lastCardTime: new Date()
   })
 
+  // Track recent answers for the progress bar (last 10: true = correct, false = wrong)
+  const [recentAnswers, setRecentAnswers] = useState<boolean[]>([])
+
   // For rating button hover effect
   const [hoveredRating, setHoveredRating] = useState<ConfidenceRating | null>(null)
 
@@ -207,6 +210,19 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     setStudyComplete(false)
     setCardsToReview([])
     setReviewMode(false)
+    setReviewIndices([])
+    setReviewCurrent(0)
+    setRecentAnswers([])
+    setStats({
+      totalCards: cards.length,
+      cardsStudied: 0,
+      knownCards: 0,
+      unknownCards: 0,
+      startTime: new Date(),
+      endTime: null,
+      averageTimePerCard: 0,
+      lastCardTime: new Date()
+    })
   }
 
   const finishSession = () => {
@@ -290,14 +306,46 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
 
   const handleCardNeedsReview = () => {
     if (reviewMode) {
-      // Just go to next review card
-      moveToNextCard();
-      return
+      // In review mode, re-insert the card randomly within the next few cards
+      updateStats(false);
+      const currentCard = cards[reviewIndices[reviewCurrent]];
+
+      // Remove from review indices
+      const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent);
+
+      if (newReviewIndices.length === 0) {
+        // If this was the last card, just add it back
+        setReviewIndices([reviewIndices[reviewCurrent]]);
+      } else {
+        // Re-insert at random position within the remaining cards (within next 3 cards or at end)
+        const insertPos = Math.min(Math.floor(Math.random() * 3) + 1, newReviewIndices.length);
+        newReviewIndices.splice(insertPos, 0, reviewIndices[reviewCurrent]);
+        setReviewIndices(newReviewIndices);
+      }
+      return;
     }
-    if (!cardsToReview.includes(currentCardIndex)) {
-      setCardsToReview(prev => [...prev, currentCardIndex])
-    }
+
+    // Normal mode: re-insert the card randomly within the next few cards
     updateStats(false);
+    const currentCard = cards[currentCardIndex];
+
+    // Create new array without the current card
+    const remainingCards = cards.slice(currentCardIndex + 1);
+    const beforeCards = cards.slice(0, currentCardIndex + 1);
+
+    // Re-insert at random position within the next few cards (within next 2-4 cards)
+    // This ensures the wrong card comes up again soon but not immediately
+    const insertOffset = Math.floor(Math.random() * 3) + 2; // 2-4 cards ahead
+    const insertPos = Math.min(insertOffset, remainingCards.length);
+
+    // Insert the card at the calculated position
+    const newRemainingCards = [...remainingCards];
+    newRemainingCards.splice(insertPos, 0, currentCard);
+
+    // Reconstruct the full cards array
+    const newCards = [...beforeCards, ...newRemainingCards];
+    setCards(newCards);
+
     moveToNextCard();
   }
 
@@ -557,6 +605,15 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
 
   // These functions are now defined earlier in the component
 
+  // Helper to add answer to recent history
+  const addToRecentAnswers = (isCorrect: boolean) => {
+    setRecentAnswers(prev => {
+      const newAnswers = [...prev, isCorrect];
+      // Keep only last 10
+      return newAnswers.slice(-10);
+    });
+  };
+
   // Update statistics based on user response
   const updateStats = (isKnown: boolean) => {
     const now = new Date();
@@ -583,6 +640,8 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
         endTime: cardsStudied === prev.totalCards ? now : prev.endTime
       };
     });
+
+    addToRecentAnswers(isKnown);
   };
 
   const handleRating = async (rating: ConfidenceRating) => {
@@ -611,7 +670,23 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       })
 
       // Update statistics based on rating
-      updateStats(rating >= 3);
+      const isCorrect = rating >= 3;
+      updateStats(isCorrect);
+
+      // If rating is low (0-2), re-insert card for immediate review
+      if (!isCorrect && !reviewMode) {
+        const currentCard = cards[currentCardIndex];
+        const remainingCards = cards.slice(currentCardIndex + 1);
+        const beforeCards = cards.slice(0, currentCardIndex + 1);
+
+        // Re-insert at random position within next 2-4 cards
+        const insertOffset = Math.floor(Math.random() * 3) + 2;
+        const insertPos = Math.min(insertOffset, remainingCards.length);
+
+        const newRemainingCards = [...remainingCards];
+        newRemainingCards.splice(insertPos, 0, currentCard);
+        setCards([...beforeCards, ...newRemainingCards]);
+      }
 
       // Move to the next card
       moveToNextCard()
@@ -623,7 +698,8 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
         variant: "destructive",
       })
       // Still move to the next card even if there's an error
-      updateStats(rating >= 3);
+      const isCorrect = rating >= 3;
+      updateStats(isCorrect);
       moveToNextCard()
     }
   }
@@ -674,6 +750,29 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
               className="h-full bg-black rounded-full transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Recent answers bar (last 10: green = correct, red = wrong) */}
+      {recentAnswers.length > 0 && (
+        <div className="mb-3">
+          <div className="flex gap-0.5 h-1">
+            {Array.from({ length: 10 }).map((_, i) => {
+              const answer = recentAnswers[i];
+              return (
+                <div
+                  key={i}
+                  className={`flex-1 rounded-sm transition-colors duration-300 ${
+                    answer === undefined
+                      ? 'bg-neutral-100'
+                      : answer
+                        ? 'bg-emerald-500'
+                        : 'bg-rose-500'
+                  }`}
+                />
+              );
+            })}
           </div>
         </div>
       )}
