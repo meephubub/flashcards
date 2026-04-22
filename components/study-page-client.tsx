@@ -19,6 +19,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useTimeTracking } from "@/hooks/use-time-tracking";
+import { Link } from "next-view-transitions";
 
 export function StudyPageClient({ deckId }: { deckId: number }) {
   const { session, isLoading, user } = useAuth();
@@ -107,7 +108,9 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
                 <Breadcrumb>
                   <BreadcrumbList>
                     <BreadcrumbItem className="hidden md:block">
-                      <BreadcrumbLink href="/">Decks</BreadcrumbLink>
+                      <BreadcrumbLink asChild>
+                        <Link href="/">Decks</Link>
+                      </BreadcrumbLink>
                     </BreadcrumbItem>
                     <BreadcrumbSeparator className="hidden md:block" />
                     <BreadcrumbItem>
@@ -142,7 +145,9 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href="/">Decks</BreadcrumbLink>
+                    <BreadcrumbLink asChild>
+                      <Link href="/">Decks</Link>
+                    </BreadcrumbLink>
                   </BreadcrumbItem>
                   <BreadcrumbSeparator className="hidden md:block" />
                   <BreadcrumbItem>

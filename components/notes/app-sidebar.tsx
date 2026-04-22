@@ -14,7 +14,7 @@ import {
   SquareTerminal,
   Earth,
 } from "lucide-react";
-import NextLink from "next/link";
+import { Link } from "next-view-transitions";
 
 import { NavMain } from "@/components/notes/nav-main";
 import { NavSearch } from "@/components/notes/nav-search";
@@ -380,7 +380,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarFooter>
           {/* Fixed Agenda panel */}
           <div className="w-full px-2 pt-2 border-t group-data-[collapsible=icon]:hidden">
-            <NextLink href="/tasks" className="block">
+            <Link href="/tasks" className="block">
               <div className="rounded-lg border bg-muted/30 backdrop-blur p-3 hover:bg-muted/40 transition-colors">
                 <div className="flex items-start justify-between">
                   <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[10px] font-medium">
@@ -436,7 +436,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </ul>
                 </div>
               </div>
-            </NextLink>
+            </Link>
           </div>
           <NavUser user={navUser} />
         </SidebarFooter>

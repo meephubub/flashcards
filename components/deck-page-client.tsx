@@ -17,6 +17,10 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Link } from "next-view-transitions";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Edit, BookText, Trophy, CalendarIcon, Download, ChevronDown } from "lucide-react";
+import { getCachedExamData } from "@/lib/exam-cache";
 
 export function DeckPageClient({ deckId }: { deckId: number }) {
   const { session, isLoading, user } = useAuth();
@@ -24,12 +28,27 @@ export function DeckPageClient({ deckId }: { deckId: number }) {
   const supabase = useMemo(() => createClient(), []);
   const [deckTitle, setDeckTitle] = useState<string>("");
   const [deckTag, setDeckTag] = useState<string | null>(null);
+  const [hasInProgressExam, setHasInProgressExam] = useState(false);
+
+  useEffect(() => {
+    if (deckId) {
+      const cachedExam = getCachedExamData(deckId);
+      setHasInProgressExam(!!cachedExam);
+    }
+  }, [deckId]);
 
   useEffect(() => {
     if (!isLoading && !session) {
       router.push("/");
     }
   }, [session, isLoading, router]);
+
+  // Track last visited deck for quick "Add Card" access
+  useEffect(() => {
+    if (deckId && !Number.isNaN(deckId)) {
+      localStorage.setItem('lastVisitedDeckId', deckId.toString())
+    }
+  }, [deckId])
 
   useEffect(() => {
     let mounted = true;
@@ -101,15 +120,19 @@ export function DeckPageClient({ deckId }: { deckId: number }) {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href="/">Decks</BreadcrumbLink>
+                    <BreadcrumbLink asChild>
+                      <Link href="/">Decks</Link>
+                    </BreadcrumbLink>
                   </BreadcrumbItem>
                   <BreadcrumbSeparator className="hidden md:block" />
                   
                   {tagParts.map((part, index) => (
                     <React.Fragment key={index}>
                       <BreadcrumbItem className="hidden md:block">
-                        <BreadcrumbLink href={`/?path=${tagParts.slice(0, index + 1).join('/')}`}>
-                          {part}
+                        <BreadcrumbLink asChild>
+                          <Link href={`/?path=${tagParts.slice(0, index + 1).join('/')}`}>
+                            {part}
+                          </Link>
                         </BreadcrumbLink>
                       </BreadcrumbItem>
                       <BreadcrumbSeparator className="hidden md:block" />
@@ -117,7 +140,41 @@ export function DeckPageClient({ deckId }: { deckId: number }) {
                   ))}
 
                   <BreadcrumbItem>
-                    <BreadcrumbPage>{deckTitle || `Deck #${deckId}`}</BreadcrumbPage>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-50 transition-colors outline-none focus:ring-0">
+                        <span className="font-normal text-foreground">{deckTitle || `Deck #${deckId}`}</span>
+                        <ChevronDown className="h-3 w-3" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-48 rounded-2xl">
+                        <DropdownMenuItem asChild className="rounded-xl">
+                          <Link href={`/deck/${deckId}/edit`} className="cursor-pointer">
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit Deck
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="rounded-xl">
+                          <Link href={`/deck/${deckId}/language-study`} className="cursor-pointer">
+                            <BookText className="h-4 w-4 mr-2" />
+                            Language Study
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="rounded-xl">
+                          <Link href={`/deck/${deckId}/exam`} className="cursor-pointer">
+                            <Trophy className="h-4 w-4 mr-2" />
+                            {hasInProgressExam ? "Resume Exam" : "Take Exam"}
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => window.dispatchEvent(new CustomEvent('open-schedule-modal'))} className="cursor-pointer rounded-xl">
+                          <CalendarIcon className="h-4 w-4 mr-2" />
+                          Schedule Exam
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => window.dispatchEvent(new CustomEvent('open-export-modal'))} className="cursor-pointer rounded-xl">
+                          <Download className="h-4 w-4 mr-2" />
+                          Export Deck
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>

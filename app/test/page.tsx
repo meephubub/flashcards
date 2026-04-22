@@ -1,76 +1,82 @@
-"use client"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
-import React, { useMemo } from "react"
-import { Canvas, useLoader } from "@react-three/fiber"
-import { OrbitControls } from "@react-three/drei"
-import * as THREE from "three"
-import { SVGLoader } from "three-stdlib"
-
-function SvgExtrude({ url = "/logo.svg", depth = 2 }: { url?: string; depth?: number }) {
-  const data = useLoader(SVGLoader as any, url) as any
-
-  // Convert SVG paths to extruded meshes
-  const meshes = useMemo(() => {
-    const group: React.ReactElement[] = []
-    const material = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.2, roughness: 0.6 })
-
-    ;(data?.paths || []).forEach((path: any, i: number) => {
-      const shapes = SVGLoader.createShapes(path)
-      shapes.forEach((shape: any, j: number) => {
-        const geo = new THREE.ExtrudeGeometry(shape, {
-          depth,
-          bevelEnabled: true,
-          bevelThickness: depth * 0.15,
-          bevelSize: depth * 0.15,
-          bevelSegments: 2,
-        })
-        // Center each piece
-        geo.center()
-        const color = new THREE.Color(path.color || "#1f2937") // fallback slate-800
-        const mat = material.clone()
-        mat.color = color
-        group.push(
-          <mesh key={`${i}-${j}`} geometry={geo} material={mat} castShadow receiveShadow />
-        )
-      })
-    })
-    return group
-  }, [data, depth])
-
-  // Slight tilt for better look
-  return <group rotation={[-Math.PI / 2.5, 0, 0]}>{meshes}</group>
-}
-
-export default function TestPage() {
+export default function Page() {
   return (
-    <div className="h-[calc(100vh-0px)] w-full">
-      <Canvas
-        shadows
-        camera={{ position: [8, 6, 8], fov: 45 }}
-        gl={{ antialias: true }}
-      >
-        {/* Lights */}
-        <ambientLight intensity={0.4} />
-        <directionalLight
-          position={[5, 8, 5]}
-          intensity={1.2}
-          castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
-        />
+    <div className="flex min-h-screen items-center justify-center">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline">Open</Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-40" align="start">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuItem>
+              Profile
+              <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              Billing
+              <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              Settings
+              <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
 
-        {/* Ground */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
-          <planeGeometry args={[50, 50]} />
-          <meshStandardMaterial color="#f5f5f4" />
-        </mesh>
+          <DropdownMenuSeparator />
 
-        {/* SVG model */}
-        <SvgExtrude url="/placeholder.svg" depth={1.2} />
+          <DropdownMenuGroup>
+            <DropdownMenuItem>Team</DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>Invite users</DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem>Email</DropdownMenuItem>
+                  <DropdownMenuItem>Message</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>More...</DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+            <DropdownMenuItem>
+              New Team
+              <DropdownMenuShortcut>⌘+T</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
 
-        {/* Controls */}
-        <OrbitControls enableDamping dampingFactor={0.08} />
-      </Canvas>
+          <DropdownMenuSeparator />
+
+          <DropdownMenuGroup>
+            <DropdownMenuItem>GitHub</DropdownMenuItem>
+            <DropdownMenuItem>Support</DropdownMenuItem>
+            <DropdownMenuItem disabled>API</DropdownMenuItem>
+          </DropdownMenuGroup>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuGroup>
+            <DropdownMenuItem>
+              Log out
+              <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

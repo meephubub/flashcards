@@ -14,7 +14,7 @@ import { MoreHorizontal, Edit, Copy, Download, Trash2 } from "lucide-react"
 import { useDecks } from "@/context/deck-context"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
+import { Link } from "next-view-transitions"
 
 interface DeckOptionsMenuProps {
   deckId: number
