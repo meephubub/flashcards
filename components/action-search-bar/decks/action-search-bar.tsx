@@ -30,6 +30,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -356,7 +358,6 @@ function DeckPicker({
       </p>
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">No decks found.</p>
-      ) : (
         filtered.map((deck, idx) => (
           <button
             key={deck.id}
@@ -383,40 +384,60 @@ function DeckPicker({
   )
 }
 
-// ─── Note picker (shown after typing "notes:") ─────────────────────────────────
+// ─── Note explorer (shown after typing "notes:") ───────────────────────────────
 
-function NotePicker({
+function NoteExplorer({
   query,
   notes,
   onSelect,
+  onBack,
+  onClose,
 }: {
   query: string
   notes: Note[]
   onSelect: (note: Note) => void
+  onBack: () => void
+  onClose: () => void
 }) {
-  const [activeIdx, setActiveIdx] = useState(0)
+  const [activeNoteIdx, setActiveNoteIdx] = useState(0)
+  const [searchQuery, setSearchQuery] = useState(query)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
 
-  const filtered = query.trim()
-    ? notes.filter((n) => (n.title || "Untitled").toLowerCase().includes(query.toLowerCase()))
+  const filtered = searchQuery.trim()
+    ? notes.filter((n) =>
+      (n.title || "Untitled").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (n.content || "").toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : notes
 
+  const activeNote = filtered[activeNoteIdx] ?? null
+
   useEffect(() => {
-    setActiveIdx(0)
-  }, [query])
+    inputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    setActiveNoteIdx(0)
+  }, [searchQuery])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "ArrowDown") {
         e.preventDefault()
-        setActiveIdx((prev) => Math.min(prev + 1, filtered.length - 1))
+        setActiveNoteIdx((prev) => Math.min(prev + 1, filtered.length - 1))
       } else if (e.key === "ArrowUp") {
         e.preventDefault()
-        setActiveIdx((prev) => Math.max(prev - 1, 0))
+        setActiveNoteIdx((prev) => Math.max(prev - 1, 0))
+      } else if (e.key === "Escape") {
+        onBack()
       } else if (e.key === "Enter") {
-        if (filtered[activeIdx]) onSelect(filtered[activeIdx])
+        if (activeNote) {
+          onSelect(activeNote)
+        }
       }
     },
-    [filtered, activeIdx, onSelect]
+    [filtered.length, onBack, activeNote, onSelect]
   )
 
   useEffect(() => {
@@ -425,37 +446,95 @@ function NotePicker({
   }, [handleKeyDown])
 
   return (
-    <div className="py-2 max-h-[420px] overflow-y-auto">
-      <p className="px-5 pt-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase text-muted-foreground select-none">
-        SELECT NOTE
-      </p>
-      {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-8">No notes found.</p>
-      ) : (
-        filtered.map((note, idx) => (
+    <div className="w-[780px] max-w-[95vw] flex flex-col max-h-[85vh]">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
+        <Search size={16} className="text-muted-foreground shrink-0" strokeWidth={1.5} />
+        {/* Notes badge */}
+        <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted border border-border text-xs text-foreground shrink-0">
+          <span className="text-muted-foreground font-medium">Search:</span>
+          <span className="font-semibold">Notes</span>
           <button
-            key={note.id}
-            onClick={() => onSelect(note)}
-            onMouseEnter={() => setActiveIdx(idx)}
-            className={`w-full flex items-center justify-between px-5 py-3 text-sm text-left transition-colors cursor-default ${idx === activeIdx
-              ? "bg-muted text-foreground"
-              : "text-foreground/80 hover:bg-muted/60"
-              }`}
+            onClick={onBack}
+            className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
           >
-            <div className="flex items-center gap-3.5">
-              <FileText
-                size={16}
-                strokeWidth={1.5}
-                className={idx === activeIdx ? "text-foreground" : "text-muted-foreground"}
-              />
-              <span>{note.title || "Untitled"}</span>
-            </div>
-            {note.category && (
-              <span className="text-xs text-muted-foreground">{note.category}</span>
-            )}
+            <X size={11} strokeWidth={2} />
           </button>
-        ))
-      )}
+        </div>
+        <input
+          ref={inputRef}
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search notes content..."
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+        />
+        <Kbd wide>esc</Kbd>
+      </div>
+
+      {/* Body: two-panel */}
+      <div className="flex flex-1 min-h-0 h-[480px]">
+        {/* Left: note list */}
+        <div className="w-[260px] border-r border-border flex flex-col shrink-0">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
+            <span className="text-xs text-muted-foreground">{filtered.length} notes</span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">No notes found.</p>
+            ) : (
+              filtered.map((note, idx) => (
+                <div
+                  key={note.id}
+                  onMouseEnter={() => setActiveNoteIdx(idx)}
+                  onClick={() => onSelect(note)}
+                  className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left transition-colors cursor-default group ${idx === activeNoteIdx
+                    ? "bg-muted text-foreground"
+                    : "text-foreground/80 hover:bg-muted/50"
+                    }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText size={14} className="shrink-0 text-muted-foreground" />
+                    <span className="truncate pr-2">{note.title || "Untitled"}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Right: note preview */}
+        <div className="flex-1 overflow-y-auto p-8 bg-muted/5">
+          {activeNote ? (
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <h2 className="text-xl font-semibold mb-4 text-foreground">{activeNote.title || "Untitled"}</h2>
+              <div className="text-sm text-foreground/80 leading-relaxed">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {activeNote.content || "_No content_"}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+              Select a note to preview
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center gap-4 px-5 py-3 border-t border-border bg-muted/40">
+        <div className="flex items-center gap-1.5">
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd>
+          <span className="text-xs text-muted-foreground">Navigate</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Kbd>↵</Kbd>
+          <span className="text-xs text-muted-foreground">Open Note</span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -676,6 +755,17 @@ export function DecksActionSearchBar() {
               exit="exit"
             >
               <DeckView deck={selectedDeck} onBack={handleBack} onClose={() => setOpen(false)} />
+            </motion.div>
+          ) : effectiveMode === "note-pick" ? (
+            <motion.div
+              key="note-view"
+              custom={direction}
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <NoteExplorer query={noteQuery} notes={notes} onSelect={handleNoteSelect} onBack={handleBack} onClose={() => setOpen(false)} />
             </motion.div>
           ) : (
             <motion.div
