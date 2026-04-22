@@ -24,6 +24,7 @@ import { useDecks, Deck } from "@/context/deck-context";
 import { Card, Note } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/client";
 import { useNoteContextStore } from "@/hooks/use-note-context";
+import { useNoteDialogStore } from "@/hooks/use-note-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -447,17 +448,20 @@ function NoteExplorer({
   onSelect,
   onBack,
   onClose,
+  onDeleteNote,
 }: {
   query: string;
   notes: Note[];
   onSelect: (note: Note) => void;
   onBack: () => void;
   onClose: () => void;
+  onDeleteNote: (id: string) => Promise<void>;
 }) {
   const [activeNoteIdx, setActiveNoteIdx] = useState(0);
   const [searchQuery, setSearchQuery] = useState(query);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const openDialog = useNoteDialogStore((s) => s.openDialog);
 
   const filtered = searchQuery.trim()
     ? notes.filter(
@@ -531,6 +535,17 @@ function NoteExplorer({
           placeholder="Search notes content..."
           className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
         />
+        <button
+          onClick={() => {
+            router.push("/notes");
+            openDialog();
+            onClose();
+          }}
+          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          title="New Note"
+        >
+          <Plus size={16} strokeWidth={2} />
+        </button>
         <Kbd wide>esc</Kbd>
       </div>
 
@@ -561,7 +576,10 @@ function NoteExplorer({
                       : "text-foreground/80 hover:bg-muted/50"
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="flex items-center gap-3 min-w-0 flex-1"
+                    onClick={() => onSelect(note)}
+                  >
                     <FileText
                       size={14}
                       className="shrink-0 text-muted-foreground"
@@ -570,6 +588,47 @@ function NoteExplorer({
                       {note.title || "Untitled"}
                     </span>
                   </div>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-0.5 rounded">
+                        <MoreHorizontal size={14} strokeWidth={1.75} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-32">
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/notes?noteId=${note.id}`);
+                          onClose();
+                        }}
+                        className="gap-2 cursor-pointer"
+                      >
+                        <Edit size={14} />
+                        <span>Edit</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (
+                            window.confirm(
+                              "Are you sure you want to delete this note?",
+                            )
+                          ) {
+                            try {
+                              await onDeleteNote(note.id);
+                            } catch (err) {
+                              console.error("Failed to delete note", err);
+                            }
+                          }
+                        }}
+                        className="gap-2 cursor-pointer text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 size={14} />
+                        <span>Delete</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               ))
             )}
@@ -637,6 +696,7 @@ export function DecksActionSearchBar() {
   const [notes, setNotes] = useState<Note[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = useMemo(() => createClient(), []);
+  const openDialog = useNoteDialogStore((s) => s.openDialog);
 
   const [mounted, setMounted] = useState(false);
 
@@ -665,6 +725,15 @@ export function DecksActionSearchBar() {
 
     fetchNotes();
   }, [open, supabase]);
+
+  const deleteNote = useCallback(
+    async (id: string) => {
+      const { error } = await supabase.from("notes").delete().eq("id", id);
+      if (error) throw error;
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+    },
+    [supabase],
+  );
 
   // Global hotkeys
   useEffect(() => {
@@ -774,6 +843,17 @@ export function DecksActionSearchBar() {
       section: "CREATE",
       run: () => {
         /* Handle create card global? */
+      },
+    },
+    {
+      id: "create-note",
+      label: "New Note",
+      icon: <FileText size={16} strokeWidth={1.5} />,
+      section: "CREATE",
+      run: () => {
+        router.push("/notes");
+        openDialog();
+        setOpen(false);
       },
     },
   ];
@@ -906,6 +986,7 @@ export function DecksActionSearchBar() {
                 onSelect={handleNoteSelect}
                 onBack={handleBack}
                 onClose={() => setOpen(false)}
+                onDeleteNote={deleteNote}
               />
             </motion.div>
           ) : (
@@ -967,10 +1048,13 @@ export function DecksActionSearchBar() {
                   onSelect={handleDeckSelect}
                 />
               ) : effectiveMode === "note-pick" ? (
-                <NotePicker
+                <NoteExplorer
                   query={noteQuery}
                   notes={notes}
                   onSelect={handleNoteSelect}
+                  onBack={handleBack}
+                  onClose={() => setOpen(false)}
+                  onDeleteNote={deleteNote}
                 />
               ) : (
                 <div className="py-2 max-h-[420px] overflow-y-auto">
