@@ -9,7 +9,7 @@ import { getSentenceEmbedding, cosineSimilarity, spellcheckAnswer, preloadModel,
 import { useDecks } from "@/context/deck-context";
 import { useSettings } from '@/context/settings-context';
 import { ArrowLeft, ArrowRight, RotateCw, CheckCircle, XCircle } from 'lucide-react';
-import Link from 'next/link';
+import { Link } from "next-view-transitions";
 import { Skeleton } from './ui/skeleton';
 import { SessionSummary } from './session-summary';
 import { calculateNextReview, DEFAULT_CARD_PROGRESS, type CardProgress, type ConfidenceRating } from '@/lib/spaced-repetition';

@@ -20,7 +20,7 @@ import {
   Trash,
   X,
 } from "lucide-react"
-import Link from "next/link"
+import { Link } from "next-view-transitions"
 import { Progress } from "@/components/ui/progress"
 import { useDecks } from "@/context/deck-context"
 import { useSettings } from "@/context/settings-context"

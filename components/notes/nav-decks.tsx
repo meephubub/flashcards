@@ -5,7 +5,7 @@ import { BookText, ChevronDown, ChevronRight, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 import { useDecks } from "@/context/deck-context"
-import { useRouter } from "next/navigation"
+import { Link } from "next-view-transitions"
 
 export function NavDecks({
   expanded,
@@ -16,7 +16,6 @@ export function NavDecks({
 }) {
   const { decks, loading } = useDecks()
   const [filter, setFilter] = React.useState("")
-  const router = useRouter()
 
   const filtered = React.useMemo(() => {
     const q = filter.trim().toLowerCase()
@@ -88,16 +87,11 @@ export function NavDecks({
 
             {filtered.map((d) => (
               <SidebarMenuItem key={d.id}>
-                <SidebarMenuButton
-                  asChild
-                  onClick={() => {
-                    router.push(`/deck/${d.id}`)
-                  }}
-                >
-                  <button type="button">
+                <SidebarMenuButton asChild>
+                  <Link href={`/deck/${d.id}`}>
                     <BookText />
                     <span>{d.name}</span>
-                  </button>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}

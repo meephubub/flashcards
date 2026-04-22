@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
 import { Search, Send, X, HelpCircle, PlusCircle, BarChart2, Pencil, Trash2, Image as ImageIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
 import { useNoteContextStore } from "@/hooks/use-note-context"
@@ -57,6 +57,9 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
 
   const [mounted, setMounted] = useState(false)
   const [copied, setCopied] = useState(false)
+  const pathname = usePathname()
+
+  const isExcluded = pathname === "/" || pathname === "/home" || pathname?.startsWith("/deck") || pathname === "/notes"
 
   // Sub-UI States
   const [imageNoteOpen, setImageNoteOpen] = useState(false)
@@ -472,7 +475,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
     show: { opacity: 1, y: 0, transition: { duration: 0.3 } },
   }
 
-  if (!mounted) return null
+  if (!mounted || isExcluded) return null
   const portalTarget = typeof document !== 'undefined' ? document.body : null
   if (!portalTarget) return null
 

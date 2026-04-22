@@ -2,6 +2,7 @@ import type React from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { ViewTransitions } from "next-view-transitions";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { Analytics } from "@vercel/analytics/react";
@@ -12,6 +13,7 @@ import { DeckProvider } from "@/context/deck-context";
 import { FolderProvider } from "@/context/folder-context";
 import MobilePaletteButton from "@/components/mobile-palette-button";
 import ActionSearchBar from "@/components/action-search-bar";
+import { DecksActionSearchBar } from "@/components/action-search-bar/decks/action-search-bar";
 import PwaInit from "@/components/pwa-init";
 import EnvBannerClient from "@/components/env-banner-client";
 import OnlineIndicator from "@/components/online-indicator";
@@ -71,25 +73,28 @@ export default function RootLayout({
           disableTransitionOnChange
         >
 
-          <AuthProvider>
-            <SettingsProvider>
-              <DeckProvider>
+          <ViewTransitions>
+            <AuthProvider>
+              <SettingsProvider>
+                <DeckProvider>
 
-                <FolderProvider>
-                  {/* Mobile-only palette trigger */}
-                  <MobilePaletteButton />
-                  {children}
-                  {/* Global Action Search - opens with Ctrl+K */}
-                  <ActionSearchBar />
-                  <Toaster />
-                  <SpeedInsights />
-                  <Analytics />
-                  <PwaInit />
-                  <CookieBannerWrapper />
-                </FolderProvider>
-              </DeckProvider>
-            </SettingsProvider>
-          </AuthProvider>
+                  <FolderProvider>
+                    {/* Mobile-only palette trigger */}
+                    <MobilePaletteButton />
+                    {children}
+                    {/* Global Action Search - opens with Ctrl+K */}
+                    <ActionSearchBar />
+                    <DecksActionSearchBar />
+                    <Toaster />
+                    <SpeedInsights />
+                    <Analytics />
+                    <PwaInit />
+                    <CookieBannerWrapper />
+                  </FolderProvider>
+                </DeckProvider>
+              </SettingsProvider>
+            </AuthProvider>
+          </ViewTransitions>
         </ThemeProvider>
       </body>
       <Analytics />

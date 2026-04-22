@@ -4,7 +4,7 @@ import { useState, FormEvent, useEffect, Suspense } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { AppSidebar } from "@/components/notes/app-sidebar"
-import { DeckGrid } from "@/components/deck-grid"
+import { Dashboard } from "@/components/dashboard"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import {
@@ -152,20 +152,16 @@ export default function HomeClient() {
                             <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
                             <Breadcrumb>
                                 <BreadcrumbList>
-                                    <BreadcrumbItem className="hidden md:block">
-                                        <BreadcrumbLink href="/">Decks</BreadcrumbLink>
-                                    </BreadcrumbItem>
-                                    <BreadcrumbSeparator className="hidden md:block" />
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage>All Decks</BreadcrumbPage>
+                                        <BreadcrumbPage>Home</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
                         </div>
                     </header>
-                    <div className={`flex-1 p-6 overflow-auto ${!session ? 'opacity-20 pointer-events-none' : ''}`}>
+                    <div className={`flex-1 overflow-auto ${!session ? 'opacity-20 pointer-events-none' : ''}`}>
                         <Suspense fallback={<div className="flex items-center justify-center h-32 text-zinc-400 text-sm">Loading decks…</div>}>
-                            <DeckGrid />
+                            <Dashboard />
                         </Suspense>
                     </div>
                 </SidebarInset>
