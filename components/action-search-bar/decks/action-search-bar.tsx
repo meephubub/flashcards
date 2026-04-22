@@ -893,7 +893,7 @@ export function DecksActionSearchBar() {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (effectiveMode !== "default") return;
+      if (!open || effectiveMode !== "default") return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIndex((prev) => Math.min(prev + 1, flatList.length - 1));
@@ -911,7 +911,7 @@ export function DecksActionSearchBar() {
         }
       }
     },
-    [flatList, activeIndex, effectiveMode, router],
+    [flatList, activeIndex, effectiveMode, router, open],
   );
 
   useEffect(() => {
