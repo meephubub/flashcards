@@ -358,6 +358,7 @@ function DeckPicker({
       </p>
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">No decks found.</p>
+      ) : (
         filtered.map((deck, idx) => (
           <button
             key={deck.id}
