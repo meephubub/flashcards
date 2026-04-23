@@ -26,13 +26,6 @@ export const DEFAULT_CARD_PROGRESS: CardProgress = {
 
 /**
  * Calculate the next review date based on the FSRS algorithm
- * 
- * 0: Complete blackout -> Again (1)
- * 1: Incorrect response -> Again (1)
- * 2: Correct with difficulty -> Hard (2)
- * 3: Correct with effort -> Good (3)
- * 4: Correct with hesitation -> Good (3)
- * 5: Perfect recall -> Easy (4)
  */
 export function calculateNextReview(
   currentProgress: CardProgress,
@@ -45,30 +38,35 @@ export function calculateNextReview(
   // Convert our 0-5 rating to FSRS Grade (1-4)
   const grade = ratingToGrade(rating)
 
-  // Reconstruct the FSRS card object from our saved state
-  const baseCard: FsrsCard = currentProgress.fsrsState
-    ? (currentProgress.fsrsState as FsrsCard)
-    : createEmptyCard(new Date(currentProgress.dueDate || now))
-
-  // If the card is new (no reps), ensure due date is now so it gets scheduled immediately
-  if (currentProgress.repetitions === 0) {
-    baseCard.due = now
-    baseCard.last_review = undefined
+  // Reconstruct the FSRS card object and ensure Dates are actual Date objects
+  let baseCard: FsrsCard;
+  if (currentProgress.fsrsState) {
+    const state = currentProgress.fsrsState as any;
+    baseCard = {
+      ...state,
+      due: new Date(state.due),
+      last_review: state.last_review ? new Date(state.last_review) : undefined
+    } as FsrsCard;
+  } else {
+    // For legacy cards or new cards, start fresh
+    baseCard = createEmptyCard(new Date(currentProgress.dueDate || now))
+    // If it's a new card (reps=0), make sure it's due now for the scheduler
+    if (currentProgress.repetitions === 0) {
+      baseCard.due = now
+    }
   }
 
   const record = f.next(baseCard, now, grade)
   const nextCard = record.card as FsrsCard
 
-  const due = nextCard.due
-
   const nextProgress: CardProgress = {
-    easeFactor: currentProgress.easeFactor, // Keep legacy field for now
+    easeFactor: currentProgress.easeFactor, // Legacy
     interval: nextCard.scheduled_days,
     repetitions: nextCard.reps,
-    dueDate: due.toISOString(),
+    dueDate: nextCard.due.toISOString(),
     lastReviewed: now.toISOString(),
     fsrsState: nextCard,
-    fsrsParams: params, // Persist params used for this review
+    fsrsParams: params,
   }
 
   return nextProgress
@@ -83,9 +81,8 @@ function ratingToGrade(rating: ConfidenceRating): Grade {
       return 2 // Hard
     case 3:
     case 4:
-      return 3 // Good
     case 5:
-      return 4 // Easy
+      return 4 // Easy (as requested: wire Good/Easy to Easy)
     default:
       return 3 // Default to Good
   }
@@ -107,19 +104,34 @@ export function getNextReviewText(progress: CardProgress): string {
   const dueDate = new Date(progress.dueDate)
   const now = new Date()
 
-  // If due today or in the past
   if (dueDate <= now) {
     return "Due now"
   }
 
-  // Calculate the difference in days
-  const diffTime = Math.abs(dueDate.getTime() - now.getTime())
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  const diffMs = dueDate.getTime() - now.getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  const diffMin = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.round(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffDays === 1) {
+  if (diffSec < 60) {
+    return `${diffSec}s`
+  } else if (diffMin < 10) {
+    const remainingSec = Math.floor((diffMs % (1000 * 60)) / 1000)
+    return remainingSec > 0 ? `${diffMin}m ${remainingSec}s` : `${diffMin}m`
+  } else if (diffMin < 60) {
+    return `${diffMin}m`
+  } else if (diffHours < 24) {
+    return `${diffHours}h`
+  } else if (diffDays === 0) {
+    return "Today"
+  } else if (diffDays === 1) {
     return "Tomorrow"
+  } else if (diffDays < 30) {
+    return `${diffDays}d`
   } else {
-    return `In ${diffDays} days`
+    const months = Math.round(diffDays / 30.44)
+    return `${months}mo`
   }
 }
 

@@ -1,19 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { ArrowLeft, ArrowRight, RotateCw, Check, X, Calendar, Maximize2, Minimize2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, X, RotateCw } from "lucide-react"
 import { Link } from "next-view-transitions"
-import { Progress } from "@/components/ui/progress"
 import { useDecks } from "@/context/deck-context"
 import { useSettings } from "@/context/settings-context"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ConfidenceRatingComponent } from "@/components/confidence-rating"
 import type { ConfidenceRating } from "@/lib/spaced-repetition"
-import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText, getRatingDescription } from "@/lib/spaced-repetition"
+import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText } from "@/lib/spaced-repetition"
 import { haptics } from "@/lib/haptics"
 import { useToast } from "@/hooks/use-toast"
 import { MarkdownCardContent } from "@/components/markdown-card-content"
@@ -30,16 +27,15 @@ interface StudyModeProps {
     correct: number
     wrong: number
   }) => void
+  onCardChange?: (card: any) => void
   initialSide?: "front" | "back" | "mixed"
 }
 
-export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: StudyModeProps) {
+export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = "front" }: StudyModeProps) {
   const { getDeck, loading, getDueCards, updateCardProgress } = useDecks()
   const { settings } = useSettings()
   const router = useRouter()
   const { toast } = useToast()
-
-  const [focusMode, setFocusMode] = useState(false)
 
   const deck = getDeck(deckId)
   const rawStudy: any = settings?.studySettings ?? {}
@@ -66,6 +62,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
   const [cardsToReview, setCardsToReview] = useState<number[]>([])
   const [reviewMode, setReviewMode] = useState(false)
   const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
   const FLIP_ANIMATION_DURATION = 300 // ms, should match CSS duration
 
   // Statistics tracking
@@ -79,9 +76,6 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     averageTimePerCard: 0,
     lastCardTime: new Date()
   })
-
-  // For rating button hover effect
-  const [hoveredRating, setHoveredRating] = useState<ConfidenceRating | null>(null)
 
   const [reviewIndices, setReviewIndices] = useState<number[]>([])
   const [reviewCurrent, setReviewCurrent] = useState(0)
@@ -189,6 +183,17 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     }
   }, [currentCardIndex, cards.length, reviewMode, reviewCurrent, reviewIndices.length, stats.knownCards, stats.unknownCards, onProgressInfo])
 
+  const currentCard = reviewMode
+    ? cards[reviewIndices[reviewCurrent]]
+    : cards[currentCardIndex]
+
+  // Notify parent about current card
+  useEffect(() => {
+    if (typeof onCardChange === 'function' && currentCard) {
+      onCardChange(currentCard)
+    }
+  }, [currentCard, onCardChange])
+
   // Define all handler functions first before using them in useEffect
   const handleFlip = () => {
     haptics.cardFlip()
@@ -225,6 +230,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     setIsFlipped(false)
     setReviewMode(false)
     setStudyComplete(true)
+    setIsProcessing(false)
     // ensure endTime is captured
     setStats(prev => ({
       ...prev,
@@ -244,6 +250,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       } else {
         setReviewCurrent(0)
       }
+      setIsProcessing(false)
       return
     }
     if (isFlipped) {
@@ -263,12 +270,14 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
     } else {
       if (currentCardIndex < cards.length - 1) {
         setCurrentCardIndex((prev) => prev + 1)
+        setIsProcessing(false)
       } else if (!reviewMode && cardsToReview.length > 0) {
         setReviewMode(true)
         const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
         setReviewIndices(sortedReviewIndices)
         setReviewCurrent(0)
         setStudyComplete(false)
+        setIsProcessing(false)
         toast({
           title: "Review Mode",
           description: `Reviewing ${cardsToReview.length} cards that need attention`,
@@ -280,6 +289,8 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
   }
 
   const handleCardKnown = () => {
+    if (isProcessing) return
+    setIsProcessing(true)
     updateStats(true);
     if (reviewMode) {
       // Remove this card from reviewIndices
@@ -295,12 +306,15 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
         setReviewCurrent(Math.max(0, newReviewIndices.length - 1))
       }
       setIsFlipped(false)
+      setIsProcessing(false)
       return
     }
     moveToNextCard();
   }
 
   const handleCardNeedsReview = () => {
+    if (isProcessing) return
+    setIsProcessing(true)
     if (reviewMode) {
       // In review mode, re-insert the card randomly within the next few cards
       updateStats(false);
@@ -318,6 +332,7 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
         newReviewIndices.splice(insertPos, 0, reviewIndices[reviewCurrent]);
         setReviewIndices(newReviewIndices);
       }
+      setIsProcessing(false)
       return;
     }
 
@@ -410,42 +425,49 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isProcessing) return
       switch (e.key) {
         case " ": // Space
         case "Enter":
-          // Always flip the card with space/enter
-          handleFlip()
+          if (!isFlipped) {
+            handleFlip()
+          } else if (isSpacedRepetitionEnabled) {
+            handleRating(5)
+          } else {
+            handleCardKnown()
+          }
           break
         case "1":
-          // If card is flipped, mark as known/correct
           if (isFlipped) {
             if (isSpacedRepetitionEnabled) {
-              // In spaced repetition mode, 1 = rating 5 (perfect)
-              handleRating(5)
+              handleRating(1)
             } else {
-              // In regular mode, 1 = card known (don't need to review again)
               handleCardKnown()
             }
           }
           break
         case "2":
-          // If card is flipped, mark as unknown/incorrect
           if (isFlipped) {
             if (isSpacedRepetitionEnabled) {
-              // In spaced repetition mode, 2 = rating 1 (incorrect)
-              handleRating(1)
+              handleRating(2)
             } else {
-              // In regular mode, 2 = card needs review
               handleCardNeedsReview()
             }
           }
           break
         case "3":
+          if (isFlipped && isSpacedRepetitionEnabled) {
+            handleRating(3)
+          }
+          break
         case "4":
+          if (isFlipped && isSpacedRepetitionEnabled) {
+            handleRating(4)
+          }
+          break
         case "5":
           if (isFlipped && isSpacedRepetitionEnabled) {
-            const rating = parseInt(e.key) as ConfidenceRating
-            handleRating(rating)
+            handleRating(5)
           }
           break
         case "0":
@@ -502,39 +524,11 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
           setCurrentCardIndex(pendingCardIndex)
         }
         setPendingCardIndex(null)
+        setIsProcessing(false)
       }, FLIP_ANIMATION_DURATION)
       return () => clearTimeout(timer)
     }
   }, [pendingCardIndex, reviewMode, cardsToReview, cards.length, toast])
-
-  // Focus mode effect to hide/show header and sidebar
-  useEffect(() => {
-    const header = document.querySelector('header') as HTMLElement
-    const sidebar = document.querySelector('[data-sidebar="sidebar"]') as HTMLElement
-
-    if (focusMode) {
-      // Hide header and sidebar on mobile
-      if (window.innerWidth < 768) {
-        if (header) header.style.display = 'none'
-        if (sidebar) sidebar.style.display = 'none'
-      }
-      // Prevent scrolling
-      document.body.style.overflow = 'hidden'
-    } else {
-      // Show header and sidebar
-      if (header) header.style.display = ''
-      if (sidebar) sidebar.style.display = ''
-      // Restore scrolling
-      document.body.style.overflow = ''
-    }
-
-    return () => {
-      // Cleanup on unmount
-      if (header) header.style.display = ''
-      if (sidebar) sidebar.style.display = ''
-      document.body.style.overflow = ''
-    }
-  }, [focusMode])
 
   if (loading) {
     return (
@@ -628,6 +622,8 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
   };
 
   const handleRating = async (rating: ConfidenceRating) => {
+    if (isProcessing) return
+    setIsProcessing(true)
     try {
       haptics.rating(rating)
       const currentCard = cards[currentCardIndex]
@@ -684,12 +680,11 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       const isCorrect = rating >= 3;
       updateStats(isCorrect);
       moveToNextCard()
+    } finally {
+      // isProcessing is mostly handled in moveToNextCard / useEffect
     }
   }
 
-  const currentCard = reviewMode
-    ? cards[reviewIndices[reviewCurrent]]
-    : cards[currentCardIndex]
   const isLastCard = currentCardIndex === cards.length - 1
 
   // Helper for Cloze deletion
@@ -718,19 +713,19 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
   }
 
   return (
-    <div className="w-full mx-auto space-y-4 text-black">
+    <div className="w-full mx-auto text-neutral-900 relative min-h-[80vh] flex flex-col">
       {reviewMode && (
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
-          <span className="text-[11px] uppercase tracking-widest text-neutral-400 font-medium">Review mode</span>
+        <div className="flex items-center justify-center gap-2 py-2">
+          <span className="inline-block w-1 h-1 rounded-full bg-neutral-400 animate-pulse" />
+          <span className="text-[10px] uppercase tracking-widest text-neutral-400">review</span>
         </div>
       )}
 
-      {normalizedStudy.showProgressBar && (
-        <div className="mb-1">
-          <div className="w-full h-0.5 bg-neutral-100 rounded-full overflow-hidden">
+      {normalizedStudy.showProgressBar && !reviewMode && (
+        <div className="absolute top-0 left-0 right-0">
+          <div className="w-full h-px bg-neutral-100">
             <div
-              className="h-full bg-black rounded-full transition-all duration-500 ease-out"
+              className="h-full bg-neutral-300 transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -740,284 +735,198 @@ export function StudyMode({ deckId, onProgressInfo, initialSide = "front" }: Stu
       {!studyComplete && (
         <>
           <div
-            className={`card-flip ${isFlipped ? "flipped" : ""} transition-all duration-300 mb-4`}
+            className="flex-1 flex flex-col items-center justify-center w-full max-w-6xl mx-auto px-6"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <div className="card-flip-inner relative h-[550px] md:h-[650px] lg:h-[700px] w-full">
-              <Card
-                className="card-front absolute w-full h-full flex items-center justify-center p-6 md:p-12 cursor-pointer bg-white border border-neutral-200 hover:border-neutral-300 rounded-2xl transition-colors duration-200"
-                onClick={handleFlip}
-              >
-                <div className="text-center text-2xl space-y-6 max-w-[88%] w-full">
-                  {currentCard.front_img_url && (
-                    <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
-                      <img
-                        src={currentCard.front_img_url}
-                        alt="Front side image"
-                        className="max-h-[40vh] md:max-h-[400px] w-auto object-contain rounded-md"
-                      />
-                      {/* Diagram Occlusion Boxes (Front) */}
-                      {currentCard.occlusion_data && (
-                        <div className="absolute inset-0 m-3 overflow-hidden rounded-md pointer-events-none">
-                          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                            {currentCard.occlusion_data.map((rect: any) => (
-                              <rect
-                                key={rect.id}
-                                x={rect.x}
-                                y={rect.y}
-                                width={rect.w}
-                                height={rect.h}
-                                className="fill-blue-500/80 backdrop-blur-md"
-                              />
-                            ))}
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {currentCard.audio_url && !isFlipped && (
-                    <audio controls className="mx-auto h-8 opacity-70">
-                      <source src={currentCard.audio_url} />
-                    </audio>
-                  )}
-                  <div className="w-full flex justify-center">
-                    <MarkdownCardContent 
-                      content={parseCloze(currentCard.front, isFlipped)} 
-                      className="font-semibold text-2xl md:text-3xl leading-snug" 
+            <div className="w-full flex-1 flex flex-col items-center justify-center min-h-[50vh]">
+              {/* Question Section */}
+              <div className="w-full flex flex-col items-center justify-center">
+                {currentCard.front_img_url && (
+                  <div className="relative w-full flex justify-center items-center mb-8">
+                    <img
+                      src={currentCard.front_img_url}
+                      alt="Front side image"
+                      className="max-h-[30vh] md:max-h-[350px] w-auto object-contain rounded-xl"
                     />
+                    {currentCard.occlusion_data && (
+                      <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          {currentCard.occlusion_data.map((rect: any) => (
+                            <rect
+                              key={rect.id}
+                              x={rect.x}
+                              y={rect.y}
+                              width={rect.w}
+                              height={rect.h}
+                              className={isFlipped ? "fill-neutral-500/20 stroke-neutral-500 stroke-2" : "fill-neutral-800/90"}
+                            />
+                          ))}
+                        </svg>
+                      </div>
+                    )}
                   </div>
-                  <div className="hidden sm:block text-[10px] text-neutral-300 absolute bottom-5 left-0 right-0 text-center">
-                    Press <kbd className="px-1 py-0.5 border border-neutral-200 rounded text-[10px] bg-neutral-50 text-neutral-400">Space</kbd> to flip
-                  </div>
+                )}
+                {currentCard.audio_url && !isFlipped && (
+                  <audio controls className="mx-auto h-8 opacity-50 mb-6">
+                    <source src={currentCard.audio_url} />
+                  </audio>
+                )}
+                <div className="w-full text-center">
+                  <MarkdownCardContent
+                    content={parseCloze(currentCard.front, isFlipped)}
+                    className="text-2xl md:text-3xl text-neutral-900 leading-relaxed"
+                  />
                 </div>
-              </Card>
-              <Card
-                className="card-back absolute w-full h-full flex flex-col items-center justify-center p-6 md:p-10 bg-white border border-neutral-200 hover:border-neutral-300 rounded-2xl transition-colors duration-200 overflow-y-auto cursor-pointer"
-                onClick={handleFlip}
-              >
-                <div className="text-center space-y-4 w-full max-w-[88%] flex-shrink-0">
-                  {currentCard.front_img_url && (
-                    <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
-                      <img
-                        src={currentCard.front_img_url}
-                        alt="Front side image"
-                        className="max-h-[200px] w-auto object-contain rounded-md opacity-50"
-                      />
-                      {/* Diagram Occlusion Boxes (Back - Revealed) */}
-                      {currentCard.occlusion_data && (
-                        <div className="absolute inset-0 m-3 overflow-hidden rounded-md pointer-events-none">
-                          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                            {currentCard.occlusion_data.map((rect: any) => (
-                              <rect
-                                key={rect.id}
-                                x={rect.x}
-                                y={rect.y}
-                                width={rect.w}
-                                height={rect.h}
-                                className="fill-blue-500/20 stroke-blue-500 stroke-2"
-                              />
-                            ))}
-                          </svg>
-                        </div>
-                      )}
+              </div>
+
+              {/* Answer Section (Animated Reveal) */}
+              <AnimatePresence>
+                {isFlipped && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                    className="w-full flex flex-col items-center mt-10"
+                  >
+                    <div className="h-px w-16 bg-neutral-200 mb-10" />
+                    {currentCard.back_img_url && (
+                      <div className="relative w-full flex justify-center items-center mb-6">
+                        <img
+                          src={currentCard.back_img_url}
+                          alt="Back side image"
+                          className="max-h-[250px] w-auto object-contain rounded-xl"
+                        />
+                      </div>
+                    )}
+                    {currentCard.video_url && (
+                      <div className="w-full max-w-xl mx-auto rounded-xl overflow-hidden bg-black aspect-video mb-6">
+                        <iframe
+                          src={currentCard.video_url}
+                          className="w-full h-full border-0"
+                          allow="autoplay; encrypted-media"
+                          allowFullScreen
+                        />
+                      </div>
+                    )}
+                    <div className="w-full text-center">
+                      <MarkdownCardContent content={currentCard.back} className="text-xl md:text-2xl text-neutral-600 leading-relaxed" />
                     </div>
-                  )}
-                  {currentCard.back_img_url && (
-                    <div className="relative w-full flex justify-center items-center bg-neutral-100 rounded-md p-3">
-                      <img
-                        src={currentCard.back_img_url}
-                        alt="Back side image"
-                        className="max-h-[300px] w-auto object-contain rounded-md"
-                      />
-                    </div>
-                  )}
-                  {currentCard.video_url && isFlipped && (
-                    <div className="w-full rounded-xl overflow-hidden bg-black aspect-video">
-                      <iframe 
-                        src={currentCard.video_url} 
-                        className="w-full h-full border-0"
-                        allow="autoplay; encrypted-media"
-                        allowFullScreen
-                      />
-                    </div>
-                  )}
-                  <div className="w-full flex justify-center">
-                    <MarkdownCardContent content={currentCard.back} className="font-semibold text-xl md:text-2xl leading-snug" />
-                  </div>
-
-                  {/* Show confidence rating buttons directly on the back of the card when using spaced repetition */}
-                  {isFlipped && (
-                    <div className="mt-6 animate-fadeIn">
-                      {isSpacedRepetitionEnabled ? (
-                        <>
-                          <div className="text-xs text-neutral-400 mb-3">Rate your recall (0–5)</div>
-                          <div className="flex justify-center gap-2 flex-wrap">
-                            {[0, 1, 2, 3, 4, 5].map((rating) => {
-                              let extra = "border-neutral-200 text-neutral-500 hover:border-neutral-400"
-                              if (rating === 0) extra = "border-neutral-200 text-neutral-400 hover:border-neutral-400"
-                              if (rating === 1) extra = "border-neutral-200 text-neutral-500 hover:border-neutral-400"
-                              if (rating === 2) extra = "border-neutral-300 text-neutral-600 hover:border-neutral-400"
-                              if (rating === 3) extra = "border-neutral-300 bg-neutral-50 text-neutral-700 hover:bg-neutral-100"
-                              if (rating === 4) extra = "border-neutral-400 bg-neutral-100 text-neutral-800 hover:bg-neutral-200"
-                              if (rating === 5) extra = "border-black bg-black text-white hover:bg-neutral-800"
-
-                              return (
-                                <Button
-                                  key={rating}
-                                  variant="outline"
-                                  className={`h-9 w-9 text-sm font-medium ${extra} transition-colors duration-150 flex-shrink-0`}
-                                  disableHaptics
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleRating(rating as ConfidenceRating)
-                                  }}
-                                  onTouchStart={(e) => {
-                                    e.stopPropagation()
-                                  }}
-                                  title={getRatingDescription(rating as ConfidenceRating)}
-                                  onMouseEnter={() => setHoveredRating(rating as ConfidenceRating)}
-                                  onMouseLeave={() => setHoveredRating(null)}
-                                >
-                                  {rating}
-                                </Button>
-                              )
-                            })}
-                          </div>
-                          <div className="mt-2 text-[11px] text-neutral-400 min-h-[16px]">
-                            {hoveredRating !== null && (
-                              <div className="animate-fadeIn">{getRatingDescription(hoveredRating)}</div>
-                            )}
-                          </div>
-                        </>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              </Card>
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center mt-2 py-3 sticky bottom-0 z-10 bg-white/80 backdrop-blur-sm">
-            <Button
-              variant="ghost"
-              onClick={handlePrevious}
-              disabled={currentCardIndex === 0}
-              className="text-neutral-500 hover:text-black hover:bg-neutral-100 transition-colors duration-150 h-9 text-sm"
-            >
-              <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
-              Prev
-            </Button>
-
-            <div className="flex items-center gap-1.5">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={resetStudySession}
-                      className="text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors duration-150 h-9 w-9"
-                    >
-                      <RotateCw className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Reset Session</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setFocusMode(!focusMode)}
-                      className="text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors duration-150 h-9 w-9"
-                    >
-                      {focusMode ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{focusMode ? "Exit Focus Mode" : "Enter Focus Mode"}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <div className="w-px h-5 bg-neutral-200 mx-1" />
-
-              {isFlipped && !isSpacedRepetitionEnabled && (
-                <>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={handleCardKnown}
-                          className="border-neutral-200 text-black hover:bg-black hover:text-white hover:border-black transition-colors duration-150 h-9 w-9"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Mark as known (Press 1)</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={handleCardNeedsReview}
-                          className="border-neutral-200 text-neutral-500 hover:bg-black hover:text-white hover:border-black transition-colors duration-150 h-9 w-9"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Mark for review (Press 2)</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <div className="w-px h-5 bg-neutral-200 mx-1" />
-                </>
-              )}
-
-              <Button
-                variant="ghost"
-                onClick={finishSession}
-                className="text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors duration-150 h-9 text-sm"
-              >
-                End
-              </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <Button
-              variant={isFlipped ? "default" : "outline"}
-              onClick={isFlipped ? (isSpacedRepetitionEnabled ? undefined : handleCardKnown) : handleFlip}
-              disabled={(isLastCard && isFlipped && studyComplete) || (isFlipped && isSpacedRepetitionEnabled)}
-              className={isFlipped ?
-                "bg-black text-white hover:bg-neutral-800 transition-colors duration-150 h-9 text-sm" :
-                "border-neutral-200 text-black hover:bg-black hover:text-white hover:border-black transition-colors duration-150 h-9 text-sm"}
-            >
-              {isFlipped ? (
-                <>
-                  {isLastCard ? "Finish" : "Next"}
-                  {!isLastCard && <ArrowRight className="h-3.5 w-3.5 ml-1.5" />}
-                </>
-              ) : (
-                <>
-                  Flip
-                  <kbd className="ml-2 px-1 py-0.5 border border-neutral-200 rounded text-[10px] bg-neutral-50 text-neutral-400 hidden sm:inline">Space</kbd>
-                </>
-              )}
-            </Button>
+            {/* Show/Rating Buttons (Pinned to Bottom of Content) */}
+            {isSpacedRepetitionEnabled && (
+              <div className="w-full pb-8">
+                <AnimatePresence mode="wait">
+                  {!isFlipped ? (
+                    <motion.div
+                      key="show-btn"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                      className="w-full flex justify-center"
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-[11px] text-neutral-400 border border-neutral-200 rounded px-1.5 py-0.5 tabular-nums">space</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleFlip(); }}
+                          className="bg-neutral-900 text-white px-8 py-3 rounded-full text-base font-medium hover:bg-neutral-800 transition-all active:scale-[0.98]"
+                        >
+                          Show
+                        </button>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="rating-btns"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="flex justify-center items-end gap-3 w-full"
+                      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-[11px] text-neutral-400 border border-neutral-200 rounded px-1.5 py-0.5 tabular-nums">1</span>
+                        <button
+                          disabled={isProcessing}
+                          className="bg-white border border-neutral-200 text-neutral-600 px-6 py-3 rounded-full text-base font-medium hover:border-neutral-400 hover:text-neutral-900 transition-all active:scale-[0.98] flex items-center gap-2 disabled:opacity-50"
+                          onClick={(e) => { e.stopPropagation(); handleRating(1); }}
+                        >
+                          Again
+                          <span className="text-neutral-400 text-sm tabular-nums">
+                            {getNextReviewText(calculateNextReview(currentCard.progress || DEFAULT_CARD_PROGRESS, 1, normalizedStudy.fsrsParams))}
+                          </span>
+                        </button>
+                      </div>
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-[11px] text-neutral-400 border border-neutral-200 rounded px-1.5 py-0.5 tabular-nums">space</span>
+                        <button
+                          disabled={isProcessing}
+                          className="bg-neutral-900 text-white px-6 py-3 rounded-full text-base font-medium hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center gap-2 disabled:opacity-50"
+                          onClick={(e) => { e.stopPropagation(); handleRating(5); }}
+                        >
+                          Good
+                          <span className="text-neutral-400 text-sm tabular-nums">
+                            {getNextReviewText(calculateNextReview(currentCard.progress || DEFAULT_CARD_PROGRESS, 5, normalizedStudy.fsrsParams))}
+                          </span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
+
+          {/* Minimal bottom nav - only show when spaced repetition is disabled */}
+          {!isSpacedRepetitionEnabled && (
+            <div className="flex justify-between items-center py-4 border-t border-neutral-100">
+              <button
+                onClick={handlePrevious}
+                disabled={currentCardIndex === 0}
+                className="text-neutral-400 hover:text-neutral-900 transition-colors text-sm disabled:opacity-30"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+
+              <div className="flex items-center gap-4">
+                {isFlipped && (
+                  <>
+                    <button
+                      onClick={handleCardKnown}
+                      className="text-neutral-400 hover:text-neutral-900 transition-colors"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={handleCardNeedsReview}
+                      className="text-neutral-400 hover:text-neutral-900 transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <button
+                onClick={isFlipped ? handleCardKnown : handleFlip}
+                disabled={(isLastCard && isFlipped && studyComplete)}
+                className="text-neutral-400 hover:text-neutral-900 transition-colors text-sm disabled:opacity-30"
+              >
+                {isFlipped ? (
+                  <ArrowRight className="h-4 w-4" />
+                ) : (
+                  <span>Flip</span>
+                )}
+              </button>
+            </div>
+          )}
         </>
       )}
 

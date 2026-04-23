@@ -17,6 +17,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { ChevronDown, ChevronRight, RotateCcw, HelpCircle, Info } from "lucide-react"
+import { motion } from "framer-motion"
 
 export interface FSRSParams {
     request_retention: number

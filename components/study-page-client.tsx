@@ -20,6 +20,9 @@ import {
 } from "@/components/ui/breadcrumb";
 import { useTimeTracking } from "@/hooks/use-time-tracking";
 import { Link } from "next-view-transitions";
+import { Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CardInfoDialog } from "@/components/card-info-dialog";
 
 export function StudyPageClient({ deckId }: { deckId: number }) {
   const { session, isLoading, user } = useAuth();
@@ -37,6 +40,8 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
     wrong: number;
   } | null>(null);
   const [initialSide, setInitialSide] = useState<"front" | "back" | "mixed">("front");
+  const [currentCard, setCurrentCard] = useState<any>(null);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
 
   useTimeTracking({
     activityType: 'study',
@@ -151,7 +156,17 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
                   </BreadcrumbItem>
                   <BreadcrumbSeparator className="hidden md:block" />
                   <BreadcrumbItem>
-                    <BreadcrumbPage>{deckTitle || `Deck #${deckId}`}</BreadcrumbPage>
+                    <div className="flex items-center gap-1">
+                      <BreadcrumbPage>{deckTitle || `Deck #${deckId}`}</BreadcrumbPage>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-neutral-400 hover:text-black transition-colors rounded-full"
+                        onClick={() => setIsInfoOpen(true)}
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
@@ -179,10 +194,20 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
             </div>
           </header>
           <div className="flex-1 overflow-auto flex flex-col">
-            <div className="mx-auto w-full max-w-5xl px-4 py-6 md:py-10 flex-1 flex flex-col justify-center">
-              <StudyMode deckId={deckId} onProgressInfo={setProgressInfo} initialSide={initialSide} />
+            <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-10 flex-1 flex flex-col justify-center">
+              <StudyMode 
+                deckId={deckId} 
+                onProgressInfo={setProgressInfo} 
+                onCardChange={setCurrentCard}
+                initialSide={initialSide} 
+              />
             </div>
           </div>
+          <CardInfoDialog 
+            card={currentCard} 
+            open={isInfoOpen} 
+            onOpenChange={setIsInfoOpen} 
+          />
         </SidebarInset>
       </SidebarProvider>
     </div>

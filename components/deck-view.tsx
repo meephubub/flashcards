@@ -17,7 +17,8 @@ import type { Card } from "@/lib/supabase"
 import { formatDate } from "@/lib/date-utils"
 import { ScheduleExamModal } from "@/components/schedule-exam-modal"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion"
+import { haptics } from "@/lib/haptics"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -102,6 +103,10 @@ export function DeckView({ deckId }: DeckViewProps) {
   const [dueCards, setDueCards] = useState<Card[]>([])
   
   const [isCardListVisible, setIsCardListVisible] = useState(false)
+  const pullY = useMotionValue(0)
+  const [hasTriggeredHaptic, setHasTriggeredHaptic] = useState(false)
+  const pullThreshold = -80
+  const pullSpring = useSpring(pullY, { stiffness: 400, damping: 40 })
 
   // Fetch due cards when needed
   useEffect(() => {
@@ -359,31 +364,70 @@ export function DeckView({ deckId }: DeckViewProps) {
         <ActivityHeatmap />
       </div>
 
-      <div className="flex justify-center max-w-2xl mx-auto pt-4">
-        <Button 
-          variant="ghost" 
-          onClick={() => setIsCardListVisible(!isCardListVisible)}
-          className="rounded-full px-6 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-xs font-medium uppercase tracking-widest transition-colors"
-        >
+      {!isCardListVisible && (
+        <div className="flex flex-col items-center justify-center max-w-2xl mx-auto pt-8 pb-12">
           <motion.div
-            animate={{ rotate: isCardListVisible ? 180 : 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="mr-2"
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={0.4}
+            onDrag={(_, info) => {
+              pullY.set(info.offset.y)
+              if (info.offset.y < pullThreshold && !hasTriggeredHaptic) {
+                haptics.buttonPress()
+                setHasTriggeredHaptic(true)
+              } else if (info.offset.y > pullThreshold && hasTriggeredHaptic) {
+                setHasTriggeredHaptic(false)
+              }
+            }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y < pullThreshold) {
+                setIsCardListVisible(true)
+                haptics.navigation()
+              }
+              pullY.set(0)
+              setHasTriggeredHaptic(false)
+            }}
+            style={{ y: pullSpring }}
+            className="flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing group"
           >
-            <ChevronDown className="h-3.5 w-3.5" />
+            <motion.div 
+              className="w-10 h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full group-hover:bg-zinc-300 dark:group-hover:bg-zinc-700 transition-colors"
+              animate={{
+                scale: hasTriggeredHaptic ? 1.2 : 1,
+                backgroundColor: hasTriggeredHaptic ? "rgb(113 113 122)" : undefined
+              }}
+            />
+            <div className="flex items-center text-zinc-400 dark:text-zinc-600 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
+              <ChevronDown className="h-3.5 w-3.5 mr-2 rotate-180" />
+              <span className="text-[10px] uppercase tracking-[0.2em] font-bold">
+                {hasTriggeredHaptic ? "Release to view" : "Pull up for cards"}
+              </span>
+            </div>
           </motion.div>
-          {isCardListVisible ? "Hide Cards" : "View Cards"}
-        </Button>
-      </div>
+        </div>
+      )}
+
+      {isCardListVisible && (
+        <div className="flex justify-center max-w-2xl mx-auto pt-4 pb-8">
+          <Button 
+            variant="ghost" 
+            onClick={() => setIsCardListVisible(false)}
+            className="rounded-full px-6 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-[10px] font-bold uppercase tracking-widest transition-colors"
+          >
+            <ChevronDown className="h-3.5 w-3.5 mr-2" />
+            Hide Cards
+          </Button>
+        </div>
+      )}
 
       {/* ── Card List (Toggled) ── */}
       <AnimatePresence>
         {isCardListVisible && (
           <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
+            transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
             className="max-w-2xl mx-auto overflow-hidden"
           >
             <div className="pt-4">
