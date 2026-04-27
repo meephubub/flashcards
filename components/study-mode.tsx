@@ -4,10 +4,9 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, ArrowRight, Check, X, RotateCw } from "lucide-react"
-import { Link } from "next-view-transitions"
+import { Link, useTransitionRouter } from "next-view-transitions"
 import { useDecks } from "@/context/deck-context"
 import { useSettings } from "@/context/settings-context"
-import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ConfidenceRating } from "@/lib/spaced-repetition"
 import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText } from "@/lib/spaced-repetition"
@@ -29,12 +28,13 @@ interface StudyModeProps {
   }) => void
   onCardChange?: (card: any) => void
   initialSide?: "front" | "back" | "mixed"
+  tag?: string
 }
 
-export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = "front" }: StudyModeProps) {
+export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = "front", tag }: StudyModeProps) {
   const { getDeck, loading, getDueCards, updateCardProgress } = useDecks()
   const { settings } = useSettings()
-  const router = useRouter()
+  const router = useTransitionRouter()
   const { toast } = useToast()
 
   const deck = getDeck(deckId)
@@ -115,6 +115,13 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
           cardsToConsider = deck.cards || [];
         }
 
+        // Apply tag filtering if specified
+        if (tag) {
+          cardsToConsider = cardsToConsider.filter(c => 
+            c.tag && c.tag.split(',').map((t: string) => t.trim()).includes(tag)
+          );
+        }
+
         // Shuffle all available cards first
         const allShuffledCards = shuffleArray(cardsToConsider);
         // Then take the configured number of cards for the session
@@ -140,7 +147,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     };
 
     initializeCards();
-  }, [deck, deckId, isSpacedRepetitionEnabled, normalizedStudy.cardsPerSession, getDueCards])
+  }, [deck, deckId, isSpacedRepetitionEnabled, normalizedStudy.cardsPerSession, getDueCards, tag])
 
   useEffect(() => {
     if (cards.length === 0) return
@@ -496,12 +503,21 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
         case "R":
           resetStudySession()
           break
+        case "e":
+        case "E":
+          if (e.ctrlKey) {
+            e.preventDefault()
+            if (currentCard) {
+              router.push(`/deck/${deckId}/card/${currentCard.id}/edit`)
+            }
+          }
+          break
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isFlipped, currentCardIndex, isSpacedRepetitionEnabled, reviewMode, cards.length])
+  }, [isFlipped, currentCardIndex, isSpacedRepetitionEnabled, reviewMode, cards.length, currentCard, deckId])
 
   useEffect(() => {
     if (pendingCardIndex !== null) {
@@ -740,7 +756,13 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <div className="w-full flex-1 flex flex-col items-center justify-center min-h-[50vh]">
+            <motion.div
+              className="w-full flex-1 flex flex-col items-center justify-center min-h-[50vh]"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+              key={currentCard?.id}
+            >
               {/* Question Section */}
               <div className="w-full flex flex-col items-center justify-center">
                 {currentCard.front_img_url && (
@@ -817,7 +839,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </motion.div>
 
             {/* Show/Rating Buttons (Pinned to Bottom of Content) */}
             {isSpacedRepetitionEnabled && (

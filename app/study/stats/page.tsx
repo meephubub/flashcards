@@ -36,7 +36,6 @@ import {
     Target,
     TrendingUp,
     GraduationCap,
-    AlertCircle,
     CheckCircle2,
     Brain,
     Layers

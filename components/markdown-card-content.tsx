@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import rehypeHighlight from 'rehype-highlight'
+import rehypeRaw from 'rehype-raw'
 import 'katex/dist/katex.min.css'
 
 interface MarkdownCardContentProps {
@@ -17,7 +18,7 @@ export function MarkdownCardContent({ content, className = '' }: MarkdownCardCon
         <div className={`markdown-content prose dark:prose-invert max-w-none break-words ${className}`}>
             <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeKatex, rehypeHighlight]}
+                rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight]}
                 components={{
                     // Override headings to fit card sizes better if needed, or rely on prose
                     h1: ({ node, ...props }) => <h1 className="text-2xl font-bold mt-2 mb-2" {...props} />,

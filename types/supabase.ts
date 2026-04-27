@@ -71,6 +71,7 @@ export type Database = {
           updated_at: string | null
           user_id: string | null
           exclude_from_srs: boolean
+          tag: string | null
         }
         Insert: {
           back: string
@@ -83,6 +84,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string | null
           exclude_from_srs?: boolean
+          tag?: string | null
         }
         Update: {
           back?: string
@@ -95,6 +97,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string | null
           exclude_from_srs?: boolean
+          tag?: string | null
         }
         Relationships: [
           {

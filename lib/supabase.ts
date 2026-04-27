@@ -68,6 +68,7 @@ export type Card = {
   deck_id: number
   front: string
   back: string
+  tag: string | null
   front_img_url: string | null
   back_img_url: string | null
   created_at: string

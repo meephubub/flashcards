@@ -120,10 +120,12 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
   
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
+  const [tag, setTag] = useState("");
   const [selectedDeckId, setSelectedDeckId] = useState<number>(deckId);
   const [selectedType, setSelectedType] = useState("Basic");
   const [activeField, setActiveField] = useState<"front" | "back" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [tagInputOpen, setTagInputOpen] = useState(false);
 
   const selectedDeck = useMemo(() => decks.find(d => d.id === selectedDeckId), [decks, selectedDeckId]);
   const originalCard = useMemo(() => {
@@ -135,6 +137,7 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
     if (originalCard) {
       setFront(originalCard.front);
       setBack(originalCard.back);
+      setTag(originalCard.tag || "");
     }
   }, [originalCard]);
 
@@ -150,7 +153,7 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
 
     setIsSaving(true);
     try {
-      await updateCard(selectedDeckId, cardId, front, back, originalCard?.front_img_url, originalCard?.back_img_url);
+      await updateCard(selectedDeckId, cardId, front, back, tag || null, originalCard?.front_img_url, originalCard?.back_img_url);
       toast({ title: "Card updated", description: "Changes saved successfully." });
       router.push(`/deck/${selectedDeckId}`);
     } catch (err) {
@@ -263,7 +266,13 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
               </DropdownMenu>
             </div>
 
-            <motion.div className="w-full max-w-lg relative" style={{ viewTransitionName: 'card-editor' }}>
+            <motion.div
+              className="w-full max-w-lg relative"
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            >
               <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
                 <div className="px-5 pt-4 pb-3">
                   <div className="flex items-center justify-between mb-2">
@@ -300,7 +309,62 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
                   </AnimatePresence>
                 </div>
                 <div className="px-5 py-3 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/50">
-                  <button type="button" className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600"><Tag className="w-3.5 h-3.5" /><span>+ tag</span></button>
+                  <div className="flex items-center gap-2">
+                  <AnimatePresence mode="wait">
+                    {tagInputOpen ? (
+                      <motion.div
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: "auto", opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="flex items-center gap-1"
+                      >
+                        <input
+                          type="text"
+                          value={tag}
+                          onChange={(e) => setTag(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              setTagInputOpen(false);
+                            }
+                            if (e.key === "Escape") {
+                              setTagInputOpen(false);
+                            }
+                          }}
+                          onBlur={() => setTagInputOpen(false)}
+                          placeholder="Add tags..."
+                          autoFocus
+                          className="w-32 px-2 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                        />
+                      </motion.div>
+                    ) : tag ? (
+                      <motion.button
+                        type="button"
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        onClick={() => setTagInputOpen(true)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                      >
+                        <Tag className="w-3 h-3" />
+                        <span className="max-w-[100px] truncate">{tag}</span>
+                      </motion.button>
+                    ) : (
+                      <motion.button
+                        type="button"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setTagInputOpen(true)}
+                        className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>+ tag</span>
+                      </motion.button>
+                    )}
+                  </AnimatePresence>
+                </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-zinc-500 h-7 px-2"><LayoutGrid className="w-3.5 h-3.5" />{selectedType}<ChevronDown className="w-3 h-3" /></Button>

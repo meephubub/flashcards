@@ -27,6 +27,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { getUniqueTags, parseTags } from "@/lib/text-utils"
 
 // Heatmap Calendar Mock Component
 const ActivityHeatmap = () => {
@@ -107,6 +108,7 @@ export function DeckView({ deckId }: DeckViewProps) {
   const [hasTriggeredHaptic, setHasTriggeredHaptic] = useState(false)
   const pullThreshold = -80
   const pullSpring = useSpring(pullY, { stiffness: 400, damping: 40 })
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
   // Fetch due cards when needed
   useEffect(() => {
@@ -259,6 +261,11 @@ export function DeckView({ deckId }: DeckViewProps) {
   let learningCount = 0;
   let masteredCount = 0;
 
+  const filteredCards = (deck.cards || []).filter(card => {
+    if (!selectedTag) return true;
+    return card.tag && card.tag.split(',').map(t => t.trim()).includes(selectedTag);
+  });
+
   deck.cards?.forEach((card) => {
     const progress = (card as any).progress;
     if (isSpacedRepetitionEnabled && progress?.fsrs_state) {
@@ -296,9 +303,12 @@ export function DeckView({ deckId }: DeckViewProps) {
       <div className="flex items-center justify-center gap-3">
         <div className="flex overflow-hidden rounded-full shadow-sm shadow-zinc-200/50 dark:shadow-none border border-zinc-900 dark:border-zinc-100">
           <Button asChild className="h-11 rounded-none rounded-l-full pl-6 pr-4 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 text-sm font-medium border-r border-zinc-800 dark:border-zinc-200">
-            <Link href={`/deck/${deckId}/study`}>
+            <Link href={`/deck/${deckId}/study${selectedTag ? `?tag=${encodeURIComponent(selectedTag)}` : ""}`}>
               <Play className="h-4 w-4 mr-2 fill-current" />
-              {isSpacedRepetitionEnabled && dueCards.length > 0 ? `Study ${dueCards.length}` : "Study"}
+              {selectedTag 
+                ? `Study ${selectedTag}` 
+                : (isSpacedRepetitionEnabled && dueCards.length > 0 ? `Study ${dueCards.length}` : "Study")
+              }
             </Link>
           </Button>
           <DropdownMenu>
@@ -309,10 +319,14 @@ export function DeckView({ deckId }: DeckViewProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-2xl">
               <DropdownMenuItem asChild className="rounded-xl">
-                <Link href={`/deck/${deckId}/language-study`} className="cursor-pointer">Language Mode</Link>
+                <Link href={`/deck/${deckId}/language-study${selectedTag ? `?tag=${encodeURIComponent(selectedTag)}` : ""}`} className="cursor-pointer">
+                  Language Mode {selectedTag && `(${selectedTag})`}
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild className="rounded-xl">
-                <Link href={`/deck/${deckId}/exam`} className="cursor-pointer">Exam Mode</Link>
+                <Link href={`/deck/${deckId}/exam${selectedTag ? `?tag=${encodeURIComponent(selectedTag)}` : ""}`} className="cursor-pointer">
+                  Exam Mode {selectedTag && `(${selectedTag})`}
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -436,12 +450,37 @@ export function DeckView({ deckId }: DeckViewProps) {
               Cards
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-600 tabular-nums">
-              {totalCards}
+              {filteredCards.length} of {totalCards}
             </p>
           </div>
 
+          {/* Tag Filter Bar */}
+          {totalCards > 0 && (
+            <div className="flex items-center gap-2 px-1 mb-4 overflow-x-auto no-scrollbar pb-1">
+              <Button
+                variant={!selectedTag ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setSelectedTag(null)}
+                className="h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider"
+              >
+                All
+              </Button>
+              {getUniqueTags(deck.cards || []).map(tag => (
+                <Button
+                  key={tag}
+                  variant={selectedTag === tag ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
+                  className="h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap"
+                >
+                  {tag}
+                </Button>
+              ))}
+            </div>
+          )}
+
           <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800 shadow-sm">
-            {deck.cards?.map((card) => {
+            {filteredCards.map((card) => {
               const progress = (card as any).progress
               let stateLabel = ""
               let dotColor = "bg-zinc-200 dark:bg-zinc-700"
@@ -475,6 +514,15 @@ export function DeckView({ deckId }: DeckViewProps) {
                     <p className="text-xs text-zinc-400 dark:text-zinc-500 truncate">
                       {card.back}
                     </p>
+                    {card.tag && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {parseTags(card.tag).map(tag => (
+                          <span key={tag} className="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[9px] font-bold uppercase tracking-tight text-zinc-500 dark:text-zinc-400 border border-zinc-200/50 dark:border-zinc-700/50">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="shrink-0 flex items-center gap-3 text-[10px] text-zinc-400 dark:text-zinc-600">
                     {stateLabel && (

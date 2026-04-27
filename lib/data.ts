@@ -525,6 +525,7 @@ export async function addCard(
   deckId: number,
   front: string,
   back: string,
+  tag?: string | null,
   front_img_url?: string | null,
   back_img_url?: string | null,
 ): Promise<Card | undefined> {
@@ -571,6 +572,7 @@ export async function addCard(
           deck_id: deckId,
           front,
           back,
+          tag: tag ?? null,
           // per-side image fields
           front_img_url: front_img_url ?? null,
           back_img_url: back_img_url ?? null,
@@ -621,6 +623,7 @@ export async function updateCard(
   cardId: number,
   front: string,
   back: string,
+  tag?: string | null,
   front_img_url?: string | null,
   back_img_url?: string | null,
   exclude_from_srs?: boolean,
@@ -684,6 +687,7 @@ export async function updateCard(
     const updatePayload: {
       front: string;
       back: string;
+      tag?: string | null;
       front_img_url?: string | null;
       back_img_url?: string | null;
       exclude_from_srs?: boolean;
@@ -693,6 +697,7 @@ export async function updateCard(
       back,
       updated_at: new Date().toISOString(),
     };
+    if (tag !== undefined) updatePayload.tag = tag;
     if (front_img_url !== undefined) updatePayload.front_img_url = front_img_url;
     if (back_img_url !== undefined) updatePayload.back_img_url = back_img_url;
     if (exclude_from_srs !== undefined) updatePayload.exclude_from_srs = exclude_from_srs;

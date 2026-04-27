@@ -109,10 +109,6 @@ const data = {
           title: "Email Summaries",
           url: "/summaries",
         },
-        {
-          title: "Maths",
-          url: "/maths",
-        },
       ],
     },
     {

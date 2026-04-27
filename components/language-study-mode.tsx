@@ -16,9 +16,11 @@ import { calculateNextReview, DEFAULT_CARD_PROGRESS, type CardProgress, type Con
 import { useToast } from '@/hooks/use-toast';
 import Confetti from 'react-confetti';
 import { useWindowSize } from '@uidotdev/usehooks'; // A common hook for window size
+import { stripFormatting } from "@/lib/text-utils";
 
 interface LanguageStudyModeProps {
   deckId: number;
+  tag?: string;
 }
 
 import type { StudySettings } from '@/lib/settings';
@@ -51,7 +53,7 @@ function shuffleArray<T>(array: T[]): T[] {
   return newArray;
 }
 
-export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: LanguageStudyModeProps & { compactHeader?: boolean; onMetricsChange?: (m: { streak: number; current: number; total: number; progress: number; }) => void; }) {
+export function LanguageStudyMode({ deckId, tag, compactHeader, onMetricsChange }: LanguageStudyModeProps & { compactHeader?: boolean; onMetricsChange?: (m: { streak: number; current: number; total: number; progress: number; }) => void; }) {
   const { getDeck, loading: decksLoading, updateCardProgress } = useDecks();
   const { settings } = useSettings();
   const { toast } = useToast();
@@ -319,7 +321,10 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
     // Update the tracked deck ID
     deckIdRef.current = deckId;
     
-    const allCardsFromDeck = deck.cards as Flashcard[];
+    const allCardsFromDeck = (deck.cards as Flashcard[]).filter(c => {
+      if (!tag) return true;
+      return c.tag && c.tag.split(',').map(t => t.trim()).includes(tag);
+    });
     const sessionSize = settings.studySettings.cardsPerSession || allCardsFromDeck.length;
     
     // Shuffle the cards first to ensure a random initial order
@@ -630,6 +635,10 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
     return <div className="text-center py-10">Loading card...</div>; 
   }
 
+  // Strip formatting for language study as requested
+  const cleanFront = stripFormatting(currentCard.front);
+  const cleanBack = stripFormatting(currentCard.back);
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 p-4 md:p-8">
       {!compactHeader && (
@@ -662,11 +671,11 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
                       key={i}
                       className={`flex-1 rounded-sm transition-colors duration-300 ${
                         answer === undefined
-                          ? 'bg-neutral-100'
-                          : answer
-                            ? 'bg-emerald-500'
-                            : 'bg-rose-500'
-                      }`}
+                           ? 'bg-neutral-100'
+                           : answer
+                             ? 'bg-emerald-500'
+                             : 'bg-rose-500'
+                       }`}
                     />
                   );
                 })}
@@ -679,8 +688,8 @@ export function LanguageStudyMode({ deckId, compactHeader, onMetricsChange }: La
       {currentCard && (
         <LanguageCard
           key={currentCard.id} // Add key here to reset input on card change
-          questionText={currentCard.front}
-          correctAnswer={currentCard.back}
+          questionText={cleanFront}
+          correctAnswer={cleanBack}
           userAnswer={userAnswer}
           similarityScore={similarityScore}
           isAnswerChecked={isAnswerChecked}

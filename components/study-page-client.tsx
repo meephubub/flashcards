@@ -24,7 +24,7 @@ import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardInfoDialog } from "@/components/card-info-dialog";
 
-export function StudyPageClient({ deckId }: { deckId: number }) {
+export function StudyPageClient({ deckId, tag }: { deckId: number, tag?: string }) {
   const { session, isLoading, user } = useAuth();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -197,6 +197,7 @@ export function StudyPageClient({ deckId }: { deckId: number }) {
             <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-10 flex-1 flex flex-col justify-center">
               <StudyMode 
                 deckId={deckId} 
+                tag={tag}
                 onProgressInfo={setProgressInfo} 
                 onCardChange={setCurrentCard}
                 initialSide={initialSide} 

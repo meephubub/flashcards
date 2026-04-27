@@ -1,7 +1,7 @@
 "use client";
 
 import { LanguageStudyMode } from "@/components/language-study-mode";
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useEffect, useMemo, useState } from 'react';
 import { AppSidebar } from "@/components/notes/app-sidebar";
@@ -19,6 +19,8 @@ import {
 
 export default function LanguageStudyPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const tag = searchParams.get('tag') || undefined;
   const router = useRouter();
   const { session, isLoading, user } = useAuth();
   // Ensure params.id is treated as a string, as that's what useParams returns.
@@ -140,7 +142,7 @@ export default function LanguageStudyPage() {
             </div>
           </div>
           <div className="flex-1 p-6 overflow-auto">
-            <LanguageStudyMode deckId={deckId} compactHeader onMetricsChange={setMetrics} />
+            <LanguageStudyMode deckId={deckId} tag={tag} compactHeader onMetricsChange={setMetrics} />
           </div>
         </SidebarInset>
       </SidebarProvider>

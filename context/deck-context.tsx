@@ -34,6 +34,7 @@ interface DeckContextType {
     deckId: number,
     front: string,
     back: string,
+    tag?: string | null,
     front_img_url?: string | null,
     back_img_url?: string | null,
   ) => Promise<Card>
@@ -42,6 +43,7 @@ interface DeckContextType {
     cardId: number,
     front: string,
     back: string,
+    tag?: string | null,
     front_img_url?: string | null,
     back_img_url?: string | null,
     exclude_from_srs?: boolean,
@@ -267,11 +269,12 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     deckId: number,
     front: string,
     back: string,
+    tag?: string | null,
     front_img_url?: string | null,
     back_img_url?: string | null,
   ): Promise<Card> => {
     if (!user) throw new Error("User not authenticated");
-    const newCard = await dataService.addCard(supabase, deckId, front, back, front_img_url, back_img_url)
+    const newCard = await dataService.addCard(supabase, deckId, front, back, tag, front_img_url, back_img_url)
     if (!newCard) {
       throw new Error("Failed to add card")
     }
@@ -300,12 +303,13 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     cardId: number,
     front: string,
     back: string,
+    tag?: string | null,
     front_img_url?: string | null,
     back_img_url?: string | null,
     exclude_from_srs?: boolean,
   ): Promise<Card> => {
     if (!user) throw new Error("User not authenticated");
-    const updatedCard = await dataService.updateCard(supabase, deckId, cardId, front, back, front_img_url, back_img_url, exclude_from_srs)
+    const updatedCard = await dataService.updateCard(supabase, deckId, cardId, front, back, tag, front_img_url, back_img_url, exclude_from_srs)
     if (!updatedCard) {
       throw new Error("Failed to update card")
     }

@@ -10,12 +10,12 @@ import {
   Search,
   X,
   MoreHorizontal,
-  ArrowUp,
-  ArrowDown,
   ChevronDown,
   Trash2,
   Edit,
   FileText,
+  Upload,
+  Tag,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,6 +25,7 @@ import { Card, Note } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/client";
 import { useNoteContextStore } from "@/hooks/use-note-context";
 import { useNoteDialogStore } from "@/hooks/use-note-dialog";
+import { getUniqueTags, parseTags } from "@/lib/text-utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
+import { parseAnkiApkg } from "@/lib/anki-parser";
+import { MarkdownCardContent } from "@/components/markdown-card-content";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -117,16 +121,21 @@ function DeckView({
 }) {
   const [activeCardIdx, setActiveCardIdx] = useState(0);
   const [cardQuery, setCardQuery] = useState("");
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const filteredCards = cardQuery.trim()
-    ? (deck.cards || []).filter(
-        (c) =>
-          c.front.toLowerCase().includes(cardQuery.toLowerCase()) ||
-          c.back.toLowerCase().includes(cardQuery.toLowerCase()),
-      )
-    : deck.cards || [];
+  const filteredCards = (deck.cards || []).filter((c) => {
+    const matchesQuery = !cardQuery.trim() || 
+      c.front.toLowerCase().includes(cardQuery.toLowerCase()) ||
+      c.back.toLowerCase().includes(cardQuery.toLowerCase());
+    
+    const matchesTag = !selectedTag || (c.tag && c.tag.includes(selectedTag));
+    
+    return matchesQuery && matchesTag;
+  });
+
+  const uniqueTags = useMemo(() => getUniqueTags(deck.cards || []), [deck.cards]);
 
   const activeCard = filteredCards[activeCardIdx] ?? null;
 
@@ -200,6 +209,35 @@ function DeckView({
       <div className="flex flex-1 min-h-0 h-[480px]">
         {/* Left: card list */}
         <div className="w-[260px] border-r border-border flex flex-col shrink-0">
+          {/* Tags */}
+          {uniqueTags.length > 0 && (
+            <div className="flex items-center gap-1.5 px-4 py-2 border-b border-border overflow-x-auto no-scrollbar shrink-0">
+              <button
+                onClick={() => setSelectedTag(null)}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors shrink-0 ${
+                  !selectedTag
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                All
+              </button>
+              {uniqueTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors shrink-0 ${
+                    tag === selectedTag
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Sort toolbar */}
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
             <button className="flex items-center gap-1 text-xs text-foreground border border-border rounded-md px-2 py-1 hover:bg-muted transition-colors">
@@ -293,18 +331,20 @@ function DeckView({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Front
                 </span>
-                <h2 className="text-lg font-medium text-foreground">
-                  {activeCard.front}
-                </h2>
+                <MarkdownCardContent
+                  content={activeCard.front}
+                  className="text-lg font-medium text-foreground"
+                />
               </div>
               <hr className="border-border" />
               <div className="space-y-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Back
                 </span>
-                <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
-                  {activeCard.back}
-                </div>
+                <MarkdownCardContent
+                  content={activeCard.back}
+                  className="text-sm text-foreground/80 leading-relaxed"
+                />
               </div>
               {activeCard.front_img_url && (
                 <div className="mt-4 rounded-lg overflow-hidden border border-border">
@@ -313,6 +353,18 @@ function DeckView({
                     alt="Card front"
                     className="max-w-full h-auto"
                   />
+                </div>
+              )}
+              {activeCard.tag && (
+                <div className="flex flex-wrap gap-1.5 pt-2">
+                  {parseTags(activeCard.tag).map((t) => (
+                    <span
+                      key={t}
+                      className="px-2 py-0.5 rounded-full bg-secondary text-[10px] font-medium text-secondary-foreground border border-border"
+                    >
+                      {t}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
@@ -674,13 +726,13 @@ function NoteExplorer({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type Mode = "default" | "deck-pick" | "deck-view" | "note-pick";
+type Mode = "default" | "deck-pick" | "deck-view" | "note-pick" | "tag-view";
 
 export function DecksActionSearchBar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { decks, deleteCard } = useDecks();
+  const { decks, deleteCard, addDeck, addCard } = useDecks();
   const setCurrentNoteId = useNoteContextStore((s) => s.setCurrentNoteId);
   const isIncluded =
     pathname === "/" ||
@@ -694,6 +746,8 @@ export function DecksActionSearchBar() {
   const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
   const [selectedDeck, setSelectedDeck] = useState<Deck | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = useMemo(() => createClient(), []);
   const openDialog = useNoteDialogStore((s) => s.openDialog);
@@ -791,13 +845,19 @@ export function DecksActionSearchBar() {
   const isNotePrefix = query.toLowerCase().startsWith("notes:");
   const noteQuery = isNotePrefix ? query.slice(6).trimStart() : "";
 
+  // Parse tag: prefix
+  const isTagPrefix = query.toLowerCase().startsWith("tag:");
+  const tagQuery = isTagPrefix ? query.slice(4).trimStart() : "";
+
   const effectiveMode: Mode = isDeckPrefix
     ? "deck-pick"
     : isNotePrefix
       ? "note-pick"
-      : mode === "deck-view"
-        ? "deck-view"
-        : "default";
+      : isTagPrefix
+        ? "tag-view"
+        : mode === "deck-view"
+          ? "deck-view"
+          : "default";
 
   // ── Action Items ──
   const staticItems: Item[] = [
@@ -856,6 +916,15 @@ export function DecksActionSearchBar() {
         setOpen(false);
       },
     },
+    {
+      id: "import-anki",
+      label: importing ? "Importing Anki..." : "Import Anki Deck",
+      icon: <Upload size={16} strokeWidth={1.5} />,
+      section: "IMPORT",
+      run: () => {
+        fileInputRef.current?.click();
+      },
+    },
   ];
 
   // Add decks to the searchable items
@@ -882,11 +951,26 @@ export function DecksActionSearchBar() {
   const allSearchable = [...staticItems, ...dynamicItems, ...noteItems];
 
   const filtered =
-    query.trim() && !isDeckPrefix && !isNotePrefix
+    query.trim() && !isDeckPrefix && !isNotePrefix && !isTagPrefix
       ? allSearchable.filter((item) =>
           item.label.toLowerCase().includes(query.toLowerCase()),
         )
-      : allSearchable;
+      : isTagPrefix
+        ? decks.flatMap(d => (d.cards || []).map(c => ({
+            id: `card-${c.id}`,
+            label: c.front,
+            icon: <Tag size={14} />, // Updated to Tag icon
+            section: "TAG RESULTS",
+            run: () => {
+              const deck = decks.find(dk => dk.id === c.deck_id);
+              if (deck) handleDeckSelect(deck);
+              setOpen(false);
+            }
+          }))).filter(item => {
+            const card = (decks.flatMap(d => d.cards || [])).find(c => `card-${c.id}` === item.id);
+            return card && card.tag && card.tag.toLowerCase().includes(tagQuery.toLowerCase());
+          })
+        : allSearchable;
 
   const grouped = groupItems(filtered);
   const flatList = filtered;
@@ -944,6 +1028,94 @@ export function DecksActionSearchBar() {
     setOpen(false);
   };
 
+  const handleAnkiImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    const toastId = toast.loading(`Importing ${file.name}...`);
+    
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please log in to import decks", { id: toastId });
+        return;
+      }
+
+      const results = await parseAnkiApkg(file);
+      let totalCardsAdded = 0;
+
+      // Group results by top-level deck to avoid creating many small decks
+      const groupedByRoot: { [rootName: string]: { subNames: string[], cards: any[] }[] } = {};
+      for (const result of results) {
+        const parts = result.deckName.split("::");
+        const rootName = parts[0];
+        const subNames = parts.slice(1); 
+        
+        if (!groupedByRoot[rootName]) groupedByRoot[rootName] = [];
+        groupedByRoot[rootName].push({ subNames, cards: result.cards });
+      }
+
+      for (const [rootName, entries] of Object.entries(groupedByRoot)) {
+        // 1. Create/Find the root deck
+        let deck = decks.find(d => d.name === rootName);
+        if (!deck) {
+          deck = await addDeck(rootName, "Imported from Anki");
+        }
+        if (!deck) continue;
+
+        for (const entry of entries) {
+          for (const cardData of entry.cards) {
+            let front = cardData.front;
+            let back = cardData.back;
+
+            // 2. Handle media
+            for (const [filename, blob] of Object.entries(cardData.media)) {
+              const ext = filename.split(".").pop() || "png";
+              const storagePath = `${user.id}/anki/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+              
+              const { data, error } = await supabase.storage
+                .from("userFiles")
+                .upload(storagePath, blob);
+
+              if (data) {
+                const { data: { publicUrl } } = supabase.storage
+                  .from("userFiles")
+                  .getPublicUrl(storagePath);
+                
+                front = front.replace(new RegExp(filename, "g"), publicUrl);
+                back = back.replace(new RegExp(filename, "g"), publicUrl);
+              }
+            }
+
+            // 3. Combine all subdeck parts and existing tags into one list
+            const allTags = [...cardData.tags, ...entry.subNames];
+
+            // 4. Add the card
+            await addCard(
+              deck.id,
+              front,
+              back,
+              allTags.join(", "), 
+            );
+            totalCardsAdded++;
+          }
+        }
+      }
+
+      toast.success(`Successfully imported ${totalCardsAdded} cards from Anki!`, { id: toastId });
+      setOpen(false);
+    } catch (err) {
+      console.error("Anki import error:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to import Anki deck", { id: toastId });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   // ── Render ──
   if (!mounted || !isIncluded) return null;
 
@@ -999,6 +1171,14 @@ export function DecksActionSearchBar() {
               exit="exit"
               className="w-[600px] max-w-[95vw]"
             >
+              {/* Hidden file input for Anki import */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".apkg"
+                onChange={handleAnkiImport}
+                className="hidden"
+              />
               {/* Search input row */}
               <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
                 <Search
@@ -1029,9 +1209,12 @@ export function DecksActionSearchBar() {
                       >
                         notes:
                       </button>
-                      <kbd className="inline-flex items-center px-2 py-0.5 rounded-full border border-border text-[11px] text-muted-foreground bg-muted font-sans cursor-default select-none">
+                      <button
+                        onClick={() => setQuery("tag:")}
+                        className="inline-flex items-center px-2 py-0.5 rounded-full border border-border text-[11px] text-muted-foreground bg-muted font-sans cursor-pointer hover:bg-muted/80 transition-colors select-none"
+                      >
                         tag:
-                      </kbd>
+                      </button>
                     </>
                   )}
                   <kbd className="inline-flex items-center px-2 py-0.5 rounded-full border border-border text-[11px] text-muted-foreground bg-muted font-sans cursor-default select-none">
