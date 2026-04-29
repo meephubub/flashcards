@@ -1233,3 +1233,347 @@ export async function generateAIFlashcards(
     };
   }
 }
+
+// Get cards by tag
+export async function getCardsByTag(supabase: SupabaseClient, tag: string): Promise<Card[]> {
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getCardsByTag:", authError);
+      return [];
+    }
+
+    const { data: cards, error: cardsError } = await supabase
+      .from("cards")
+      .select("*, decks!inner(*)")
+      .eq("decks.user_id", user.id)
+      .like("tag", `%${tag}%`)
+      .limit(10000);
+
+    if (cardsError) {
+      console.error(`Error fetching cards with tag ${tag} for user ${user.id}:`, cardsError);
+      return [];
+    }
+
+    return cards as Card[];
+  } catch (error) {
+    console.error(`Unexpected error in getCardsByTag for tag ${tag}:`, error);
+    return [];
+  }
+}
+
+// Get cards by multiple tags (OR logic - cards with any of the specified tags)
+export async function getCardsByMultipleTags(supabase: SupabaseClient, tags: string[]): Promise<Card[]> {
+  if (!tags || tags.length === 0) return [];
+  
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getCardsByMultipleTags:", authError);
+      return [];
+    }
+
+    // Build OR conditions for tags
+    const orConditions = tags.map(tag => `tag.like.%${tag}%`).join(',');
+    
+    const { data: cards, error: cardsError } = await supabase
+      .from("cards")
+      .select("*, decks!inner(*)")
+      .eq("decks.user_id", user.id)
+      .or(orConditions)
+      .limit(10000);
+
+    if (cardsError) {
+      console.error(`Error fetching cards with tags ${tags.join(', ')} for user ${user.id}:`, cardsError);
+      return [];
+    }
+
+    return cards as Card[];
+  } catch (error) {
+    console.error(`Unexpected error in getCardsByMultipleTags for tags ${tags.join(', ')}:`, error);
+    return [];
+  }
+}
+
+// Get cards by multiple decks
+export async function getCardsByMultipleDecks(supabase: SupabaseClient, deckIds: number[]): Promise<Card[]> {
+  if (!deckIds || deckIds.length === 0) return [];
+  
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getCardsByMultipleDecks:", authError);
+      return [];
+    }
+
+    const { data: cards, error: cardsError } = await supabase
+      .from("cards")
+      .select("*, decks!inner(*)")
+      .eq("decks.user_id", user.id)
+      .in("deck_id", deckIds)
+      .limit(10000);
+
+    if (cardsError) {
+      console.error(`Error fetching cards for decks ${deckIds.join(', ')} for user ${user.id}:`, cardsError);
+      return [];
+    }
+
+    return cards as Card[];
+  } catch (error) {
+    console.error(`Unexpected error in getCardsByMultipleDecks for deckIds ${deckIds.join(', ')}:`, error);
+    return [];
+  }
+}
+
+// Get due cards by multiple tags
+export async function getDueCardsByMultipleTags(supabase: SupabaseClient, tags: string[]): Promise<Card[]> {
+  if (!tags || tags.length === 0) return [];
+  
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getDueCardsByMultipleTags:", authError);
+      return [];
+    }
+
+    // Build OR conditions for tags
+    const orConditions = tags.map(tag => `cards.tag.like.%${tag}%`).join(',');
+    
+    // Fetch all cards with the specified tags, excluding those opted out of SRS
+    const { data: cards, error: cardsError } = await supabase
+      .from("cards")
+      .select("*, decks!inner(exclude_from_srs)")
+      .eq("decks.user_id", user.id)
+      .eq("exclude_from_srs", false) // Only get cards that are NOT excluded from SRS
+      .eq("decks.exclude_from_srs", false) // And deck is not excluded
+      .or(orConditions)
+      .limit(10000);
+
+    if (cardsError) {
+      console.error(`Error fetching cards with tags ${tags.join(', ')} for user ${user.id}:`, cardsError);
+      return [];
+    }
+
+    if (!cards || cards.length === 0) {
+      return [];
+    }
+
+    const cardIds = cards.map((card) => card.id);
+
+    // Fetch progress for these cards
+    const { data: progressRecords, error: progressError } = await supabase
+      .from("card_progress")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("card_id", cardIds)
+      .limit(10000);
+
+    if (progressError) {
+      console.error(`Error fetching card progress for user ${user.id} and tags ${tags.join(', ')}:`, progressError);
+      // Proceed with cards, assuming no progress means they are due
+    }
+
+    const progressMap = new Map<number, SupabaseCardProgress>();
+    if (progressRecords) {
+      for (const record of progressRecords) {
+        if (record.card_id === null || record.card_id === undefined) {
+          console.warn("Skipping progress record with null card_id:", record);
+          continue;
+        }
+        progressMap.set(record.card_id, {
+          id: record.id,
+          user_id: record.user_id,
+          card_id: record.card_id,
+          ease_factor: record.ease_factor,
+          interval: record.interval,
+          repetitions: record.repetitions,
+          due_date: record.due_date,
+          last_reviewed: record.last_reviewed,
+          created_at: record.created_at,
+          updated_at: record.updated_at,
+          fsrs_state: record.fsrs_state,
+        } as SupabaseCardProgress);
+      }
+    }
+
+    const now = new Date();
+    const dueCards: Card[] = [];
+
+    for (const card of cards) {
+      const typedCard = card as Card;
+      const progress = progressMap.get(typedCard.id);
+
+      if (!progress) {
+        dueCards.push(typedCard);
+        continue;
+      }
+
+      const dueDate = new Date(progress.due_date);
+      if (now >= dueDate) {
+        dueCards.push(typedCard);
+      }
+    }
+
+    return dueCards;
+  } catch (error) {
+    console.error(`Unexpected error in getDueCardsByMultipleTags for tags ${tags.join(', ')}:`, error);
+    return [];
+  }
+}
+
+// Get due cards by multiple decks
+export async function getDueCardsByMultipleDecks(supabase: SupabaseClient, deckIds: number[]): Promise<Card[]> {
+  if (!deckIds || deckIds.length === 0) return [];
+  
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getDueCardsByMultipleDecks:", authError);
+      return [];
+    }
+
+    // Fetch all cards from the specified decks, excluding those opted out of SRS
+    const { data: cards, error: cardsError } = await supabase
+      .from("cards")
+      .select("*, decks!inner(exclude_from_srs)")
+      .eq("decks.user_id", user.id)
+      .eq("exclude_from_srs", false) // Only get cards that are NOT excluded from SRS
+      .eq("decks.exclude_from_srs", false) // And deck is not excluded
+      .in("deck_id", deckIds)
+      .limit(10000);
+
+    if (cardsError) {
+      console.error(`Error fetching cards for decks ${deckIds.join(', ')} for user ${user.id}:`, cardsError);
+      return [];
+    }
+
+    if (!cards || cards.length === 0) {
+      return [];
+    }
+
+    const cardIds = cards.map((card) => card.id);
+
+    // Fetch progress for these cards
+    const { data: progressRecords, error: progressError } = await supabase
+      .from("card_progress")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("card_id", cardIds)
+      .limit(10000);
+
+    if (progressError) {
+      console.error(`Error fetching card progress for user ${user.id} and decks ${deckIds.join(', ')}:`, progressError);
+      // Proceed with cards, assuming no progress means they are due
+    }
+
+    const progressMap = new Map<number, SupabaseCardProgress>();
+    if (progressRecords) {
+      for (const record of progressRecords) {
+        if (record.card_id === null || record.card_id === undefined) {
+          console.warn("Skipping progress record with null card_id:", record);
+          continue;
+        }
+        progressMap.set(record.card_id, {
+          id: record.id,
+          user_id: record.user_id,
+          card_id: record.card_id,
+          ease_factor: record.ease_factor,
+          interval: record.interval,
+          repetitions: record.repetitions,
+          due_date: record.due_date,
+          last_reviewed: record.last_reviewed,
+          created_at: record.created_at,
+          updated_at: record.updated_at,
+          fsrs_state: record.fsrs_state,
+        } as SupabaseCardProgress);
+      }
+    }
+
+    const now = new Date();
+    const dueCards: Card[] = [];
+
+    for (const card of cards) {
+      const typedCard = card as Card;
+      const progress = progressMap.get(typedCard.id);
+
+      if (!progress) {
+        dueCards.push(typedCard);
+        continue;
+      }
+
+      const dueDate = new Date(progress.due_date);
+      if (now >= dueDate) {
+        dueCards.push(typedCard);
+      }
+    }
+
+    return dueCards;
+  } catch (error) {
+    console.error(`Unexpected error in getDueCardsByMultipleDecks for deckIds ${deckIds.join(', ')}:`, error);
+    return [];
+  }
+}
+
+// Get all unique tags from user's cards
+export async function getAllUniqueTags(supabase: SupabaseClient): Promise<string[]> {
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Error fetching user or no user logged in for getAllUniqueTags:", authError);
+      return [];
+    }
+
+    const { data: cards, error: cardsError } = await supabase
+      .from("cards")
+      .select("tag, decks!inner(*)")
+      .eq("decks.user_id", user.id)
+      .not("tag", "is", null)
+      .neq("tag", "")
+      .limit(10000);
+
+    if (cardsError) {
+      console.error(`Error fetching tags for user ${user.id}:`, cardsError);
+      return [];
+    }
+
+    const tagSet = new Set<string>();
+    if (cards) {
+      for (const card of cards) {
+        if (card.tag) {
+          // Parse tags from the tag string (comma-separated or slash-separated)
+          const tags = card.tag.split(/[,\/]/).map(t => t.trim()).filter(t => t.length > 0);
+          tags.forEach(tag => tagSet.add(tag));
+        }
+      }
+    }
+
+    return Array.from(tagSet).sort();
+  } catch (error) {
+    console.error(`Unexpected error in getAllUniqueTags:`, error);
+    return [];
+  }
+}

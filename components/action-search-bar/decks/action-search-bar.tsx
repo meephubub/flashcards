@@ -26,6 +26,14 @@ import { createClient } from "@/lib/supabase/client";
 import { useNoteContextStore } from "@/hooks/use-note-context";
 import { useNoteDialogStore } from "@/hooks/use-note-dialog";
 import { getUniqueTags, parseTags } from "@/lib/text-utils";
+import { 
+  getCardsByTag, 
+  getCardsByMultipleTags, 
+  getCardsByMultipleDecks, 
+  getDueCardsByMultipleTags, 
+  getDueCardsByMultipleDecks, 
+  getAllUniqueTags 
+} from "@/lib/data";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +45,9 @@ import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { parseAnkiApkg } from "@/lib/anki-parser";
 import { MarkdownCardContent } from "@/components/markdown-card-content";
+import { ImportMarkdownDialog } from "@/components/import-markdown-dialog";
+import { MultiTagStudy } from "./multi-tag-study";
+import { MultiDeckStudy } from "./multi-deck-study";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -726,7 +737,7 @@ function NoteExplorer({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type Mode = "default" | "deck-pick" | "deck-view" | "note-pick" | "tag-view";
+type Mode = "default" | "deck-pick" | "deck-view" | "note-pick" | "tag-view" | "multi-deck-study" | "multi-tag-study";
 
 export function DecksActionSearchBar() {
   const [open, setOpen] = useState(false);
@@ -746,7 +757,11 @@ export function DecksActionSearchBar() {
   const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
   const [selectedDeck, setSelectedDeck] = useState<Deck | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedDecks, setSelectedDecks] = useState<number[]>([]);
   const [importing, setImporting] = useState(false);
+  const [isImportMarkdownOpen, setIsImportMarkdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = useMemo(() => createClient(), []);
@@ -758,26 +773,31 @@ export function DecksActionSearchBar() {
     setMounted(true);
   }, []);
 
-  // Fetch notes
+  // Fetch notes and tags
   useEffect(() => {
     if (!open) return;
 
-    const fetchNotes = async () => {
+    const fetchData = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
+      // Fetch notes
+      const { data: notesData } = await supabase
         .from("notes")
         .select("*")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
 
-      if (data) setNotes(data);
+      if (notesData) setNotes(notesData);
+
+      // Fetch all unique tags
+      const tags = await getAllUniqueTags(supabase);
+      setAllTags(tags);
     };
 
-    fetchNotes();
+    fetchData();
   }, [open, supabase]);
 
   const deleteNote = useCallback(
@@ -828,12 +848,24 @@ export function DecksActionSearchBar() {
       );
   }, [isIncluded]);
 
+  // Listen for import markdown event
+  useEffect(() => {
+    if (!isIncluded) return;
+
+    const handler = () => setIsImportMarkdownOpen(true);
+    window.addEventListener("open-import-markdown", handler as EventListener);
+    return () =>
+      window.removeEventListener("open-import-markdown", handler as EventListener);
+  }, [isIncluded]);
+
   // Reset state when closing
   useEffect(() => {
     if (!open) {
       setQuery("");
       setMode("default");
       setSelectedDeck(null);
+      setSelectedTags([]);
+      setSelectedDecks([]);
     }
   }, [open]);
 
@@ -857,7 +889,11 @@ export function DecksActionSearchBar() {
         ? "tag-view"
         : mode === "deck-view"
           ? "deck-view"
-          : "default";
+          : mode === "multi-tag-study"
+            ? "multi-tag-study"
+            : mode === "multi-deck-study"
+              ? "multi-deck-study"
+              : "default";
 
   // ── Action Items ──
   const staticItems: Item[] = [
@@ -888,6 +924,26 @@ export function DecksActionSearchBar() {
       icon: <Play size={16} strokeWidth={1.5} />,
       section: "GO TO",
       href: "/study/all-due",
+    },
+    {
+      id: "study-tags",
+      label: "Study by Tags",
+      icon: <Tag size={16} strokeWidth={1.5} />,
+      section: "STUDY",
+      run: () => {
+        setMode("multi-tag-study");
+        setQuery("");
+      },
+    },
+    {
+      id: "study-decks",
+      label: "Study Multiple Decks",
+      icon: <Library size={16} strokeWidth={1.5} />,
+      section: "STUDY",
+      run: () => {
+        setMode("multi-deck-study");
+        setQuery("");
+      },
     },
     {
       id: "statistics",
@@ -923,6 +979,16 @@ export function DecksActionSearchBar() {
       section: "IMPORT",
       run: () => {
         fileInputRef.current?.click();
+      },
+    },
+    {
+      id: "import-markdown",
+      label: "Import Markdown",
+      icon: <FileText size={16} strokeWidth={1.5} />,
+      section: "IMPORT",
+      run: () => {
+        setIsImportMarkdownOpen(true);
+        setOpen(false);
       },
     },
   ];
@@ -1016,9 +1082,16 @@ export function DecksActionSearchBar() {
 
   const handleBack = () => {
     setDirection(-1);
-    setMode("default");
-    setSelectedDeck(null);
-    setQuery("deck:");
+    if (mode === "multi-tag-study" || mode === "multi-deck-study") {
+      setMode("default");
+      setQuery("");
+      setSelectedTags([]);
+      setSelectedDecks([]);
+    } else {
+      setMode("default");
+      setSelectedDeck(null);
+      setQuery("deck:");
+    }
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
@@ -1159,6 +1232,34 @@ export function DecksActionSearchBar() {
                 onBack={handleBack}
                 onClose={() => setOpen(false)}
                 onDeleteNote={deleteNote}
+              />
+            </motion.div>
+          ) : effectiveMode === "multi-tag-study" ? (
+            <motion.div
+              key="multi-tag-study"
+              custom={direction}
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <MultiTagStudy
+                onClose={() => setOpen(false)}
+                onBack={handleBack}
+              />
+            </motion.div>
+          ) : effectiveMode === "multi-deck-study" ? (
+            <motion.div
+              key="multi-deck-study"
+              custom={direction}
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <MultiDeckStudy
+                onClose={() => setOpen(false)}
+                onBack={handleBack}
               />
             </motion.div>
           ) : (
@@ -1309,29 +1410,34 @@ export function DecksActionSearchBar() {
     );
   };
 
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="fixed inset-0 z-50 bg-neutral-900/40 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setOpen(false)}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-        >
-          <motion.div
-            onClick={(e) => e.stopPropagation()}
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.18 }}
-          >
-            {renderContent()}
-          </motion.div>
-        </motion.div>
+  return (
+    <>
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              className="fixed inset-0 z-50 bg-neutral-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+              onClick={() => setOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <motion.div
+                onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ duration: 0.18 }}
+              >
+                {renderContent()}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
-    </AnimatePresence>,
-    document.body,
+      <ImportMarkdownDialog open={isImportMarkdownOpen} onOpenChange={setIsImportMarkdownOpen} />
+    </>
   );
 }

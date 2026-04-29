@@ -1,57 +1,82 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useRef } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { useState, useRef, useCallback } from "react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
-import { useDecks } from "@/context/deck-context"
-import { AlertCircle, FileText, Upload } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { MarkdownTemplate } from "@/components/markdown-template"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { Spinner } from "@/components/ui/spinner"
+import { Upload, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+type ImportFormat = "markdown" | "tab" | "csv"
 
 interface ImportMarkdownDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
+const FORMAT_CONFIG: Record<ImportFormat, { label: string; accept: string; hint: string }> = {
+  markdown: {
+    label: "Markdown",
+    accept: ".md,text/markdown",
+    hint: "# Deck → ## Question → Answer",
+  },
+  tab: {
+    label: "Tab",
+    accept: ".txt,text/plain",
+    hint: "Question[tab]Answer",
+  },
+  csv: {
+    label: "CSV",
+    accept: ".csv,text/csv",
+    hint: "Question,Answer",
+  },
+}
+
 export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialogProps) {
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const [previewText, setPreviewText] = useState<string>("")
-  const [importFormat, setImportFormat] = useState<"markdown" | "tab" | "csv">("markdown")
+  const [importFormat, setImportFormat] = useState<ImportFormat>("markdown")
   const [directInput, setDirectInput] = useState("")
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { toast } = useToast()
-  const { refreshDecks } = useDecks()
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
       setFile(selectedFile)
-
-      // Preview the file content
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const content = e.target?.result as string
-        setPreviewText(content.substring(0, 500) + (content.length > 500 ? "..." : ""))
-      }
-      reader.readAsText(selectedFile)
+      setDirectInput("")
     }
   }
 
-  const handleImport = async () => {
-    if (!file && !directInput.trim()) {
-      toast({
-        title: "No content provided",
-        description: "Please either select a file or enter text to import.",
-        variant: "destructive",
-      })
-      return
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const droppedFile = e.dataTransfer.files[0]
+    if (droppedFile) {
+      setFile(droppedFile)
+      setDirectInput("")
     }
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }, [])
+
+  const handleImport = async () => {
+    if (!file && !directInput.trim()) return
 
     setIsUploading(true)
 
@@ -60,7 +85,6 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
       if (file) {
         formData.append("file", file)
       } else {
-        // Create a text file from direct input
         const textFile = new File([directInput], "import.txt", { type: "text/plain" })
         formData.append("file", textFile)
       }
@@ -71,254 +95,158 @@ export function ImportMarkdownDialog({ open, onOpenChange }: ImportMarkdownDialo
         body: formData,
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.error || "Failed to import flashcards")
+        const data = await response.json()
+        throw new Error(data.error || "Failed to import")
       }
 
-      // Refresh decks to show the newly imported deck
-      await refreshDecks()
-
-      toast({
-        title: "Import successful",
-        description: data.message,
-      })
-
-      // Reset and close dialog
-      setFile(null)
-      setPreviewText("")
-      setDirectInput("")
+      resetState()
       onOpenChange(false)
     } catch (error) {
-      toast({
-        title: "Import failed",
-        description: error instanceof Error ? error.message : "Failed to import flashcards",
-        variant: "destructive",
-      })
+      console.error("Import failed:", error)
     } finally {
       setIsUploading(false)
     }
   }
 
-  const resetFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
+  const resetState = () => {
+    if (fileInputRef.current) fileInputRef.current.value = ""
     setFile(null)
-    setPreviewText("")
     setDirectInput("")
   }
 
+  const clearFile = () => {
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    setFile(null)
+  }
+
+  const hasContent = file || directInput.trim()
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
-          <DialogTitle>Import Flashcards</DialogTitle>
+      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4">
+          <DialogTitle className="text-lg font-medium">Import flashcards</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="markdown" onValueChange={(value) => setImportFormat(value as "markdown" | "tab" | "csv")}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="markdown">Markdown</TabsTrigger>
-            <TabsTrigger value="tab">Tab-Delimited</TabsTrigger>
-            <TabsTrigger value="csv">CSV</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="markdown" className="space-y-4 py-4">
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="flex flex-col gap-2">
-                <div>
-                  Your markdown file should use <code className="text-xs bg-muted px-1 py-0.5 rounded"># Title</code> for
-                  deck name, and <code className="text-xs bg-muted px-1 py-0.5 rounded">## Question</code> followed by the
-                  answer for each card.
-                </div>
-                <div className="flex justify-end">
-                  <MarkdownTemplate />
-                </div>
-              </AlertDescription>
-            </Alert>
-
-            <div className="grid w-full items-center gap-1.5">
-              <label htmlFor="markdown-file" className="text-sm font-medium">
-                Select Markdown File
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="markdown-file"
-                  type="file"
-                  accept=".md,text/markdown"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
-                  <FileText className="mr-2 h-4 w-4" />
-                  {file ? file.name : "Choose file"}
-                </Button>
-                {file && (
-                  <Button type="button" variant="ghost" size="sm" onClick={resetFileInput}>
-                    Clear
-                  </Button>
+        <div className="px-6 pb-6 space-y-5">
+          {/* Format selector */}
+          <div className="flex gap-1 p-1 bg-muted rounded-lg">
+            {(Object.keys(FORMAT_CONFIG) as ImportFormat[]).map((format) => (
+              <button
+                key={format}
+                onClick={() => setImportFormat(format)}
+                className={cn(
+                  "flex-1 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  importFormat === format
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
-              </div>
-              <p className="text-xs text-muted-foreground">Accepted file types: .md</p>
-            </div>
-
-            <div className="grid w-full items-center gap-1.5">
-              <label htmlFor="direct-input" className="text-sm font-medium">
-                Or Enter Text Directly
-              </label>
-              <Textarea
-                id="direct-input"
-                placeholder="Paste your markdown content here..."
-                value={directInput}
-                onChange={(e) => setDirectInput(e.target.value)}
-                className="min-h-[200px] font-mono text-sm"
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="tab" className="space-y-4 py-4">
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="flex flex-col gap-2">
-                <div>
-                  Your tab-delimited file should have two columns: question and answer, separated by tabs. The first line
-                  can be used for the deck name and description.
-                </div>
-                <div className="text-xs font-mono bg-muted p-2 rounded">
-                  Deck Name{"\t"}Description{"\n"}
-                  Question 1{"\t"}Answer 1{"\n"}
-                  Question 2{"\t"}Answer 2
-                </div>
-              </AlertDescription>
-            </Alert>
-
-            <div className="grid w-full items-center gap-1.5">
-              <label htmlFor="tab-file" className="text-sm font-medium">
-                Select Tab-Delimited File
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="tab-file"
-                  type="file"
-                  accept=".txt,text/plain"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
-                  <FileText className="mr-2 h-4 w-4" />
-                  {file ? file.name : "Choose file"}
-                </Button>
-                {file && (
-                  <Button type="button" variant="ghost" size="sm" onClick={resetFileInput}>
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">Accepted file types: .txt</p>
-            </div>
-
-            <div className="grid w-full items-center gap-1.5">
-              <label htmlFor="direct-input-tab" className="text-sm font-medium">
-                Or Enter Text Directly
-              </label>
-              <Textarea
-                id="direct-input-tab"
-                placeholder="Paste your tab-delimited content here..."
-                value={directInput}
-                onChange={(e) => setDirectInput(e.target.value)}
-                className="min-h-[200px] font-mono text-sm"
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="csv" className="space-y-4 py-4">
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="flex flex-col gap-2">
-                <div>
-                  Your CSV file should have two columns: question and answer, separated by commas. The first line
-                  can be used for the deck name and description.
-                </div>
-                <div className="text-xs font-mono bg-muted p-2 rounded">
-                  Deck Name,Description{"\n"}
-                  Question 1,Answer 1{"\n"}
-                  Question 2,Answer 2
-                </div>
-              </AlertDescription>
-            </Alert>
-
-            <div className="grid w-full items-center gap-1.5">
-              <label htmlFor="csv-file" className="text-sm font-medium">
-                Select CSV File
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="csv-file"
-                  type="file"
-                  accept=".csv,text/csv"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
-                  <FileText className="mr-2 h-4 w-4" />
-                  {file ? file.name : "Choose file"}
-                </Button>
-                {file && (
-                  <Button type="button" variant="ghost" size="sm" onClick={resetFileInput}>
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">Accepted file types: .csv</p>
-            </div>
-
-            <div className="grid w-full items-center gap-1.5">
-              <label htmlFor="direct-input-csv" className="text-sm font-medium">
-                Or Enter Text Directly
-              </label>
-              <Textarea
-                id="direct-input-csv"
-                placeholder="Paste your CSV content here..."
-                value={directInput}
-                onChange={(e) => setDirectInput(e.target.value)}
-                className="min-h-[200px] font-mono text-sm"
-              />
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        {previewText && (
-          <div className="mt-4">
-            <h3 className="text-sm font-medium mb-2">Preview:</h3>
-            <div className="bg-muted p-3 rounded-md text-xs font-mono overflow-auto max-h-[200px] whitespace-pre-wrap">
-              {previewText}
-            </div>
+              >
+                {FORMAT_CONFIG[format].label}
+              </button>
+            ))}
           </div>
-        )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
-            Cancel
-          </Button>
-          <Button onClick={handleImport} disabled={(!file && !directInput.trim()) || isUploading}>
-            {isUploading ? (
-              <>
-                <Upload className="mr-2 h-4 w-4 animate-spin" />
-                Importing...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" />
-                Import
-              </>
+          {/* File drop zone */}
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => !file && fileInputRef.current?.click()}
+            className={cn(
+              "relative border border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer",
+              isDragging && "border-foreground/50 bg-muted/50",
+              file ? "border-foreground/20 bg-muted/30" : "border-border hover:border-foreground/30 hover:bg-muted/30"
             )}
-          </Button>
-        </DialogFooter>
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={FORMAT_CONFIG[importFormat].accept}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            {file ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+                    <Upload className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <span className="text-sm font-medium truncate">{file.name}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    clearFile()
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto">
+                  <Upload className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Drop file here or click to browse</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {FORMAT_CONFIG[importFormat].hint}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or paste content</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Text input */}
+          <Textarea
+            placeholder="Paste your content here..."
+            value={directInput}
+            onChange={(e) => {
+              setDirectInput(e.target.value)
+              if (e.target.value && file) clearFile()
+            }}
+            className="min-h-[120px] font-mono text-sm resize-none"
+          />
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-1">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => onOpenChange(false)}
+              disabled={isUploading}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={handleImport}
+              disabled={!hasContent || isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Spinner className="mr-2" />
+                  Importing...
+                </>
+              ) : (
+                "Import"
+              )}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )
