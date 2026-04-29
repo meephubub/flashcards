@@ -749,7 +749,8 @@ export function DecksActionSearchBar() {
     pathname === "/" ||
     pathname === "/home" ||
     pathname?.startsWith("/deck") ||
-    pathname === "/notes";
+    pathname === "/notes" ||
+    pathname === "/study/all-due";
 
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
