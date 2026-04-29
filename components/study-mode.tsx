@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, ArrowRight, Check, X, RotateCw } from "lucide-react"
@@ -79,6 +79,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
   const [reviewIndices, setReviewIndices] = useState<number[]>([])
   const [reviewCurrent, setReviewCurrent] = useState(0)
+  const isNavigatingRef = useRef(false)
 
   // Function to shuffle an array (Fisher-Yates algorithm)
   const shuffleArray = (array: any[]) => {
@@ -160,6 +161,8 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
   useEffect(() => {
     if (cards.length === 0) return
+    // Don't sync isFlipped during navigation - let the pendingCardIndex effect handle it
+    if (isNavigatingRef.current) return
     const displayIndex = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
     setIsFlipped(initialSides[displayIndex] ?? false)
   }, [currentCardIndex, reviewMode, reviewCurrent])
@@ -262,6 +265,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     }
     if (isFlipped) {
       // We're on the back of the card; flip first, then navigate/finish after animation
+      isNavigatingRef.current = true
       setIsFlipped(false)
       // Decide next action:
       // - If there's a next card in the initial pass, go there
@@ -540,6 +544,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
           setCurrentCardIndex(pendingCardIndex)
         }
         setPendingCardIndex(null)
+        isNavigatingRef.current = false
         setIsProcessing(false)
       }, FLIP_ANIMATION_DURATION)
       return () => clearTimeout(timer)
