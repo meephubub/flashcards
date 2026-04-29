@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
 import { StudyMode } from "@/components/study-mode";
@@ -208,6 +208,7 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
 
   const [reviewIndices, setReviewIndices] = useState<number[]>([]);
   const [reviewCurrent, setReviewCurrent] = useState(0);
+  const isNavigatingRef = useRef(false);
 
   const rawStudy: any = settings?.studySettings ?? {};
   const normalizedStudy = {
@@ -268,6 +269,8 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
 
   useEffect(() => {
     if (cards.length === 0) return;
+    // Don't sync isFlipped during navigation - let the pendingCardIndex effect handle it
+    if (isNavigatingRef.current) return;
     const displayIndex = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex;
     setIsFlipped(initialSides[displayIndex] ?? false);
   }, [currentCardIndex, reviewMode, reviewCurrent]);
@@ -357,6 +360,7 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
       return;
     }
     if (isFlipped) {
+      isNavigatingRef.current = true;
       setIsFlipped(false);
       const nextPending =
         currentCardIndex < cards.length - 1
@@ -573,6 +577,7 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
           setCurrentCardIndex(pendingCardIndex);
         }
         setPendingCardIndex(null);
+        isNavigatingRef.current = false;
         setIsProcessing(false);
       }, FLIP_ANIMATION_DURATION);
       return () => clearTimeout(timer);
