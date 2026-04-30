@@ -13,8 +13,8 @@ import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText } from "@
 import { haptics } from "@/lib/haptics"
 import { useToast } from "@/hooks/use-toast"
 import { MarkdownCardContent } from "@/components/markdown-card-content"
-import { LeechAlert, LeechBadge, LeechCounter } from "@/components/leech-alert"
-import { isLeech, resetLeechStatus } from "@/lib/spaced-repetition"
+import { LeechAlert } from "@/components/leech-alert"
+import { resetLeechStatus } from "@/lib/spaced-repetition"
 
 interface StudyModeProps {
   deckId: number
@@ -34,7 +34,7 @@ interface StudyModeProps {
 }
 
 export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = "front", tag }: StudyModeProps) {
-  const { getDeck, loading, getDueCards, updateCardProgress } = useDecks()
+  const { getDeck, loading, getDueCards, updateCardProgress, updateCard } = useDecks()
   const { settings } = useSettings()
   const router = useTransitionRouter()
   const { toast } = useToast()
@@ -281,7 +281,6 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const handleSuspendLeech = async () => {
     if (!currentCard) return
     // Mark card as excluded from SRS
-    const { updateCard } = useDecks()
     try {
       await updateCard(deckId, currentCard.id, currentCard.front, currentCard.back, currentCard.tag, currentCard.front_img_url, currentCard.back_img_url, true)
       toast({
@@ -349,26 +348,45 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     }
   }
 
-  const handleCardKnown = () => {
+  const handleCardKnown = async () => {
     if (isProcessing) return
     setIsProcessing(true)
     updateStats(true);
+    
+    // Get fresh card reference to avoid stale closure
+    const idx = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
+    const cardToUpdate = cards[idx]
+    
+    // Update card progress (rating 4 = Good/Easy pass)
+    if (cardToUpdate) {
+      const nextProgress = calculateNextReview(
+        cardToUpdate.progress || DEFAULT_CARD_PROGRESS,
+        4 // Good/Easy rating for pass
+      )
+      await updateCardProgress(deckId, cardToUpdate.id, nextProgress)
+      // Update local state
+      const updatedCards = [...cards]
+      updatedCards[idx] = { ...cardToUpdate, progress: nextProgress }
+      setCards(updatedCards)
+    }
+    
     if (reviewMode) {
       // Remove this card from reviewIndices
-      const currentReviewCardIndex = reviewIndices[reviewCurrent]
       const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent)
       setReviewIndices(newReviewIndices)
       
-      // Also remove from wrongCardIndices if present
+      // Also remove from wrongCardIndices since they got it right
+      const currentReviewCardIndex = reviewIndices[reviewCurrent]
       setWrongCardIndices(prev => prev.filter(idx => idx !== currentReviewCardIndex))
       
       if (newReviewIndices.length === 0) {
         finishSession()
         return
       }
-      // If we removed the last card, go to the new last card
+      
+      // Stay at same index (next card slides into this position)
       if (reviewCurrent >= newReviewIndices.length) {
-        setReviewCurrent(Math.max(0, newReviewIndices.length - 1))
+        setReviewCurrent(0)
       }
       setIsFlipped(false)
       setIsProcessing(false)
@@ -377,17 +395,52 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     moveToNextCard();
   }
 
-  const handleCardNeedsReview = () => {
+  const handleCardNeedsReview = async () => {
     if (isProcessing) return
     setIsProcessing(true)
     updateStats(false);
     
+    // Get fresh card reference to avoid stale closure
+    const idx = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
+    const cardToUpdate = cards[idx]
+    
+    // Update card progress (rating 1 = Again/fail)
+    if (cardToUpdate) {
+      const nextProgress = calculateNextReview(
+        cardToUpdate.progress || DEFAULT_CARD_PROGRESS,
+        1 // Again rating for fail
+      )
+      await updateCardProgress(deckId, cardToUpdate.id, nextProgress)
+      // Update local state
+      const updatedCards = [...cards]
+      updatedCards[idx] = { ...cardToUpdate, progress: nextProgress }
+      setCards(updatedCards)
+    }
+    
     if (reviewMode) {
-      // In review mode, keep the card in review indices for another attempt
-      // Just move to next card (it will cycle back around)
+      // In review mode, remove the card from review indices
+      // (user got it wrong again, but we don't want infinite loops)
+      const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent)
+      setReviewIndices(newReviewIndices)
+      
+      // Keep it in wrongCardIndices since they still got it wrong
+      const currentReviewCardIndex = reviewIndices[reviewCurrent]
+      if (!wrongCardIndices.includes(currentReviewCardIndex)) {
+        setWrongCardIndices(prev => [...prev, currentReviewCardIndex])
+      }
+      
+      if (newReviewIndices.length === 0) {
+        finishSession()
+        return
+      }
+      
+      // Stay at same index (next card slides into this position)
+      if (reviewCurrent >= newReviewIndices.length) {
+        setReviewCurrent(0)
+      }
+      setIsFlipped(false)
       setIsProcessing(false)
-      moveToNextCard();
-      return;
+      return
     }
 
     // Normal mode: add to wrong cards list for end-of-session review
@@ -396,7 +449,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
         return [...prev, currentCardIndex]
       }
       return prev
-    });
+    })
 
     moveToNextCard();
   }
@@ -740,9 +793,9 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
         </div>
       )}
 
-      {/* Leech Alert */}
-      {!studyComplete && isFlipped && currentCard?.progress && !leechAlertDismissed && (
-        <div className="max-w-3xl mx-auto px-6 pt-2">
+      {/* Leech Alert - Compact pill at top */}
+      {!studyComplete && currentCard?.progress && (currentCard.progress.failCount || 0) > 0 && !leechAlertDismissed && (
+        <div className="flex justify-center pt-2">
           <LeechAlert
             progress={currentCard.progress}
             onReset={handleResetLeech}
@@ -750,13 +803,6 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
             onSuspend={handleSuspendLeech}
             onDismiss={() => setLeechAlertDismissed(true)}
           />
-        </div>
-      )}
-
-      {/* Leech Badge - show on front of card too */}
-      {!studyComplete && !isFlipped && currentCard?.progress?.isLeech && (
-        <div className="flex justify-center pt-2">
-          <LeechBadge progress={currentCard.progress} />
         </div>
       )}
 
@@ -824,12 +870,6 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
                     className="text-2xl md:text-3xl text-neutral-900 leading-relaxed"
                   />
                 </div>
-                {/* Leech Counter - shows fail count */}
-                {(currentCard.progress?.failCount || 0) > 0 && (
-                  <div className="mt-2">
-                    <LeechCounter progress={currentCard.progress} />
-                  </div>
-                )}
               </div>
 
               {/* Answer Section (Animated Reveal) */}

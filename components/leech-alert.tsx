@@ -1,8 +1,13 @@
 "use client"
 
-import { AlertTriangle, RotateCcw, Edit3, Ban, X } from "lucide-react"
+import { AlertTriangle, RotateCcw, Edit3, Ban, X, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type { CardProgress } from "@/lib/spaced-repetition"
 import { getLeechStatus, LEECH_THRESHOLD } from "@/lib/spaced-repetition"
 
@@ -34,71 +39,72 @@ export function LeechAlert({
   const isWarning = !status.isLeech && status.failCount > 0
 
   return (
-    <Alert
-      variant={isWarning ? "default" : "destructive"}
-      className={`${className} ${isWarning ? "border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20" : ""}`}
-    >
-      <AlertTriangle className={`h-4 w-4 ${isWarning ? "text-amber-600" : ""}`} />
-      <div className="flex-1">
-        <AlertTitle className={isWarning ? "text-amber-800 dark:text-amber-200" : ""}>
-          {isWarning ? "Leech Warning" : "Leech Card Detected"}
-        </AlertTitle>
-        <AlertDescription className={isWarning ? "text-amber-700 dark:text-amber-300" : ""}>
-          <p className="mt-1">{status.message}</p>
-          <p className="text-xs mt-1 opacity-80">
-            {isWarning
-              ? "This card is getting difficult. Consider editing it to make it easier."
-              : "This card is leeching your time. Action recommended:"}
-          </p>
-        </AlertDescription>
-
-        <div className="flex flex-wrap gap-2 mt-3">
+    <div className={`flex items-center gap-2 ${className}`}>
+      {/* Compact Pill Button with Dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className={`h-7 px-2 text-xs rounded-full border gap-1 ${
+              isWarning
+                ? "border-amber-500/50 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                : "border-red-500/50 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-900/30"
+            }`}
+          >
+            <AlertTriangle className="h-3 w-3" />
+            <span className="hidden sm:inline">
+              {isWarning ? `Warning ${status.failCount}/${LEECH_THRESHOLD}` : "Leech"}
+            </span>
+            <span className="sm:hidden">
+              {status.failCount}/{LEECH_THRESHOLD}
+            </span>
+            <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="w-40">
+          {isWarning ? (
+            <div className="px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400 border-b mb-1">
+              {status.failCount} failure{status.failCount === 1 ? "" : "s"} (leech at {LEECH_THRESHOLD})
+            </div>
+          ) : (
+            <div className="px-2 py-1.5 text-xs text-red-600 dark:text-red-400 border-b mb-1">
+              Leech detected - card needs attention
+            </div>
+          )}
           {onReset && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReset}
-              className={`text-xs ${isWarning ? "border-amber-500/50 hover:bg-amber-100 dark:hover:bg-amber-900/30" : ""}`}
-            >
-              <RotateCcw className="h-3 w-3 mr-1" />
+            <DropdownMenuItem onClick={onReset} className="text-xs cursor-pointer">
+              <RotateCcw className="h-3.5 w-3.5 mr-2" />
               Reset Progress
-            </Button>
+            </DropdownMenuItem>
           )}
           {onEdit && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onEdit}
-              className={`text-xs ${isWarning ? "border-amber-500/50 hover:bg-amber-100 dark:hover:bg-amber-900/30" : ""}`}
-            >
-              <Edit3 className="h-3 w-3 mr-1" />
+            <DropdownMenuItem onClick={onEdit} className="text-xs cursor-pointer">
+              <Edit3 className="h-3.5 w-3.5 mr-2" />
               Edit Card
-            </Button>
+            </DropdownMenuItem>
           )}
           {onSuspend && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSuspend}
-              className={`text-xs ${isWarning ? "border-amber-500/50 hover:bg-amber-100 dark:hover:bg-amber-900/30" : ""}`}
-            >
-              <Ban className="h-3 w-3 mr-1" />
-              Suspend
-            </Button>
+            <DropdownMenuItem onClick={onSuspend} className="text-xs cursor-pointer">
+              <Ban className="h-3.5 w-3.5 mr-2" />
+              Suspend Card
+            </DropdownMenuItem>
           )}
-          {onDismiss && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onDismiss}
-              className="text-xs ml-auto"
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
-      </div>
-    </Alert>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Dismiss Button (optional, small) */}
+      {onDismiss && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDismiss}
+          className="h-6 w-6 p-0 text-neutral-400 hover:text-neutral-600"
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
   )
 }
 
