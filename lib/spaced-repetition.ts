@@ -11,9 +11,16 @@ export interface CardProgress {
   lastReviewed: string // Last review date
   fsrsState?: FsrsCard // Serialized FSRS card state for this card
   fsrsParams?: any // FSRS parameters used for this card
+  // Leech tracking - consecutive failures
+  failCount?: number // Number of consecutive failures
+  isLeech?: boolean // Marked as leech when failCount >= LEECH_THRESHOLD
+  lastResult?: 'pass' | 'fail' // Last review result
 }
 
 export type ConfidenceRating = 0 | 1 | 2 | 3 | 4 | 5
+
+// Leech threshold - card becomes a leech after this many consecutive failures
+export const LEECH_THRESHOLD = 3
 
 // Default initial values for a new card
 export const DEFAULT_CARD_PROGRESS: CardProgress = {
@@ -22,6 +29,8 @@ export const DEFAULT_CARD_PROGRESS: CardProgress = {
   repetitions: 0,
   dueDate: new Date().toISOString(),
   lastReviewed: new Date().toISOString(),
+  failCount: 0,
+  isLeech: false,
 }
 
 /**
@@ -59,6 +68,12 @@ export function calculateNextReview(
   const record = f.next(baseCard, now, grade)
   const nextCard = record.card as FsrsCard
 
+  // Determine if this was a pass or fail
+  const isFail = rating <= 2
+  const currentFailCount = currentProgress.failCount || 0
+  const newFailCount = isFail ? currentFailCount + 1 : 0
+  const isNowLeech = newFailCount >= LEECH_THRESHOLD || (currentProgress.isLeech && isFail)
+
   const nextProgress: CardProgress = {
     easeFactor: currentProgress.easeFactor, // Legacy
     interval: nextCard.scheduled_days,
@@ -67,6 +82,9 @@ export function calculateNextReview(
     lastReviewed: now.toISOString(),
     fsrsState: nextCard,
     fsrsParams: params,
+    failCount: newFailCount,
+    isLeech: isNowLeech,
+    lastResult: isFail ? 'fail' : 'pass',
   }
 
   return nextProgress
@@ -154,5 +172,58 @@ export function getRatingDescription(rating: ConfidenceRating): string {
       return "Perfect recall (Easy)"
     default:
       return ""
+  }
+}
+
+/**
+ * Check if a card is a leech
+ */
+export function isLeech(progress: CardProgress): boolean {
+  return progress.isLeech === true || (progress.failCount || 0) >= LEECH_THRESHOLD
+}
+
+/**
+ * Get leech status text
+ */
+export function getLeechStatus(progress: CardProgress): {
+  isLeech: boolean
+  failCount: number
+  message: string
+} {
+  const failCount = progress.failCount || 0
+  const isLeechCard = isLeech(progress)
+
+  if (isLeechCard) {
+    return {
+      isLeech: true,
+      failCount,
+      message: `Leech: ${failCount} consecutive failures`
+    }
+  }
+
+  if (failCount > 0) {
+    return {
+      isLeech: false,
+      failCount,
+      message: `Warning: ${failCount} consecutive failure${failCount === 1 ? '' : 's'} (${LEECH_THRESHOLD - failCount} more to become leech)`
+    }
+  }
+
+  return {
+    isLeech: false,
+    failCount: 0,
+    message: ""
+  }
+}
+
+/**
+ * Reset leech status for a card (use when editing/suspending)
+ */
+export function resetLeechStatus(progress: CardProgress): CardProgress {
+  return {
+    ...progress,
+    failCount: 0,
+    isLeech: false,
+    lastResult: undefined,
   }
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, ArrowRight, Check, X, RotateCw } from "lucide-react"
@@ -13,6 +13,8 @@ import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText } from "@
 import { haptics } from "@/lib/haptics"
 import { useToast } from "@/hooks/use-toast"
 import { MarkdownCardContent } from "@/components/markdown-card-content"
+import { LeechAlert, LeechBadge, LeechCounter } from "@/components/leech-alert"
+import { isLeech, resetLeechStatus } from "@/lib/spaced-repetition"
 
 interface StudyModeProps {
   deckId: number
@@ -59,11 +61,8 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const [initialSides, setInitialSides] = useState<boolean[]>([])
   const [progress, setProgress] = useState(0)
   const [studyComplete, setStudyComplete] = useState(false)
-  const [cardsToReview, setCardsToReview] = useState<number[]>([])
   const [reviewMode, setReviewMode] = useState(false)
-  const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const FLIP_ANIMATION_DURATION = 300 // ms, should match CSS duration
 
   // Statistics tracking
   const [stats, setStats] = useState({
@@ -77,9 +76,16 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     lastCardTime: new Date()
   })
 
+  // Leech alert state
+  const [leechAlertDismissed, setLeechAlertDismissed] = useState(false)
+
   const [reviewIndices, setReviewIndices] = useState<number[]>([])
   const [reviewCurrent, setReviewCurrent] = useState(0)
-  const isNavigatingRef = useRef(false)
+
+  // Reset leech alert dismissal when card changes
+  useEffect(() => {
+    setLeechAlertDismissed(false)
+  }, [currentCardIndex, reviewCurrent, reviewMode])
 
   // Function to shuffle an array (Fisher-Yates algorithm)
   const shuffleArray = (array: any[]) => {
@@ -102,10 +108,19 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     return arr
   }
 
+  // Track if session has been initialized to prevent reset on navigation
+  const [sessionInitialized, setSessionInitialized] = useState(false)
+  // Track wrong cards to review at the end
+  const [wrongCardIndices, setWrongCardIndices] = useState<number[]>([])
+
   // Initialize cards based on spaced repetition setting
   useEffect(() => {
     const initializeCards = async () => {
+      // Prevent re-initialization if session already started
+      if (sessionInitialized) return
+      
       if (deck) {
+        setSessionInitialized(true)
         let cardsToConsider: any[];
         if (isSpacedRepetitionEnabled) {
           // Get only due cards when spaced repetition is enabled AND deck is not excluded
@@ -133,22 +148,23 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
         setIsFlipped(sides[0] ?? false)
 
         // Initialize statistics
-        setStats(prev => ({
-          ...prev,
-          totalCards: sessionCards.length, // Use sessionCards.length here
+        setStats({
+          totalCards: sessionCards.length,
           cardsStudied: 0,
           knownCards: 0,
           unknownCards: 0,
           startTime: new Date(),
-          endTime: null as Date | null,
+          endTime: null,
           averageTimePerCard: 0,
           lastCardTime: new Date()
-        }));
+        });
+        // Reset wrong cards tracking
+        setWrongCardIndices([])
       }
     };
 
     initializeCards();
-  }, [deck, deckId, isSpacedRepetitionEnabled, normalizedStudy.cardsPerSession, getDueCards, tag])
+  }, [deck, deckId, isSpacedRepetitionEnabled, normalizedStudy.cardsPerSession, getDueCards, tag, sessionInitialized])
 
   useEffect(() => {
     if (cards.length === 0) return
@@ -161,8 +177,6 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
   useEffect(() => {
     if (cards.length === 0) return
-    // Don't sync isFlipped during navigation - let the pendingCardIndex effect handle it
-    if (isNavigatingRef.current) return
     const displayIndex = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
     setIsFlipped(initialSides[displayIndex] ?? false)
   }, [currentCardIndex, reviewMode, reviewCurrent])
@@ -220,10 +234,11 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     setCurrentCardIndex(0)
     setIsFlipped(false)
     setStudyComplete(false)
-    setCardsToReview([])
     setReviewMode(false)
     setReviewIndices([])
     setReviewCurrent(0)
+    setWrongCardIndices([])
+    setSessionInitialized(false) // Allow re-initialization
     setStats({
       totalCards: cards.length,
       cardsStudied: 0,
@@ -234,6 +249,54 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
       averageTimePerCard: 0,
       lastCardTime: new Date()
     })
+    setLeechAlertDismissed(false)
+  }
+
+  // Leech handling functions
+  const handleResetLeech = async () => {
+    if (!currentCard) return
+    const resetProgress = resetLeechStatus(currentCard.progress || DEFAULT_CARD_PROGRESS)
+    const success = await updateCardProgress(deckId, currentCard.id, resetProgress)
+    if (success) {
+      // Update local state
+      const updatedCards = [...cards]
+      const idx = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
+      updatedCards[idx] = {
+        ...currentCard,
+        progress: resetProgress,
+      }
+      setCards(updatedCards)
+      toast({
+        title: "Leech reset",
+        description: "Card progress reset and leech status cleared.",
+      })
+    }
+  }
+
+  const handleEditLeech = () => {
+    if (!currentCard) return
+    router.push(`/deck/${deckId}/card/${currentCard.id}/edit`)
+  }
+
+  const handleSuspendLeech = async () => {
+    if (!currentCard) return
+    // Mark card as excluded from SRS
+    const { updateCard } = useDecks()
+    try {
+      await updateCard(deckId, currentCard.id, currentCard.front, currentCard.back, currentCard.tag, currentCard.front_img_url, currentCard.back_img_url, true)
+      toast({
+        title: "Card suspended",
+        description: "Card will no longer appear in spaced repetition reviews.",
+      })
+      // Move to next card
+      moveToNextCard()
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to suspend card",
+        variant: "destructive",
+      })
+    }
   }
 
   const finishSession = () => {
@@ -241,10 +304,10 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     setReviewMode(false)
     setStudyComplete(true)
     setIsProcessing(false)
-    // ensure endTime is captured
+    // Capture endTime in stats
     setStats(prev => ({
       ...prev,
-      endTime: prev.endTime ?? new Date(),
+      endTime: new Date(),
     }))
   }
 
@@ -263,39 +326,26 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
       setIsProcessing(false)
       return
     }
-    if (isFlipped) {
-      // We're on the back of the card; flip first, then navigate/finish after animation
-      isNavigatingRef.current = true
+    
+    // Normal mode navigation
+    if (currentCardIndex < cards.length - 1) {
+      // Move to next card
+      setCurrentCardIndex((prev) => prev + 1)
       setIsFlipped(false)
-      // Decide next action:
-      // - If there's a next card in the initial pass, go there
-      // - Else if there are cards to review, enter review mode (use >= length sentinel already handled)
-      // - Else finish session (use -1 sentinel to finish after animation)
-      const nextPending =
-        currentCardIndex < cards.length - 1
-          ? currentCardIndex + 1
-          : (!reviewMode && cardsToReview.length > 0)
-            ? cards.length // triggers review mode in pending effect
-            : -1 // sentinel to finish after animation
-      setPendingCardIndex(nextPending)
+      setIsProcessing(false)
+    } else if (wrongCardIndices.length > 0) {
+      // Enter review mode for wrong cards at the end
+      setReviewMode(true)
+      setReviewIndices([...wrongCardIndices])
+      setReviewCurrent(0)
+      setStudyComplete(false)
+      setIsProcessing(false)
+      toast({
+        title: "Review Mode",
+        description: `Reviewing ${wrongCardIndices.length} cards that need more practice`,
+      })
     } else {
-      if (currentCardIndex < cards.length - 1) {
-        setCurrentCardIndex((prev) => prev + 1)
-        setIsProcessing(false)
-      } else if (!reviewMode && cardsToReview.length > 0) {
-        setReviewMode(true)
-        const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
-        setReviewIndices(sortedReviewIndices)
-        setReviewCurrent(0)
-        setStudyComplete(false)
-        setIsProcessing(false)
-        toast({
-          title: "Review Mode",
-          description: `Reviewing ${cardsToReview.length} cards that need attention`,
-        })
-      } else {
-        finishSession()
-      }
+      finishSession()
     }
   }
 
@@ -305,9 +355,13 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     updateStats(true);
     if (reviewMode) {
       // Remove this card from reviewIndices
-      const idx = reviewIndices[reviewCurrent]
+      const currentReviewCardIndex = reviewIndices[reviewCurrent]
       const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent)
       setReviewIndices(newReviewIndices)
+      
+      // Also remove from wrongCardIndices if present
+      setWrongCardIndices(prev => prev.filter(idx => idx !== currentReviewCardIndex))
+      
       if (newReviewIndices.length === 0) {
         finishSession()
         return
@@ -326,47 +380,23 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const handleCardNeedsReview = () => {
     if (isProcessing) return
     setIsProcessing(true)
+    updateStats(false);
+    
     if (reviewMode) {
-      // In review mode, re-insert the card randomly within the next few cards
-      updateStats(false);
-      const currentCard = cards[reviewIndices[reviewCurrent]];
-
-      // Remove from review indices
-      const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent);
-
-      if (newReviewIndices.length === 0) {
-        // If this was the last card, just add it back
-        setReviewIndices([reviewIndices[reviewCurrent]]);
-      } else {
-        // Re-insert at random position within the remaining cards (within next 3 cards or at end)
-        const insertPos = Math.min(Math.floor(Math.random() * 3) + 1, newReviewIndices.length);
-        newReviewIndices.splice(insertPos, 0, reviewIndices[reviewCurrent]);
-        setReviewIndices(newReviewIndices);
-      }
+      // In review mode, keep the card in review indices for another attempt
+      // Just move to next card (it will cycle back around)
       setIsProcessing(false)
+      moveToNextCard();
       return;
     }
 
-    // Normal mode: re-insert the card randomly within the next few cards
-    updateStats(false);
-    const currentCard = cards[currentCardIndex];
-
-    // Create new array without the current card
-    const remainingCards = cards.slice(currentCardIndex + 1);
-    const beforeCards = cards.slice(0, currentCardIndex + 1);
-
-    // Re-insert at random position within the next few cards (within next 2-4 cards)
-    // This ensures the wrong card comes up again soon but not immediately
-    const insertOffset = Math.floor(Math.random() * 3) + 2; // 2-4 cards ahead
-    const insertPos = Math.min(insertOffset, remainingCards.length);
-
-    // Insert the card at the calculated position
-    const newRemainingCards = [...remainingCards];
-    newRemainingCards.splice(insertPos, 0, currentCard);
-
-    // Reconstruct the full cards array
-    const newCards = [...beforeCards, ...newRemainingCards];
-    setCards(newCards);
+    // Normal mode: add to wrong cards list for end-of-session review
+    setWrongCardIndices(prev => {
+      if (!prev.includes(currentCardIndex)) {
+        return [...prev, currentCardIndex]
+      }
+      return prev
+    });
 
     moveToNextCard();
   }
@@ -523,34 +553,6 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isFlipped, currentCardIndex, isSpacedRepetitionEnabled, reviewMode, cards.length, currentCard, deckId])
 
-  useEffect(() => {
-    if (pendingCardIndex !== null) {
-      const timer = setTimeout(() => {
-        // Finish after animation if sentinel -1 was set
-        if (pendingCardIndex === -1) {
-          finishSession()
-        } else if (!reviewMode && cardsToReview.length > 0 && pendingCardIndex >= cards.length) {
-          // Enter review mode after animation
-          setReviewMode(true)
-          const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
-          setReviewIndices(sortedReviewIndices)
-          setReviewCurrent(0)
-          setIsFlipped(false)
-          toast({
-            title: "Review Mode",
-            description: `Reviewing ${cardsToReview.length} cards that need attention`,
-          })
-        } else {
-          setCurrentCardIndex(pendingCardIndex)
-        }
-        setPendingCardIndex(null)
-        isNavigatingRef.current = false
-        setIsProcessing(false)
-      }, FLIP_ANIMATION_DURATION)
-      return () => clearTimeout(timer)
-    }
-  }, [pendingCardIndex, reviewMode, cardsToReview, cards.length, toast])
-
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
@@ -673,19 +675,15 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
       const isCorrect = rating >= 3;
       updateStats(isCorrect);
 
-      // If rating is low (0-2), re-insert card for immediate review
+      // If rating is low (0-2), add to wrong cards list for end-of-session review
       if (!isCorrect && !reviewMode) {
-        const currentCard = cards[currentCardIndex];
-        const remainingCards = cards.slice(currentCardIndex + 1);
-        const beforeCards = cards.slice(0, currentCardIndex + 1);
-
-        // Re-insert at random position within next 2-4 cards
-        const insertOffset = Math.floor(Math.random() * 3) + 2;
-        const insertPos = Math.min(insertOffset, remainingCards.length);
-
-        const newRemainingCards = [...remainingCards];
-        newRemainingCards.splice(insertPos, 0, currentCard);
-        setCards([...beforeCards, ...newRemainingCards]);
+        // Add current card index to wrong cards list if not already there
+        setWrongCardIndices(prev => {
+          if (!prev.includes(currentCardIndex)) {
+            return [...prev, currentCardIndex]
+          }
+          return prev
+        })
       }
 
       // Move to the next card
@@ -739,6 +737,26 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
         <div className="flex items-center justify-center gap-2 py-2">
           <span className="inline-block w-1 h-1 rounded-full bg-neutral-400 animate-pulse" />
           <span className="text-[10px] uppercase tracking-widest text-neutral-400">review</span>
+        </div>
+      )}
+
+      {/* Leech Alert */}
+      {!studyComplete && isFlipped && currentCard?.progress && !leechAlertDismissed && (
+        <div className="max-w-3xl mx-auto px-6 pt-2">
+          <LeechAlert
+            progress={currentCard.progress}
+            onReset={handleResetLeech}
+            onEdit={handleEditLeech}
+            onSuspend={handleSuspendLeech}
+            onDismiss={() => setLeechAlertDismissed(true)}
+          />
+        </div>
+      )}
+
+      {/* Leech Badge - show on front of card too */}
+      {!studyComplete && !isFlipped && currentCard?.progress?.isLeech && (
+        <div className="flex justify-center pt-2">
+          <LeechBadge progress={currentCard.progress} />
         </div>
       )}
 
@@ -806,6 +824,12 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
                     className="text-2xl md:text-3xl text-neutral-900 leading-relaxed"
                   />
                 </div>
+                {/* Leech Counter - shows fail count */}
+                {(currentCard.progress?.failCount || 0) > 0 && (
+                  <div className="mt-2">
+                    <LeechCounter progress={currentCard.progress} />
+                  </div>
+                )}
               </div>
 
               {/* Answer Section (Animated Reveal) */}
@@ -966,8 +990,8 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
           <p className="text-sm text-neutral-400 mt-1 max-w-sm mx-auto">
             {reviewMode
               ? "You've completed reviewing all marked cards."
-              : cardsToReview.length > 0
-                ? `${cardsToReview.length} card${cardsToReview.length === 1 ? '' : 's'} marked for further review.`
+              : wrongCardIndices.length > 0
+                ? `${wrongCardIndices.length} card${wrongCardIndices.length === 1 ? '' : 's'} need more practice.`
                 : "All cards reviewed this session."}
           </p>
 
@@ -1012,20 +1036,19 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
               <RotateCw className="h-3.5 w-3.5 mr-1.5" />
               Study Again
             </Button>
-            {!reviewMode && cardsToReview.length > 0 && (
+            {!reviewMode && wrongCardIndices.length > 0 && (
               <Button
                 variant="default"
                 onClick={() => {
                   setReviewMode(true)
-                  const sortedReviewIndices = [...cardsToReview].sort((a, b) => a - b)
-                  setReviewIndices(sortedReviewIndices)
+                  setReviewIndices([...wrongCardIndices])
                   setReviewCurrent(0)
                   setIsFlipped(false)
                   setStudyComplete(false)
                 }}
                 className="bg-black text-white hover:bg-neutral-800 transition-colors duration-150 h-9 text-sm"
               >
-                Review {cardsToReview.length} card{cardsToReview.length === 1 ? '' : 's'}
+                Review {wrongCardIndices.length} card{wrongCardIndices.length === 1 ? '' : 's'}
               </Button>
             )}
             <Button

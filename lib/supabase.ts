@@ -74,6 +74,11 @@ export type Card = {
   created_at: string
   updated_at: string
   exclude_from_srs: boolean
+  progress?: CardProgress & {
+    failCount?: number
+    isLeech?: boolean
+    lastResult?: 'pass' | 'fail'
+  }
 }
 
 export type CardProgress = {
@@ -98,6 +103,10 @@ export type CardProgressInput = {
   due_date: string;      // ISO string e.g., new Date().toISOString()
   last_reviewed: string; // ISO string e.g., new Date().toISOString()
   fsrs_state?: Json | null;
+  // Leech tracking fields
+  fail_count?: number;
+  is_leech?: boolean;
+  last_result?: 'pass' | 'fail';
 };
 
 // Structure for data imported from Markdown

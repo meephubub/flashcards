@@ -163,53 +163,70 @@ export function parseCSVToFlashcards(text: string): ParsedDeck {
   let deckName = "Imported Deck"
   let deckDescription = ""
   const cards: ParsedCard[] = []
-
-  // Split the text by lines
-  const lines = text.split("\n")
   let cardId = 1
   let headers: string[] | null = null
   let headerMap: { [key: string]: number } = {}
 
-  // Helper to parse CSV line properly, handling quoted values
-  const parseCSVLine = (line: string): string[] => {
-    const parts: string[] = []
+  // Parse CSV text as a stream, respecting quoted fields that may contain newlines
+  const parseCSVRows = (input: string): string[][] => {
+    const rows: string[][] = []
+    let currentRow: string[] = []
     let current = ""
     let inQuotes = false
-    
-    for (let j = 0; j < line.length; j++) {
-      const char = line[j]
-      
+
+    for (let i = 0; i < input.length; i++) {
+      const char = input[i]
+      const nextChar = input[i + 1]
+
       if (char === '"') {
         // Handle escaped quotes (double quotes "")
-        if (inQuotes && line[j + 1] === '"') {
+        if (inQuotes && nextChar === '"') {
           current += '"'
-          j++ // Skip the next quote
+          i++ // Skip the next quote
         } else {
           inQuotes = !inQuotes
         }
       } else if (char === ',' && !inQuotes) {
-        parts.push(current.trim())
+        currentRow.push(current.trim())
         current = ""
+      } else if ((char === '\n' || char === '\r') && !inQuotes) {
+        // End of row (but skip empty lines)
+        if (current !== "" || currentRow.length > 0) {
+          currentRow.push(current.trim())
+          rows.push(currentRow)
+          currentRow = []
+          current = ""
+        }
+        // Skip \r\n line endings
+        if (char === '\r' && nextChar === '\n') {
+          i++
+        }
       } else {
         current += char
       }
     }
-    parts.push(current.trim())
-    return parts
+
+    // Don't forget the last field/row
+    if (current !== "" || currentRow.length > 0) {
+      currentRow.push(current.trim())
+      rows.push(currentRow)
+    }
+
+    return rows
   }
 
-  // Process each line
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (!line) continue
+  const rows = parseCSVRows(text)
 
-    const parts = parseCSVLine(line)
+  // Process each row
+  for (let i = 0; i < rows.length; i++) {
+    const parts = rows[i]
+    if (parts.length === 0) continue
 
     if (i === 0) {
       // Check for headers
       const lowerParts = parts.map(p => p.toLowerCase())
-      const isHeader = lowerParts.some(p => 
-        p === "front" || p === "back" || p === "question" || p === "answer" || 
+      const isHeader = lowerParts.some(p =>
+        p === "front" || p === "back" || p === "question" || p === "answer" ||
         p === "img_url" || p === "image" || p === "front_img_url" || p === "back_img_url"
       )
 

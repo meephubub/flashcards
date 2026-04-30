@@ -286,9 +286,20 @@ export async function getDeck(supabase: SupabaseClient, deckId: number, userId: 
               deck.cards = cards.map(card => {
                 const progress = progressMap.get(card.id)
                 if (progress) {
+                  // Extract leech data from fsrs_state if present
+                  const fsrsState = progress.fsrs_state as Record<string, unknown> | null;
+                  const leechData = fsrsState?.leechData as Record<string, unknown> | undefined;
+
+                  const progressWithLeech = {
+                    ...progress,
+                    failCount: (leechData?.failCount as number) ?? 0,
+                    isLeech: (leechData?.isLeech as boolean) ?? false,
+                    lastResult: leechData?.lastResult as 'pass' | 'fail' | undefined,
+                  };
+
                   return {
                     ...card,
-                    progress: progress
+                    progress: progressWithLeech
                   }
                 }
                 return card
@@ -892,10 +903,26 @@ export async function updateCardProgress(
     // 3. Upsert card progress
     // Assumes a unique constraint on (card_id, user_id) in card_progress table for correct upsert behavior.
     // If not, this will insert a new row or update based on primary key 'id' if it's part of progressInput (which it shouldn't be for upsert).
+
+    // Extract leech fields to store in fsrs_state (since they may not have dedicated columns yet)
+    const { fail_count, is_leech, last_result, ...baseProgress } = progressInput;
+
+    // Build fsrs_state with leech data embedded
+    const existingFsrsState = (baseProgress.fsrs_state as Record<string, unknown>) || {};
+    const fsrsStateWithLeech = {
+      ...existingFsrsState,
+      leechData: {
+        failCount: fail_count,
+        isLeech: is_leech,
+        lastResult: last_result,
+      }
+    };
+
     const upsertData = {
       card_id: cardId,
       user_id: user.id, // Crucial for user-specific progress
-      ...progressInput, // Spreads ease_factor, interval, repetitions, due_date, last_reviewed
+      ...baseProgress, // Spreads ease_factor, interval, repetitions, due_date, last_reviewed
+      fsrs_state: fsrsStateWithLeech,
       updated_at: new Date().toISOString(), // Ensure updated_at is always set
     };
 
@@ -1016,9 +1043,23 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
         continue;
       }
 
+      // Extract leech data from fsrs_state if present
+      const fsrsState = progress.fsrs_state as Record<string, unknown> | null;
+      const leechData = fsrsState?.leechData as Record<string, unknown> | undefined;
+
+      const progressWithLeech = {
+        ...progress,
+        failCount: (leechData?.failCount as number) ?? 0,
+        isLeech: (leechData?.isLeech as boolean) ?? false,
+        lastResult: leechData?.lastResult as 'pass' | 'fail' | undefined,
+      };
+
       const dueDate = new Date(progress.due_date);
       if (now >= dueDate) {
-        dueCards.push(typedCard);
+        dueCards.push({
+          ...typedCard,
+          progress: progressWithLeech,
+        });
       }
     }
 

@@ -1,5 +1,5 @@
 import { Action } from "./types"
-import { Globe, BarChart2, PlaneTakeoff, PlusCircle, Download, Search, GitMerge, AudioLines, HelpCircle, ImageIcon, Pencil, Trash2 } from "lucide-react"
+import { Globe, BarChart2, PlaneTakeoff, PlusCircle, Download, Search, GitMerge, AudioLines, HelpCircle, ImageIcon, Pencil, Trash2, Calendar } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useNoteContextStore } from "@/hooks/use-note-context"
 
@@ -30,6 +30,17 @@ export const allActions: Action[] = [
         href: "/notes",
         category: "nav",
         priority: 90,
+    },
+    {
+        id: "go-revision-calendar",
+        label: "Revision Calendar",
+        description: "View your study schedule by subject",
+        icon: <Calendar className="h-4 w-4 text-violet-500" />,
+        short: "Enter",
+        end: "⌘K",
+        href: "/study/calendar",
+        category: "nav",
+        priority: 85,
     },
     {
         id: "go-signin",
