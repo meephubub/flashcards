@@ -16,6 +16,7 @@ import { ChevronDown, Plus, FilePlus, FolderPlus } from "lucide-react"
 import { Link } from "next-view-transitions"
 import { motion, AnimatePresence } from "framer-motion"
 import { CreateDeckDialog } from "@/components/create-deck-dialog"
+import { StudySessionPopup } from "@/components/study-session-popup"
 import { DeckOptionsMenu } from "@/components/deck-options-menu"
 import { formatDate } from "@/lib/date-utils"
 import { cn } from "@/lib/utils"
@@ -187,6 +188,7 @@ export function Dashboard() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [isCreateDeckOpen, setIsCreateDeckOpen] = useState(false)
+  const [isStudyPopupOpen, setIsStudyPopupOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [lastDeckId, setLastDeckId] = useState<number | null>(null)
 
@@ -196,6 +198,13 @@ export function Dashboard() {
     if (stored) {
       setLastDeckId(parseInt(stored, 10))
     }
+  }, [])
+
+  // Listen for create deck event from action search bar
+  useEffect(() => {
+    const handler = () => setIsCreateDeckOpen(true)
+    window.addEventListener('open-create-deck', handler as EventListener)
+    return () => window.removeEventListener('open-create-deck', handler as EventListener)
   }, [])
 
   const stats = useMemo(() => {
@@ -321,49 +330,12 @@ export function Dashboard() {
 
         {/* Actions */}
         <div className="flex gap-3 mb-8">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                className="h-9 px-4 text-sm bg-zinc-900 hover:bg-black text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                New
-                <ChevronDown className="h-3 w-3 ml-1.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[160px]">
-              <DropdownMenuItem onClick={() => setIsCreateDeckOpen(true)}>
-                <FolderPlus className="h-4 w-4 mr-2" />
-                New Deck
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                asChild={!!lastDeckId}
-                className={!lastDeckId ? "opacity-50 cursor-not-allowed" : ""}
-                onClick={(e) => {
-                  if (!lastDeckId) {
-                    e.preventDefault();
-                    toast({
-                      title: "No deck selected",
-                      description: "Visit a deck first to be able to add cards to it.",
-                      variant: "destructive",
-                    });
-                  }
-                }}
-              >
-                {lastDeckId ? (
-                  <Link href={`/deck/${lastDeckId}/add`}>
-                    <FilePlus className="h-4 w-4 mr-2" />
-                    Add Card
-                  </Link>
-                ) : (
-                  <>
-                    <FilePlus className="h-4 w-4 mr-2" />
-                    Add Card
-                  </>
-                )}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            onClick={() => setIsStudyPopupOpen(true)}
+            className="h-9 px-5 text-sm bg-black hover:bg-neutral-800 text-white dark:bg-white dark:text-black dark:hover:bg-neutral-200 font-medium"
+          >
+            Study
+          </Button>
         </div>
 
         {/* Decks List */}
@@ -419,6 +391,7 @@ export function Dashboard() {
       </div>
 
       <CreateDeckDialog open={isCreateDeckOpen} onOpenChange={setIsCreateDeckOpen} />
+      <StudySessionPopup open={isStudyPopupOpen} onOpenChange={setIsStudyPopupOpen} decks={decks} />
     </div>
   )
 }

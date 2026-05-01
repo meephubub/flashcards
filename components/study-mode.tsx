@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Check, X, RotateCw } from "lucide-react"
 import { Link, useTransitionRouter } from "next-view-transitions"
 import { useDecks } from "@/context/deck-context"
 import { useSettings } from "@/context/settings-context"
+import { useXp } from "@/hooks/use-xp"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ConfidenceRating } from "@/lib/spaced-repetition"
 import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText } from "@/lib/spaced-repetition"
@@ -38,6 +39,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const { settings } = useSettings()
   const router = useTransitionRouter()
   const { toast } = useToast()
+  const { totalXp, addXp } = useXp()
 
   const deck = getDeck(deckId)
   const rawStudy: any = settings?.studySettings ?? {}
@@ -76,6 +78,12 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     lastCardTime: new Date()
   })
 
+  // XP System state
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
+  const [targetStreak, setTargetStreak] = useState(() => Math.floor(Math.random() * 5) + 1);
+  const [xpBonus, setXpBonus] = useState(0);
+  const [showXpPopup, setShowXpPopup] = useState(false);
+
   // Leech alert state
   const [leechAlertDismissed, setLeechAlertDismissed] = useState(false)
 
@@ -107,6 +115,31 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     }
     return arr
   }
+
+  // XP Calculation helper
+  const calculateXp = (streak: number, cardProgress: any): number => {
+    // Base XP: 10 points per correct answer
+    let xp = 10;
+    
+    // Streak multiplier: +20% per consecutive correct (max 100% bonus at streak 5)
+    const streakMultiplier = 1 + Math.min(streak * 0.2, 1);
+    xp = Math.round(xp * streakMultiplier);
+    
+    // FSRS difficulty bonus: harder cards = more XP
+    if (cardProgress) {
+      const { ease_factor, repetitions } = cardProgress;
+      // Lower ease factor = harder card = more XP
+      if (ease_factor && ease_factor < 2.0) {
+        xp += 5; // Bonus for hard cards
+      }
+      // More repetitions = mastered card = slightly less XP
+      if (repetitions && repetitions > 5) {
+        xp -= 3; // Slightly less for easy cards
+      }
+    }
+    
+    return Math.max(xp, 5); // Minimum 5 XP
+  };
 
   // Track if session has been initialized to prevent reset on navigation
   const [sessionInitialized, setSessionInitialized] = useState(false)
@@ -351,11 +384,11 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const handleCardKnown = async () => {
     if (isProcessing) return
     setIsProcessing(true)
-    updateStats(true);
     
     // Get fresh card reference to avoid stale closure
     const idx = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
     const cardToUpdate = cards[idx]
+    updateStats(true, cardToUpdate?.progress);
     
     // Update card progress (rating 4 = Good/Easy pass)
     if (cardToUpdate) {
@@ -398,11 +431,11 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const handleCardNeedsReview = async () => {
     if (isProcessing) return
     setIsProcessing(true)
-    updateStats(false);
     
     // Get fresh card reference to avoid stale closure
     const idx = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
     const cardToUpdate = cards[idx]
+    updateStats(false, cardToUpdate?.progress);
     
     // Update card progress (rating 1 = Again/fail)
     if (cardToUpdate) {
@@ -670,9 +703,34 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   // These functions are now defined earlier in the component
 
   // Update statistics based on user response
-  const updateStats = (isKnown: boolean) => {
+  const updateStats = (isKnown: boolean, cardProgress?: any) => {
     const now = new Date();
     const timeSpent = now.getTime() - stats.lastCardTime.getTime();
+
+    // Update streak and check for XP trigger
+    if (isKnown) {
+      const newStreak = consecutiveCorrect + 1;
+      setConsecutiveCorrect(newStreak);
+      
+      // Check if streak reached target
+      if (newStreak >= targetStreak) {
+        const xp = calculateXp(newStreak, cardProgress);
+        setXpBonus(xp);
+        addXp(xp); // Persist XP to database
+        setShowXpPopup(true);
+        
+        // Reset for next round
+        setConsecutiveCorrect(0);
+        setTargetStreak(Math.floor(Math.random() * 5) + 1);
+        
+        // Hide popup after animation
+        setTimeout(() => setShowXpPopup(false), 2000);
+      }
+    } else {
+      // Reset streak on wrong answer
+      setConsecutiveCorrect(0);
+      setTargetStreak(Math.floor(Math.random() * 5) + 1);
+    }
 
     setStats(prev => {
       const cardsStudied = prev.cardsStudied + 1;
@@ -726,7 +784,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
       // Update statistics based on rating
       const isCorrect = rating >= 3;
-      updateStats(isCorrect);
+      updateStats(isCorrect, currentCard?.progress);
 
       // If rating is low (0-2), add to wrong cards list for end-of-session review
       if (!isCorrect && !reviewMode) {
@@ -750,7 +808,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
       })
       // Still move to the next card even if there's an error
       const isCorrect = rating >= 3;
-      updateStats(isCorrect);
+      updateStats(isCorrect, currentCard?.progress);
       moveToNextCard()
     } finally {
       // isProcessing is mostly handled in moveToNextCard / useEffect
@@ -786,6 +844,24 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
   return (
     <div className="w-full mx-auto text-neutral-900 relative min-h-[80vh] flex flex-col">
+      {/* XP Bonus Popup */}
+      <AnimatePresence>
+        {showXpPopup && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            className="fixed top-20 right-4 z-50"
+          >
+            <div className="bg-black text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+              <span className="text-sm font-medium">+{xpBonus} XP</span>
+              <span className="text-xs text-neutral-400">({consecutiveCorrect === 0 ? targetStreak : consecutiveCorrect}/{targetStreak} streak)</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {reviewMode && (
         <div className="flex items-center justify-center gap-2 py-2">
           <span className="inline-block w-1 h-1 rounded-full bg-neutral-400 animate-pulse" />
@@ -814,6 +890,22 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
               style={{ width: `${progress}%` }}
             />
           </div>
+          {/* Streak progress indicator */}
+          {consecutiveCorrect > 0 && (
+            <div className="absolute -bottom-5 right-4 flex items-center gap-1.5 text-xs text-neutral-400">
+              <span className="text-[10px] uppercase tracking-wider">Streak</span>
+              <div className="flex gap-0.5">
+                {Array.from({ length: targetStreak }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                      i < consecutiveCorrect ? "bg-black" : "bg-neutral-200"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

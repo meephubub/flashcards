@@ -20,14 +20,16 @@ import {
 } from "@/components/ui/breadcrumb";
 import { useTimeTracking } from "@/hooks/use-time-tracking";
 import { Link } from "next-view-transitions";
-import { Info } from "lucide-react";
+import { Info, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardInfoDialog } from "@/components/card-info-dialog";
+import { useXp } from "@/hooks/use-xp";
 
 export function StudyPageClient({ deckId, tag }: { deckId: number, tag?: string }) {
   const { session, isLoading, user } = useAuth();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { totalXp, isLoading: xpLoading } = useXp();
   const [deckTitle, setDeckTitle] = useState<string>("");
   const [progressInfo, setProgressInfo] = useState<{
     current: number;
@@ -171,6 +173,12 @@ export function StudyPageClient({ deckId, tag }: { deckId: number, tag?: string 
                 </BreadcrumbList>
               </Breadcrumb>
               <div className="ml-auto flex items-center gap-3 pr-1">
+                {!xpLoading && (
+                  <div className="flex items-center gap-1 text-xs text-neutral-500">
+                    <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                    <span className="font-medium text-neutral-600">{totalXp.toLocaleString()} XP</span>
+                  </div>
+                )}
                 {progressInfo && (
                   <div className="flex items-center gap-3 text-xs text-neutral-500 tabular-nums">
                     <span>{progressInfo.remaining} left</span>

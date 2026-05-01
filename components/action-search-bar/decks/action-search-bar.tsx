@@ -947,6 +947,24 @@ export function DecksActionSearchBar() {
       },
     },
     {
+      id: "study-ahead",
+      label: "Study Ahead",
+      icon: <Play size={16} strokeWidth={1.5} />,
+      section: "STUDY",
+      run: () => {
+        // Extract deck ID from current pathname if on a deck page
+        const deckMatch = pathname?.match(/\/deck\/(\d+)/);
+        if (deckMatch) {
+          const deckId = deckMatch[1];
+          router.push(`/study/all-due?mode=ahead&days=7`);
+        } else {
+          // If not on a deck page, go to all due study ahead
+          router.push(`/study/all-due?mode=ahead&days=7`);
+        }
+        setOpen(false);
+      },
+    },
+    {
       id: "statistics",
       label: "Statistics",
       icon: <BarChart2 size={16} strokeWidth={1.5} />,
@@ -960,6 +978,17 @@ export function DecksActionSearchBar() {
       section: "CREATE",
       run: () => {
         /* Handle create card global? */
+      },
+    },
+    {
+      id: "create-deck",
+      label: "New Deck",
+      icon: <Library size={16} strokeWidth={1.5} />,
+      section: "CREATE",
+      run: () => {
+        /* Trigger create deck dialog */
+        window.dispatchEvent(new CustomEvent('open-create-deck'));
+        setOpen(false);
       },
     },
     {

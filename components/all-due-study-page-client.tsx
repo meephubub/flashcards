@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/context/auth-context";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useXp } from "@/hooks/use-xp";
 import { StudyMode } from "@/components/study-mode";
 import { AppSidebar } from "@/components/notes/app-sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -28,7 +29,15 @@ import { DecksActionSearchBar } from "@/components/action-search-bar/decks/actio
 export function AllDueStudyPageClient() {
   const { session, isLoading, user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
+  
+  // Get study mode from query params
+  const rawMode = searchParams.get("mode") || "due";
+  const validModes = ["due", "ahead", "new", "review"] as const;
+  const mode = validModes.includes(rawMode as any) ? rawMode : "due";
+  const days = parseInt(searchParams.get("days") || "7", 10);
+  const noSchedule = searchParams.get("noSchedule") === "true";
   const [progressInfo, setProgressInfo] = useState<{
     current: number;
     total: number;
@@ -131,7 +140,10 @@ export function AllDueStudyPageClient() {
               <AllDueStudyMode 
                 onProgressInfo={setProgressInfo} 
                 onCardChange={setCurrentCard}
-                initialSide={initialSide} 
+                initialSide={initialSide}
+                mode={mode as "due" | "ahead" | "new" | "review"}
+                days={days}
+                noSchedule={noSchedule}
               />
             </div>
           </div>
@@ -176,12 +188,23 @@ interface AllDueStudyModeProps {
   }) => void;
   onCardChange?: (card: any) => void;
   initialSide?: "front" | "back" | "mixed";
+  mode?: "due" | "ahead" | "new" | "review";
+  days?: number;
+  noSchedule?: boolean;
 }
 
-function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }: AllDueStudyModeProps) {
+function AllDueStudyMode({ 
+  onProgressInfo, 
+  onCardChange, 
+  initialSide = "front",
+  mode = "due",
+  days = 7,
+  noSchedule = false
+}: AllDueStudyModeProps) {
   const { decks, loading, getDueCards, updateCardProgress } = useDecks();
   const { settings } = useSettings();
   const { toast } = useToast();
+  const { totalXp, addXp } = useXp();
 
   const [cards, setCards] = useState<DueCardWithDeck[]>([]);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -206,6 +229,12 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
     lastCardTime: new Date()
   });
 
+  // XP System state
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
+  const [targetStreak, setTargetStreak] = useState(() => Math.floor(Math.random() * 5) + 1);
+  const [xpBonus, setXpBonus] = useState(0);
+  const [showXpPopup, setShowXpPopup] = useState(false);
+
   const [reviewIndices, setReviewIndices] = useState<number[]>([]);
   const [reviewCurrent, setReviewCurrent] = useState(0);
   const isNavigatingRef = useRef(false);
@@ -219,6 +248,65 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
   };
   const isSpacedRepetitionEnabled = normalizedStudy.enableSpacedRepetition;
 
+  // Helper to filter cards based on mode
+  const filterCardsByMode = (allCards: any[], mode: string, days: number): any[] => {
+    const now = new Date();
+    
+    switch (mode) {
+      case "due":
+        // Cards with due_date <= now
+        return allCards.filter(c => {
+          if (!c.progress?.due_date) return false;
+          return new Date(c.progress.due_date) <= now;
+        });
+      
+      case "ahead":
+        // Cards due within X days
+        return allCards.filter(c => {
+          if (!c.progress?.due_date) return c.progress?.repetitions > 0;
+          const dueDate = new Date(c.progress.due_date);
+          const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          return daysUntilDue <= days && daysUntilDue >= 0;
+        });
+      
+      case "new":
+        // Cards with no progress or repetitions = 0
+        return allCards.filter(c => !c.progress || c.progress.repetitions === 0);
+      
+      case "review":
+        // Cards with progress and repetitions > 0
+        return allCards.filter(c => c.progress && c.progress.repetitions > 0);
+      
+      default:
+        return allCards;
+    }
+  };
+
+  // XP Calculation helper
+  const calculateXp = (streak: number, cardProgress: any): number => {
+    // Base XP: 10 points per correct answer
+    let xp = 10;
+    
+    // Streak multiplier: +20% per consecutive correct (max 100% bonus at streak 5)
+    const streakMultiplier = 1 + Math.min(streak * 0.2, 1);
+    xp = Math.round(xp * streakMultiplier);
+    
+    // FSRS difficulty bonus: harder cards = more XP
+    if (cardProgress) {
+      const { ease_factor, repetitions } = cardProgress;
+      // Lower ease factor = harder card = more XP
+      if (ease_factor && ease_factor < 2.0) {
+        xp += 5; // Bonus for hard cards
+      }
+      // More repetitions = mastered card = slightly less XP
+      if (repetitions && repetitions > 5) {
+        xp -= 3; // Slightly less for easy cards
+      }
+    }
+    
+    return Math.max(xp, 5); // Minimum 5 XP
+  };
+
   // Initialize cards from all decks
   useEffect(() => {
     const initializeCards = async () => {
@@ -227,12 +315,40 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
         return;
       }
 
-      const results: DueCardWithDeck[] = [];
+      // Gather cards from all decks based on mode
+      const cardsByDeck: DueCardWithDeck[][] = [];
       for (const deck of decks) {
-        const due = await getDueCards(deck.id);
-        for (const c of due) {
-          results.push({ deckId: deck.id, deckName: deck.name, card: c });
+        let cardsToUse: any[] = [];
+        
+        if (mode === "due") {
+          // Use existing getDueCards for due mode
+          cardsToUse = await getDueCards(deck.id);
+        } else {
+          // For other modes, get all cards and filter
+          cardsToUse = filterCardsByMode(deck.cards || [], mode, days);
         }
+        
+        if (cardsToUse.length > 0) {
+          cardsByDeck.push(cardsToUse.map(c => ({ deckId: deck.id, deckName: deck.name, card: c })));
+        }
+      }
+
+      // Interleave cards from different decks (round-robin) for topic mixing
+      const results: DueCardWithDeck[] = [];
+      let deckIndex = 0;
+      while (cardsByDeck.some(deckCards => deckCards.length > 0)) {
+        // Find next deck with remaining cards
+        let attempts = 0;
+        while (attempts < cardsByDeck.length) {
+          const currentDeck = cardsByDeck[deckIndex % cardsByDeck.length];
+          if (currentDeck && currentDeck.length > 0) {
+            results.push(currentDeck.shift()!);
+            break;
+          }
+          deckIndex++;
+          attempts++;
+        }
+        deckIndex++;
       }
 
       // Limit to cards per session
@@ -393,7 +509,7 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
   const handleCardKnown = () => {
     if (isProcessing) return;
     setIsProcessing(true);
-    updateStats(true);
+    updateStats(true, currentCard?.progress);
     if (reviewMode) {
       const idx = reviewIndices[reviewCurrent];
       const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent);
@@ -416,7 +532,7 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
     if (isProcessing) return;
     setIsProcessing(true);
     if (reviewMode) {
-      updateStats(false);
+      updateStats(false, currentCard?.progress);
       const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent);
       if (newReviewIndices.length === 0) {
         setReviewIndices([reviewIndices[reviewCurrent]]);
@@ -429,7 +545,7 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
       return;
     }
 
-    updateStats(false);
+    updateStats(false, currentCard?.progress);
     const currentEntry = cards[currentCardIndex];
     const remainingCards = cards.slice(currentCardIndex + 1);
     const beforeCards = cards.slice(0, currentCardIndex + 1);
@@ -441,9 +557,34 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
     moveToNextCard();
   };
 
-  const updateStats = (isKnown: boolean) => {
+  const updateStats = (isKnown: boolean, cardProgress?: any) => {
     const now = new Date();
     const timeSpent = now.getTime() - stats.lastCardTime.getTime();
+
+    // Update streak and check for XP trigger
+    if (isKnown) {
+      const newStreak = consecutiveCorrect + 1;
+      setConsecutiveCorrect(newStreak);
+      
+      // Check if streak reached target
+      if (newStreak >= targetStreak) {
+        const xp = calculateXp(newStreak, cardProgress);
+        setXpBonus(xp);
+        addXp(xp); // Persist XP to database
+        setShowXpPopup(true);
+        
+        // Reset for next round
+        setConsecutiveCorrect(0);
+        setTargetStreak(Math.floor(Math.random() * 5) + 1);
+        
+        // Hide popup after animation
+        setTimeout(() => setShowXpPopup(false), 2000);
+      }
+    } else {
+      // Reset streak on wrong answer
+      setConsecutiveCorrect(0);
+      setTargetStreak(Math.floor(Math.random() * 5) + 1);
+    }
 
     setStats(prev => {
       const cardsStudied = prev.cardsStudied + 1;
@@ -469,6 +610,28 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
   const handleRating = async (rating: ConfidenceRating) => {
     if (isProcessing || !currentEntry) return;
     setIsProcessing(true);
+    
+    // If noSchedule is true, skip updating card progress (study ahead without affecting scheduling)
+    if (noSchedule) {
+      haptics.rating(rating);
+      const isCorrect = rating >= 3;
+      updateStats(isCorrect, currentCard?.progress);
+      
+      if (!isCorrect && !reviewMode) {
+        const currentEntry = cards[currentCardIndex];
+        const remainingCards = cards.slice(currentCardIndex + 1);
+        const beforeCards = cards.slice(0, currentCardIndex + 1);
+        const insertOffset = Math.floor(Math.random() * 3) + 2;
+        const insertPos = Math.min(insertOffset, remainingCards.length);
+        const newRemainingCards = [...remainingCards];
+        newRemainingCards.splice(insertPos, 0, currentEntry);
+        setCards([...beforeCards, ...newRemainingCards]);
+      }
+      
+      moveToNextCard();
+      return;
+    }
+    
     try {
       haptics.rating(rating);
       const currentProgress = currentCard.progress || DEFAULT_CARD_PROGRESS;
@@ -494,7 +657,7 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
       });
 
       const isCorrect = rating >= 3;
-      updateStats(isCorrect);
+      updateStats(isCorrect, currentCard?.progress);
 
       if (!isCorrect && !reviewMode) {
         const currentEntry = cards[currentCardIndex];
@@ -516,7 +679,7 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
         variant: "destructive",
       });
       const isCorrect = rating >= 3;
-      updateStats(isCorrect);
+      updateStats(isCorrect, currentCard?.progress);
       moveToNextCard();
     }
   };
@@ -539,16 +702,45 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
       averageTimePerCard: 0,
       lastCardTime: new Date()
     });
-    // Re-initialize cards
+    // Re-initialize cards with interleaving and mode filtering
     const initializeCards = async () => {
       if (!decks || decks.length === 0) return;
-      const results: DueCardWithDeck[] = [];
+
+      // Gather cards from all decks based on mode
+      const cardsByDeck: DueCardWithDeck[][] = [];
       for (const deck of decks) {
-        const due = await getDueCards(deck.id);
-        for (const c of due) {
-          results.push({ deckId: deck.id, deckName: deck.name, card: c });
+        let cardsToUse: any[] = [];
+        
+        if (mode === "due") {
+          // Use existing getDueCards for due mode
+          cardsToUse = await getDueCards(deck.id);
+        } else {
+          // For other modes, get all cards and filter
+          cardsToUse = filterCardsByMode(deck.cards || [], mode, days);
+        }
+        
+        if (cardsToUse.length > 0) {
+          cardsByDeck.push(cardsToUse.map(c => ({ deckId: deck.id, deckName: deck.name, card: c })));
         }
       }
+
+      // Interleave cards from different decks (round-robin) for topic mixing
+      const results: DueCardWithDeck[] = [];
+      let deckIndex = 0;
+      while (cardsByDeck.some(deckCards => deckCards.length > 0)) {
+        let attempts = 0;
+        while (attempts < cardsByDeck.length) {
+          const currentDeck = cardsByDeck[deckIndex % cardsByDeck.length];
+          if (currentDeck && currentDeck.length > 0) {
+            results.push(currentDeck.shift()!);
+            break;
+          }
+          deckIndex++;
+          attempts++;
+        }
+        deckIndex++;
+      }
+
       const sessionCards = results.slice(0, normalizedStudy.cardsPerSession);
       setCards(sessionCards);
       const sides = computeInitialSides(sessionCards.length, initialSide);
@@ -714,6 +906,24 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
 
   return (
     <div className="w-full mx-auto text-neutral-900 relative min-h-[80vh] flex flex-col">
+      {/* XP Bonus Popup */}
+      <AnimatePresence>
+        {showXpPopup && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            className="fixed top-20 right-4 z-50"
+          >
+            <div className="bg-black text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+              <span className="text-sm font-medium">+{xpBonus} XP</span>
+              <span className="text-xs text-neutral-400">({consecutiveCorrect === 0 ? targetStreak : consecutiveCorrect}/{targetStreak} streak)</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {reviewMode && (
         <div className="flex items-center justify-center gap-2 py-2">
           <span className="inline-block w-1 h-1 rounded-full bg-neutral-400 animate-pulse" />
@@ -729,6 +939,22 @@ function AllDueStudyMode({ onProgressInfo, onCardChange, initialSide = "front" }
               style={{ width: `${progress}%` }}
             />
           </div>
+          {/* Streak progress indicator */}
+          {consecutiveCorrect > 0 && (
+            <div className="absolute -bottom-5 right-4 flex items-center gap-1.5 text-xs text-neutral-400">
+              <span className="text-[10px] uppercase tracking-wider">Streak</span>
+              <div className="flex gap-0.5">
+                {Array.from({ length: targetStreak }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                      i < consecutiveCorrect ? "bg-black" : "bg-neutral-200"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
