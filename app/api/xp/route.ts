@@ -43,14 +43,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user XP
+    // Get user XP from user_stats table
     const { data: userData, error: fetchError } = await supabase
-      .from('users')
+      .from('user_stats')
       .select('xp')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single()
 
-    if (fetchError) {
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found" error
       console.error("Error fetching XP:", fetchError)
       return NextResponse.json({ error: "Failed to fetch XP" }, { status: 500 })
     }
