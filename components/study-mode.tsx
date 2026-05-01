@@ -759,61 +759,91 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     if (isProcessing) return
     setIsProcessing(true)
     try {
-      haptics.rating(rating)
-      const currentCard = cards[currentCardIndex]
-      const currentProgress = currentCard.progress || DEFAULT_CARD_PROGRESS
-      const newProgress = calculateNextReview(currentProgress, rating, normalizedStudy.fsrsParams)
-      const success = await updateCardProgress(deckId, currentCard.id, newProgress)
-      if (!success) {
-        throw new Error("Failed to update card progress")
-      }
-
-      // Update the local card data
-      const updatedCards = [...cards]
-      updatedCards[currentCardIndex] = {
-        ...currentCard,
-        progress: newProgress,
-      }
-      setCards(updatedCards)
-
-      // Show a toast with the next review date
-      toast({
-        title: "Card scheduled",
-        description: `Next review: ${getNextReviewText(newProgress)}`,
-      })
-
-      // Update statistics based on rating
-      const isCorrect = rating >= 3;
-      updateStats(isCorrect, currentCard?.progress);
-
-      // If rating is low (0-2), add to wrong cards list for end-of-session review
-      if (!isCorrect && !reviewMode) {
-        // Add current card index to wrong cards list if not already there
-        setWrongCardIndices(prev => {
-          if (!prev.includes(currentCardIndex)) {
-            return [...prev, currentCardIndex]
-          }
-          return prev
-        })
-      }
-
-      // Move to the next card
-      moveToNextCard()
-    } catch (error) {
-      console.error("Error updating card progress:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update card progress",
-        variant: "destructive",
-      })
-      // Still move to the next card even if there's an error
-      const isCorrect = rating >= 3;
-      updateStats(isCorrect, currentCard?.progress);
-      moveToNextCard()
-    } finally {
-      // isProcessing is mostly handled in moveToNextCard / useEffect
+    haptics.rating(rating)
+    // Get the correct card index based on review mode
+    const idx = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
+    const cardToRate = cards[idx]
+    const currentProgress = cardToRate.progress || DEFAULT_CARD_PROGRESS
+    const newProgress = calculateNextReview(currentProgress, rating, normalizedStudy.fsrsParams)
+    const success = await updateCardProgress(deckId, cardToRate.id, newProgress)
+    if (!success) {
+    throw new Error("Failed to update card progress")
     }
-  }
+    
+    // Update the local card data
+    const updatedCards = [...cards]
+    updatedCards[idx] = {
+    ...cardToRate,
+    progress: newProgress,
+    }
+    setCards(updatedCards)
+    
+    // Show a toast with the next review date
+    toast({
+    title: "Card scheduled",
+    description: `Next review: ${getNextReviewText(newProgress)}`,
+    })
+    
+    // Update statistics based on rating
+    const isCorrect = rating >= 3;
+    updateStats(isCorrect, cardToRate?.progress);
+    
+    // Handle review mode specially
+    if (reviewMode) {
+      // Remove this card from reviewIndices (whether correct or wrong, we move on)
+      const newReviewIndices = reviewIndices.filter((_, i) => i !== reviewCurrent)
+      setReviewIndices(newReviewIndices)
+      
+      if (isCorrect) {
+        // Remove from wrongCardIndices since they got it right
+        const currentReviewCardIndex = reviewIndices[reviewCurrent]
+        setWrongCardIndices(prev => prev.filter(i => i !== currentReviewCardIndex))
+      }
+      
+      if (newReviewIndices.length === 0) {
+        finishSession()
+        return
+      }
+      
+      // Stay at same index (next card slides into this position)
+      if (reviewCurrent >= newReviewIndices.length) {
+        setReviewCurrent(0)
+      }
+      setIsFlipped(false)
+      setIsProcessing(false)
+      return
+    }
+    
+    // If rating is low (0-2), add to wrong cards list for end-of-session review
+    if (!isCorrect) {
+    // Add current card index to wrong cards list if not already there
+    setWrongCardIndices(prev => {
+    if (!prev.includes(currentCardIndex)) {
+    return [...prev, currentCardIndex]
+    }
+    return prev
+    })
+    }
+    
+    // Move to the next card
+    moveToNextCard()
+    } catch (error) {
+    console.error("Error updating card progress:", error)
+    toast({
+    title: "Error",
+    description: "Failed to update card progress",
+    variant: "destructive",
+    })
+    // Still move to the next card even if there's an error
+    const idx = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex
+    const cardToRate = cards[idx]
+    const isCorrect = rating >= 3;
+    updateStats(isCorrect, cardToRate?.progress);
+    moveToNextCard()
+    } finally {
+    // isProcessing is mostly handled in moveToNextCard / useEffect
+    }
+    }
 
   const isLastCard = currentCardIndex === cards.length - 1
 
