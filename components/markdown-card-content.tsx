@@ -2,6 +2,7 @@
 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import rehypeHighlight from 'rehype-highlight'
@@ -17,7 +18,7 @@ export function MarkdownCardContent({ content, className = '' }: MarkdownCardCon
     return (
         <div className={`markdown-content prose dark:prose-invert max-w-none break-words ${className}`}>
             <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
+                remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
                 rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight]}
                 components={{
                     // Override headings to fit card sizes better if needed, or rely on prose
