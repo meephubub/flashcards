@@ -137,13 +137,15 @@ export function AllDueStudyPageClient() {
           </header>
           <div className="flex-1 overflow-auto flex flex-col">
             <div className="mx-auto w-full max-w-6xl px-4 py-6 md:py-10 flex-1 flex flex-col justify-center">
-              <AllDueStudyMode 
-                onProgressInfo={setProgressInfo} 
+              <AllDueStudyMode
+                onProgressInfo={setProgressInfo}
                 onCardChange={setCurrentCard}
                 initialSide={initialSide}
                 mode={mode as "due" | "ahead" | "new" | "review"}
                 days={days}
                 noSchedule={noSchedule}
+                router={router}
+                searchParams={searchParams}
               />
             </div>
           </div>
@@ -191,15 +193,19 @@ interface AllDueStudyModeProps {
   mode?: "due" | "ahead" | "new" | "review";
   days?: number;
   noSchedule?: boolean;
+  router: ReturnType<typeof useRouter>;
+  searchParams: ReturnType<typeof useSearchParams>;
 }
 
-function AllDueStudyMode({ 
-  onProgressInfo, 
-  onCardChange, 
+function AllDueStudyMode({
+  onProgressInfo,
+  onCardChange,
   initialSide = "front",
   mode = "due",
   days = 7,
-  noSchedule = false
+  noSchedule = false,
+  router,
+  searchParams
 }: AllDueStudyModeProps) {
   const { decks, loading, getDueCards, updateCardProgress } = useDecks();
   const { settings } = useSettings();
@@ -382,6 +388,33 @@ function AllDueStudyMode({
     const displayIndex = reviewMode ? reviewIndices[reviewCurrent] : currentCardIndex;
     setIsFlipped(sides[displayIndex] ?? false);
   }, [initialSide]);
+
+  // Restore state from query parameters when returning from edit
+  useEffect(() => {
+    const cardIndex = searchParams.get('cardIndex');
+    const reviewModeParam = searchParams.get('reviewMode') === 'true';
+    const reviewCurrent = searchParams.get('reviewCurrent');
+    const reviewIndicesParam = searchParams.get('reviewIndices');
+
+    if (cardIndex && cards.length > 0) {
+      const index = parseInt(cardIndex, 10);
+      if (!isNaN(index) && index >= 0 && index < cards.length) {
+        setCurrentCardIndex(index);
+        if (reviewModeParam && reviewCurrent && reviewIndicesParam) {
+          setReviewMode(true);
+          setReviewCurrent(parseInt(reviewCurrent, 10));
+          setReviewIndices(reviewIndicesParam.split(',').map(Number));
+        }
+        // Clear the query parameters after restoring state
+        const url = new URL(window.location.href);
+        url.searchParams.delete('cardIndex');
+        url.searchParams.delete('reviewMode');
+        url.searchParams.delete('reviewCurrent');
+        url.searchParams.delete('reviewIndices');
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  }, [cards.length, searchParams]);
 
   useEffect(() => {
     if (cards.length === 0) return;
@@ -868,12 +901,29 @@ function AllDueStudyMode({
         case "R":
           resetStudySession();
           break;
+        case "e":
+        case "E":
+          if (e.ctrlKey) {
+            e.preventDefault();
+            if (currentCard) {
+              const params = new URLSearchParams();
+              params.set('returnTo', 'all-due');
+              params.set('cardIndex', currentCardIndex.toString());
+              if (reviewMode) {
+                params.set('reviewMode', 'true');
+                params.set('reviewCurrent', reviewCurrent.toString());
+                params.set('reviewIndices', reviewIndices.join(','));
+              }
+              router.push(`/deck/${currentEntry.deckId}/card/${currentCard.id}/edit?${params.toString()}`);
+            }
+          }
+          break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isFlipped, currentCardIndex, isSpacedRepetitionEnabled, reviewMode, cards.length, isProcessing]);
+  }, [isFlipped, currentCardIndex, isSpacedRepetitionEnabled, reviewMode, reviewCurrent, reviewIndices, cards.length, isProcessing, router]);
 
   if (loading) {
     return (

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/auth-context";
 import { useDecks } from "@/context/deck-context";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppSidebar } from "@/components/notes/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -117,6 +117,7 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
   const { toast } = useToast();
   const { session, isLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
@@ -155,7 +156,29 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
     try {
       await updateCard(selectedDeckId, cardId, front, back, tag || null, originalCard?.front_img_url, originalCard?.back_img_url);
       toast({ title: "Card updated", description: "Changes saved successfully." });
-      router.push(`/deck/${selectedDeckId}`);
+
+      // Check if user came from study mode and redirect back with preserved state
+      const returnTo = searchParams.get('returnTo');
+      if (returnTo === 'study' || returnTo === 'all-due') {
+        const cardIndex = searchParams.get('cardIndex');
+        const reviewMode = searchParams.get('reviewMode') === 'true';
+        const reviewCurrent = searchParams.get('reviewCurrent');
+        const reviewIndices = searchParams.get('reviewIndices');
+
+        const params = new URLSearchParams();
+        if (cardIndex) params.set('cardIndex', cardIndex);
+        if (reviewMode) params.set('reviewMode', 'true');
+        if (reviewCurrent) params.set('reviewCurrent', reviewCurrent);
+        if (reviewIndices) params.set('reviewIndices', reviewIndices);
+
+        if (returnTo === 'study') {
+          router.push(`/deck/${selectedDeckId}/study?${params.toString()}`);
+        } else {
+          router.push(`/study/all-due?${params.toString()}`);
+        }
+      } else {
+        router.push(`/deck/${selectedDeckId}`);
+      }
     } catch (err) {
       toast({ title: "Error", description: "Failed to update card.", variant: "destructive" });
     } finally {

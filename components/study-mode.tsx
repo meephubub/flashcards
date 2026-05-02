@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, ArrowRight, Check, X, RotateCw } from "lucide-react"
 import { Link, useTransitionRouter } from "next-view-transitions"
+import { useSearchParams } from "next/navigation"
 import { useDecks } from "@/context/deck-context"
 import { useSettings } from "@/context/settings-context"
 import { useXp } from "@/hooks/use-xp"
@@ -40,6 +41,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const router = useTransitionRouter()
   const { toast } = useToast()
   const { totalXp, addXp } = useXp()
+  const searchParams = useSearchParams()
 
   const deck = getDeck(deckId)
   const rawStudy: any = settings?.studySettings ?? {}
@@ -151,7 +153,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     const initializeCards = async () => {
       // Prevent re-initialization if session already started
       if (sessionInitialized) return
-      
+
       if (deck) {
         setSessionInitialized(true)
         let cardsToConsider: any[];
@@ -166,7 +168,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
         // Apply tag filtering if specified
         if (tag) {
-          cardsToConsider = cardsToConsider.filter(c => 
+          cardsToConsider = cardsToConsider.filter(c =>
             c.tag && c.tag.split(',').map((t: string) => t.trim()).includes(tag)
           );
         }
@@ -198,6 +200,33 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
     initializeCards();
   }, [deck, deckId, isSpacedRepetitionEnabled, normalizedStudy.cardsPerSession, getDueCards, tag, sessionInitialized])
+
+  // Restore state from query parameters when returning from edit
+  useEffect(() => {
+    const cardIndex = searchParams.get('cardIndex');
+    const reviewMode = searchParams.get('reviewMode') === 'true';
+    const reviewCurrent = searchParams.get('reviewCurrent');
+    const reviewIndices = searchParams.get('reviewIndices');
+
+    if (cardIndex && cards.length > 0) {
+      const index = parseInt(cardIndex, 10);
+      if (!isNaN(index) && index >= 0 && index < cards.length) {
+        setCurrentCardIndex(index);
+        if (reviewMode && reviewCurrent && reviewIndices) {
+          setReviewMode(true);
+          setReviewCurrent(parseInt(reviewCurrent, 10));
+          setReviewIndices(reviewIndices.split(',').map(Number));
+        }
+        // Clear the query parameters after restoring state
+        const url = new URL(window.location.href);
+        url.searchParams.delete('cardIndex');
+        url.searchParams.delete('reviewMode');
+        url.searchParams.delete('reviewCurrent');
+        url.searchParams.delete('reviewIndices');
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  }, [cards.length, searchParams])
 
   useEffect(() => {
     if (cards.length === 0) return
@@ -628,7 +657,15 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
           if (e.ctrlKey) {
             e.preventDefault()
             if (currentCard) {
-              router.push(`/deck/${deckId}/card/${currentCard.id}/edit`)
+              const params = new URLSearchParams()
+              params.set('returnTo', 'study')
+              params.set('cardIndex', currentCardIndex.toString())
+              if (reviewMode) {
+                params.set('reviewMode', 'true')
+                params.set('reviewCurrent', reviewCurrent.toString())
+                params.set('reviewIndices', reviewIndices.join(','))
+              }
+              router.push(`/deck/${deckId}/card/${currentCard.id}/edit?${params.toString()}`)
             }
           }
           break
@@ -637,7 +674,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isFlipped, currentCardIndex, isSpacedRepetitionEnabled, reviewMode, cards.length, currentCard, deckId])
+  }, [isFlipped, currentCardIndex, isSpacedRepetitionEnabled, reviewMode, reviewCurrent, reviewIndices, cards.length, currentCard, deckId])
 
   if (loading) {
     return (

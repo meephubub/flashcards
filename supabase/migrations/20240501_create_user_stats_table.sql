@@ -25,13 +25,13 @@ BEGIN
   IF increment_amount <= 0 THEN
     RAISE EXCEPTION 'Increment amount must be positive';
   END IF;
-  
+
   -- Insert user_stats row if it doesn't exist, then update XP
   INSERT INTO user_stats (user_id, xp)
   VALUES (user_id, increment_amount)
-  ON CONFLICT (user_id) 
-  DO UPDATE SET 
-    xp = user_stats.xp + increment_amount,
+  ON CONFLICT (user_id)
+  DO UPDATE SET
+    xp = EXCLUDED.xp + increment_amount,
     updated_at = NOW();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
