@@ -118,7 +118,6 @@ export function StudySession({ cards, sessionInfo }: StudySessionProps) {
     if (!currentCard) return;
 
     setIsLoading(true);
-    setCompletedCards(prev => [...prev, currentCard.id]);
 
     if (rating >= 3) {
       setStudyStats(prev => ({ ...prev, correct: prev.correct + 1 }));
@@ -132,25 +131,64 @@ export function StudySession({ cards, sessionInfo }: StudySessionProps) {
       await updateCardProgress(currentCard.id, rating);
     }
 
-    if (currentCardIndex < cards.length - 1) {
-      setCurrentCardIndex(prev => prev + 1);
+    // Find the next card that hasn't been completed yet (excluding current card)
+    let nextCardIndex = currentCardIndex + 1;
+    while (nextCardIndex < cards.length && completedCards.includes(cards[nextCardIndex].id)) {
+      nextCardIndex++;
+    }
+
+    // Add current card to completed cards after finding next card
+    setCompletedCards(prev => [...prev, currentCard.id]);
+
+    if (nextCardIndex < cards.length) {
+      // Move to the next uncompleted card
+      setCurrentCardIndex(nextCardIndex);
       setShowAnswer(false);
     } else {
-      // Study session completed
-      router.push("/");
-      toast({
-        title: "Study Complete!",
-        description: `You studied ${cards.length} cards. Correct: ${studyStats.correct + (rating >= 3 ? 1 : 0)}, Wrong: ${studyStats.wrong + (rating < 3 ? 1 : 0)}`,
-      });
+      // Check if there are any uncompleted cards before the current index
+      let hasUncompletedCards = false;
+      for (let i = 0; i < cards.length; i++) {
+        if (!completedCards.includes(cards[i].id) && i !== currentCardIndex) {
+          hasUncompletedCards = true;
+          setCurrentCardIndex(i);
+          setShowAnswer(false);
+          break;
+        }
+      }
+
+      // If no uncompleted cards found, session is complete
+      if (!hasUncompletedCards) {
+        router.push("/");
+        toast({
+          title: "Study Complete!",
+          description: `You studied ${cards.length} cards. Correct: ${studyStats.correct + (rating >= 3 ? 1 : 0)}, Wrong: ${studyStats.wrong + (rating < 3 ? 1 : 0)}`,
+        });
+      }
     }
 
     setIsLoading(false);
   };
 
   const handleSkip = () => {
-    if (currentCardIndex < cards.length - 1) {
-      setCurrentCardIndex(prev => prev + 1);
+    // Find the next card that hasn't been completed yet
+    let nextCardIndex = currentCardIndex + 1;
+    while (nextCardIndex < cards.length && completedCards.includes(cards[nextCardIndex].id)) {
+      nextCardIndex++;
+    }
+
+    if (nextCardIndex < cards.length) {
+      // Move to the next uncompleted card
+      setCurrentCardIndex(nextCardIndex);
       setShowAnswer(false);
+    } else {
+      // Check if there are any uncompleted cards before the current index
+      for (let i = 0; i < cards.length; i++) {
+        if (!completedCards.includes(cards[i].id)) {
+          setCurrentCardIndex(i);
+          setShowAnswer(false);
+          break;
+        }
+      }
     }
   };
 
