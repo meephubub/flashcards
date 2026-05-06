@@ -145,7 +145,7 @@ graph TD
 
 1. Clone the repository
    ```bash
-   git clone https://github.com/yourusername/flashcards.git
+   git clone <your-repo-url>
    cd flashcards
    ```
 

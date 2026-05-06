@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 const canonical = `${siteUrl}/home/contact`;
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "support@example.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -88,34 +89,34 @@ export default function ContactPage() {
             <div className="prose prose-neutral dark:prose-invert max-w-none">
               <h2 id="support"><strong>Support</strong></h2>
               <p>
-                Account or product issues? Email <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a> and we'll help.
+                Account or product issues? Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> and we'll help.
               </p>
 
               <h2 id="feedback"><strong>Feedback</strong></h2>
               <p>
                 Tell us what would make Yasashi better. Feature requests and UX notes welcome.
-                Email <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.
+                Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
 
               <h2 id="bugs"><strong>Bug Reports</strong></h2>
               <p>
                 Found a bug? Please include steps to reproduce, screenshots or console output if possible.
-                Email <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a> or alternativey submit a pull request on our git repo.
+                Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
 
               <h2 id="business"><strong>Business</strong></h2>
               <p>
-                Partnerships, education, or enterprise? Reach out at <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.
+                Partnerships, education, or enterprise? Reach out at <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
 
               <h2 id="press"><strong>Press</strong></h2>
               <p>
-                Media inquiries: <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.
+                Media inquiries: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
 
               <h2 id="other"><strong>Other</strong></h2>
               <p>
-                Anything else? Contact us at <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.
+                Anything else? Contact us at <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
             </div>
           </div>

@@ -41,12 +41,6 @@ const Navbar04Page = () => {
               Pricing
             </Link>
             <Link
-              href="/verify"
-              className="text-black-700 hover:text-black dark:text-black-300 dark:hover:text-white transition-colors rounded-full px-3 py-1 text-sm"
-            >
-              Verify
-            </Link>
-            <Link
               href="/notes"
               className="text-black-700 hover:text-black dark:text-black-300 dark:hover:text-white transition-colors rounded-full px-3 py-1 text-sm"
             >

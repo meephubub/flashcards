@@ -21,14 +21,14 @@ import {
 import PushSender from "@/components/push-sender"
 import { Bell } from "lucide-react"
 
-const ALLOWED_EMAIL = "samthelegend68@gmail.com"
+const ALLOWED_EMAIL = process.env.NEXT_PUBLIC_PUSH_ADMIN_EMAIL || ""
 
 export default function PushPage() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && (!user || user.email !== ALLOWED_EMAIL)) {
+    if (!isLoading && (!ALLOWED_EMAIL || !user || user.email !== ALLOWED_EMAIL)) {
       router.push("/")
     }
   }, [user, isLoading, router])
@@ -41,7 +41,7 @@ export default function PushPage() {
     )
   }
 
-  if (!user || user.email !== ALLOWED_EMAIL) return null
+  if (!ALLOWED_EMAIL || !user || user.email !== ALLOWED_EMAIL) return null
 
   return (
     <SidebarProvider>

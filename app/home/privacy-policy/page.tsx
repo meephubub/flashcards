@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 const canonical = `${siteUrl}/home/privacy-policy`;
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "support@example.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -132,7 +133,7 @@ export default function PrivacyPolicyPage() {
               <ul>
                 <li>Access, update, export, or delete your data.</li>
                 <li>Object to or restrict certain processing.</li>
-                <li>Contact us for help: <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.</li>
+                <li>Contact us for help: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</li>
               </ul>
 
               <h2 id="children"><strong>8. Children</strong></h2>
@@ -148,7 +149,7 @@ export default function PrivacyPolicyPage() {
 
               <h2 id="contact"><strong>10. Contact</strong></h2>
               <p>
-                Questions about privacy? Email us at <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.
+                Questions about privacy? Email us at <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
             </div>
           </div>

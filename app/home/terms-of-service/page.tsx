@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 const canonical = `${siteUrl}/home/terms-of-service`;
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "support@example.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -137,7 +138,7 @@ export default function TermsOfServicePage() {
 
               <h2 id="contact"><strong>9. Contact</strong></h2>
               <p>
-                Questions about these Terms? Email <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.
+                Questions about these Terms? Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
             </div>
           </div>

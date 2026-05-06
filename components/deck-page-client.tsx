@@ -19,13 +19,15 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Link } from "next-view-transitions";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Edit, BookText, Trophy, CalendarIcon, Download, ChevronDown } from "lucide-react";
+import { Edit, BookText, Trophy, CalendarIcon, Download, ChevronDown, Link as LinkIcon } from "lucide-react";
 import { getCachedExamData } from "@/lib/exam-cache";
+import { useToast } from "@/hooks/use-toast";
 
 export function DeckPageClient({ deckId }: { deckId: number }) {
   const { session, isLoading, user } = useAuth();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { toast } = useToast();
   const [deckTitle, setDeckTitle] = useState<string>("");
   const [deckTag, setDeckTag] = useState<string | null>(null);
   const [hasInProgressExam, setHasInProgressExam] = useState(false);
@@ -169,6 +171,34 @@ export function DeckPageClient({ deckId }: { deckId: number }) {
                           Schedule Exam
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={async () => {
+                            try {
+                              const res = await fetch(`/api/decks/${deckId}/share`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                              });
+                              const json = await res.json();
+                              if (!res.ok) throw new Error(json?.error || "Failed to create share link");
+                              const url = `${window.location.origin}/share/${encodeURIComponent(json.token)}`;
+                              await navigator.clipboard.writeText(url);
+                              toast({
+                                title: "Share link copied",
+                                description: "Anyone can study. FSRS/Xp won’t be affected.",
+                              });
+                            } catch (e: any) {
+                              toast({
+                                title: "Error",
+                                description: e?.message || "Failed to create share link",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                          className="cursor-pointer rounded-xl"
+                        >
+                          <LinkIcon className="h-4 w-4 mr-2" />
+                          Copy Share Link
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => window.dispatchEvent(new CustomEvent('open-export-modal'))} className="cursor-pointer rounded-xl">
                           <Download className="h-4 w-4 mr-2" />
                           Export Deck

@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 const canonical = `${siteUrl}/home/careers`;
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "support@example.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -114,7 +115,7 @@ export default function CareersPage() {
               <h2 id="how-to-apply"><strong>How to Apply</strong></h2>
               <p>
                 Email your resume/portfolio and a short note about why you want to work on learning to
-                <a href="mailto:samthelegend68@gmail.com"> samthelegend68@gmail.com</a>.
+                <a href={`mailto:${CONTACT_EMAIL}`}> {CONTACT_EMAIL}</a>.
               </p>
 
               <h2 id="hiring-process"><strong>Hiring Process</strong></h2>
@@ -133,7 +134,7 @@ export default function CareersPage() {
 
               <h2 id="contact"><strong>Contact</strong></h2>
               <p>
-                Questions about careers at Yasashi? Email <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.
+                Questions about careers at Yasashi? Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
             </div>
           </div>

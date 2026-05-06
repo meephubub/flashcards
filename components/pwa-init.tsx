@@ -38,7 +38,14 @@ export default function PwaInit() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     // Register service worker
-    if ('serviceWorker' in navigator) {
+    // Avoid "The operation is insecure" on http/file origins.
+    const isSecure =
+      window.isSecureContext ||
+      window.location.protocol === "https:" ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+
+    if (isSecure && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .then((registration) => {
           console.log('Service Worker registered with scope:', registration.scope);

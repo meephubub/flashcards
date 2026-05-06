@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { motion, AnimatePresence } from "framer-motion"
 import { Search, Send, X, HelpCircle, PlusCircle, BarChart2, Pencil, Trash2, Image as ImageIcon } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
+import { useAuth } from "@/context/auth-context"
 import useDebounce from "@/hooks/use-debounce"
 import { useNoteDialogStore } from "@/hooks/use-note-dialog"
 import { useNoteContextStore } from "@/hooks/use-note-context"
@@ -20,6 +21,8 @@ import { Action, SearchResult } from "@/components/action-search-bar/types"
 import { allActions } from "@/components/action-search-bar/actions"
 import { evalArithmetic } from "@/lib/arithmetic"
 import { ActionCategoryRail } from "@/components/action-search-bar/action-category-rail"
+import { LogIn } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { AiQna } from "@/components/action-search-bar/ai-qna"
 import { AiEdit } from "@/components/action-search-bar/ai-edit"
 import { TodoList } from "@/components/action-search-bar/todo-list"
@@ -28,6 +31,8 @@ import { ImageGeneration } from "@/components/action-search-bar/image-generation
 import { SlowImageGeneration } from "@/components/action-search-bar/slow-image-generation"
 import { NoteFromImage } from "@/components/action-search-bar/note-from-image"
 import { FixNoteContent } from "@/components/action-search-bar/fix-note-content"
+
+const ADMIN_LOGIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_LOGIN_EMAIL || ""
 
 function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [open, setOpen] = useState(false)
@@ -59,12 +64,18 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const [copied, setCopied] = useState(false)
   const pathname = usePathname()
 
-  const isExcluded = pathname === "/" || pathname === "/home" || pathname?.startsWith("/deck") || pathname === "/notes"
+  const isExcluded = pathname === "/" || pathname?.startsWith("/deck") || pathname === "/notes"
 
   // Sub-UI States
   const [imageNoteOpen, setImageNoteOpen] = useState(false)
   const [editAiOpen, setEditAiOpen] = useState(false)
   const [fixOpen, setFixOpen] = useState(false)
+
+  // Login state (hidden functionality)
+  const { signIn } = useAuth()
+  const [loginPassword, setLoginPassword] = useState("")
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -145,6 +156,10 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   const isEnvDev = trimmed === '__dev__'
   const isEnvProd = trimmed === '__prod__'
   const isEnvShow = trimmed === '__env__'
+
+  // Hidden login trigger - only shows when user types "login:"
+  const isLoginTrigger = trimmed.toLowerCase() === 'login:'
+  const hasLoginPrefix = query.toLowerCase().startsWith('login:')
 
   const isAiUi = query.startsWith('? ')
   const isAi = query.startsWith('?') // Raw start
@@ -486,7 +501,7 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
   // 3. Category-based feature (Todos, NoteSearch)
   // 4. Action List
 
-  const showActionList = !imageNoteOpen && !editAiOpen && !fixOpen && !selectedCategory.match(/todos|notes/) && !isAi && !isGenImage && !isGenSlow && !isCalc && !isEnvDev && !isEnvProd && !isEnvShow
+  const showActionList = !imageNoteOpen && !editAiOpen && !fixOpen && !selectedCategory.match(/todos|notes/) && !isAi && !isGenImage && !isGenSlow && !isCalc && !isEnvDev && !isEnvProd && !isEnvShow && !isLoginTrigger && !hasLoginPrefix
 
   // NoteSearch is special: it uses the main query if selectedCategory is 'notes'
   const showNoteSearch = selectedCategory === 'notes' && !imageNoteOpen && !editAiOpen && !fixOpen
@@ -601,6 +616,69 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
                     {(isEnvDev || isEnvProd) && (
                       <div className="w-full px-4 pb-2 -mt-2 text-center">
                         <button onClick={() => applyEnv(isEnvDev ? 'dev' : 'prod')} className="px-4 py-2 bg-blue-600 text-white rounded">Set to {isEnvDev ? 'DEV' : 'PROD'}</button>
+                      </div>
+                    )}
+
+                    {/* Hidden Login UI - only shows when "login:" is typed */}
+                    {isLoginTrigger && (
+                      <div className="w-full px-4 pb-3">
+                        <div className="rounded-lg border border-black/5 dark:border-white/10 bg-white dark:bg-neutral-900 p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <LogIn className="w-4 h-4 text-blue-500" />
+                            <span className="text-sm font-medium">Enter password to continue</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Input
+                              type="password"
+                              placeholder="Password"
+                              value={loginPassword}
+                              onChange={(e) => setLoginPassword(e.target.value)}
+                              className="flex-1"
+                              onKeyDown={async (e) => {
+                                if (e.key === "Enter" && loginPassword) {
+                                  e.preventDefault()
+                                  setIsLoggingIn(true)
+                                  setLoginError(null)
+                                  try {
+                                    await signIn(ADMIN_LOGIN_EMAIL, loginPassword)
+                                    setOpen(false)
+                                    setQuery("")
+                                    setLoginPassword("")
+                                    window.location.href = "/"
+                                  } catch (err) {
+                                    setLoginError("Invalid password")
+                                  } finally {
+                                    setIsLoggingIn(false)
+                                  }
+                                }
+                              }}
+                            />
+                            <Button
+                              onClick={async () => {
+                                if (!loginPassword) return
+                                setIsLoggingIn(true)
+                                setLoginError(null)
+                                try {
+                                  await signIn(ADMIN_LOGIN_EMAIL, loginPassword)
+                                  setOpen(false)
+                                  setQuery("")
+                                  setLoginPassword("")
+                                  window.location.href = "/"
+                                } catch (err) {
+                                  setLoginError("Invalid password")
+                                } finally {
+                                  setIsLoggingIn(false)
+                                }
+                              }}
+                              disabled={isLoggingIn || !loginPassword}
+                            >
+                              {isLoggingIn ? "Logging in..." : "Login"}
+                            </Button>
+                          </div>
+                          {loginError && (
+                            <p className="text-xs text-red-500 mt-2">{loginError}</p>
+                          )}
+                        </div>
                       </div>
                     )}
 

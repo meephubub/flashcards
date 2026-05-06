@@ -21,6 +21,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePathname, useRouter } from "next/navigation";
 import { useDecks, Deck } from "@/context/deck-context";
+import { useAuth } from "@/context/auth-context";
 import { Card, Note } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/client";
 import { useNoteContextStore } from "@/hooks/use-note-context";
@@ -48,6 +49,8 @@ import { MarkdownCardContent } from "@/components/markdown-card-content";
 import { ImportMarkdownDialog } from "@/components/import-markdown-dialog";
 import { MultiTagStudy } from "./multi-tag-study";
 import { MultiDeckStudy } from "./multi-deck-study";
+
+const ADMIN_LOGIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_LOGIN_EMAIL || "";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -737,7 +740,7 @@ function NoteExplorer({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type Mode = "default" | "deck-pick" | "deck-view" | "note-pick" | "tag-view" | "multi-deck-study" | "multi-tag-study";
+type Mode = "default" | "deck-pick" | "deck-view" | "note-pick" | "tag-view" | "multi-deck-study" | "multi-tag-study" | "login";
 
 export function DecksActionSearchBar() {
   const [open, setOpen] = useState(false);
@@ -767,6 +770,12 @@ export function DecksActionSearchBar() {
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = useMemo(() => createClient(), []);
   const openDialog = useNoteDialogStore((s) => s.openDialog);
+
+  // Login state (hidden functionality)
+  const { signIn } = useAuth();
+  const [loginPassword, setLoginPassword] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const [mounted, setMounted] = useState(false);
 
@@ -882,7 +891,13 @@ export function DecksActionSearchBar() {
   const isTagPrefix = query.toLowerCase().startsWith("tag:");
   const tagQuery = isTagPrefix ? query.slice(4).trimStart() : "";
 
-  const effectiveMode: Mode = isDeckPrefix
+  // Parse login: prefix (hidden functionality)
+  const isLoginPrefix = query.toLowerCase().trim() === "login:";
+  const hasLoginPrefix = query.toLowerCase().startsWith("login:");
+
+  const effectiveMode: Mode = isLoginPrefix
+    ? "login"
+    : isDeckPrefix
     ? "deck-pick"
     : isNotePrefix
       ? "note-pick"
@@ -894,7 +909,9 @@ export function DecksActionSearchBar() {
             ? "multi-tag-study"
             : mode === "multi-deck-study"
               ? "multi-deck-study"
-              : "default";
+              : mode === "login"
+                ? "login"
+                : "default";
 
   // ── Action Items ──
   const staticItems: Item[] = [
@@ -1047,7 +1064,7 @@ export function DecksActionSearchBar() {
   const allSearchable = [...staticItems, ...dynamicItems, ...noteItems];
 
   const filtered =
-    query.trim() && !isDeckPrefix && !isNotePrefix && !isTagPrefix
+    query.trim() && !isDeckPrefix && !isNotePrefix && !isTagPrefix && !hasLoginPrefix
       ? allSearchable.filter((item) =>
           item.label.toLowerCase().includes(query.toLowerCase()),
         )
@@ -1228,7 +1245,7 @@ export function DecksActionSearchBar() {
         layout
         initial={false}
         transition={{ type: "spring", stiffness: 400, damping: 40 }}
-        className="rounded-xl border border-border bg-background shadow-lg overflow-hidden font-sans"
+        className="rounded-xl border border-border bg-background shadow-lg overflow-hidden font-sans text-left"
       >
         <AnimatePresence mode="wait" custom={direction}>
           {effectiveMode === "deck-view" && selectedDeck ? (
@@ -1277,6 +1294,74 @@ export function DecksActionSearchBar() {
                 onClose={() => setOpen(false)}
                 onBack={handleBack}
               />
+            </motion.div>
+          ) : effectiveMode === "login" ? (
+            <motion.div
+              key="login"
+              custom={direction}
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="p-4"
+            >
+              <div className="rounded-lg border border-border bg-muted/40 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-medium">Enter password to continue</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-md border border-border bg-background text-sm"
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter" && loginPassword) {
+                        e.preventDefault();
+                        setIsLoggingIn(true);
+                        setLoginError(null);
+                        try {
+                          await signIn(ADMIN_LOGIN_EMAIL, loginPassword);
+                          setOpen(false);
+                          setQuery("");
+                          setLoginPassword("");
+                          window.location.href = "/";
+                        } catch (err) {
+                          setLoginError("Invalid password");
+                        } finally {
+                          setIsLoggingIn(false);
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!loginPassword) return;
+                      setIsLoggingIn(true);
+                      setLoginError(null);
+                      try {
+                        await signIn(ADMIN_LOGIN_EMAIL, loginPassword);
+                        setOpen(false);
+                        setQuery("");
+                        setLoginPassword("");
+                        window.location.href = "/";
+                      } catch (err) {
+                        setLoginError("Invalid password");
+                      } finally {
+                        setIsLoggingIn(false);
+                      }
+                    }}
+                    disabled={isLoggingIn || !loginPassword}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium disabled:opacity-50"
+                  >
+                    {isLoggingIn ? "Logging in..." : "Login"}
+                  </button>
+                </div>
+                {loginError && (
+                  <p className="text-xs text-red-500 mt-2">{loginError}</p>
+                )}
+              </div>
             </motion.div>
           ) : effectiveMode === "multi-deck-study" ? (
             <motion.div
@@ -1459,6 +1544,7 @@ export function DecksActionSearchBar() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.18 }}
+                className="w-[600px] max-w-[95vw] mx-auto"
               >
                 {renderContent()}
               </motion.div>

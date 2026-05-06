@@ -66,17 +66,6 @@ export function DeckOptionsMenu({ deckId }: DeckOptionsMenuProps) {
           <Copy className="h-4 w-4 mr-2" />
           Duplicate
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => {
-          const shareUrl = `${window.location.origin}/deck/${deckId}/join`
-          navigator.clipboard.writeText(shareUrl)
-          toast({
-            title: "Share link copied!",
-            description: "Send this link to your classmates to collaborate.",
-          })
-        }}>
-          <MoreHorizontal className="h-4 w-4 mr-2" />
-          Share with Class
-        </DropdownMenuItem>
         <DropdownMenuItem>
           <Download className="h-4 w-4 mr-2" />
           Export

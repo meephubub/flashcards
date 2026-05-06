@@ -12,7 +12,6 @@ import { SettingsProvider } from "@/context/settings-context";
 import { DeckProvider } from "@/context/deck-context";
 import { FolderProvider } from "@/context/folder-context";
 import MobilePaletteButton from "@/components/mobile-palette-button";
-import ActionSearchBar from "@/components/action-search-bar";
 import { DecksActionSearchBar } from "@/components/action-search-bar/decks/action-search-bar";
 import PwaInit from "@/components/pwa-init";
 import EnvBannerClient from "@/components/env-banner-client";
@@ -83,13 +82,11 @@ export default function RootLayout({
                     <MobilePaletteButton />
                     {children}
                     {/* Global Action Search - opens with Ctrl+K */}
-                    <ActionSearchBar />
                     <DecksActionSearchBar />
                     <Toaster />
                     <SpeedInsights />
                     <Analytics />
                     <PwaInit />
-                    <CookieBannerWrapper />
                   </FolderProvider>
                 </DeckProvider>
               </SettingsProvider>

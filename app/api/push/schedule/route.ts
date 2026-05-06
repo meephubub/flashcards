@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const ALLOWED_EMAIL = 'samthelegend68@gmail.com'
+const ALLOWED_EMAIL = process.env.PUSH_ADMIN_EMAIL || ''
 
 async function checkAdmin() {
   const cookieStore = await cookies()
@@ -20,7 +20,7 @@ async function checkAdmin() {
     }
   )
   const { data: { user } } = await supabase.auth.getUser()
-  return user && user.email === ALLOWED_EMAIL ? user : null
+  return ALLOWED_EMAIL && user && user.email === ALLOWED_EMAIL ? user : null
 }
 
 // GET — list scheduled notifications

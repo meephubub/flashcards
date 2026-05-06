@@ -4,7 +4,9 @@ import { NextResponse } from 'next/server'
 import webpush from 'web-push'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const ALLOWED_EMAIL = 'samthelegend68@gmail.com'
+const ALLOWED_EMAIL = process.env.PUSH_ADMIN_EMAIL || ''
+const VAPID_CONTACT_EMAIL = process.env.VAPID_CONTACT_EMAIL || process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'support@example.com'
+const VAPID_CONTACT = VAPID_CONTACT_EMAIL.startsWith('mailto:') ? VAPID_CONTACT_EMAIL : `mailto:${VAPID_CONTACT_EMAIL}`
 
 export async function POST(req: Request) {
   try {
@@ -18,7 +20,7 @@ export async function POST(req: Request) {
     }
 
     webpush.setVapidDetails(
-      'mailto:samthelegend68@gmail.com',
+      VAPID_CONTACT,
       publicKey,
       privateKey
     )
@@ -62,7 +64,7 @@ export async function POST(req: Request) {
       authorizedBy = 'cron'
     } else {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user && user.email === ALLOWED_EMAIL) {
+      if (ALLOWED_EMAIL && user && user.email === ALLOWED_EMAIL) {
         isAuthorized = true
         authorizedBy = user.email
       }

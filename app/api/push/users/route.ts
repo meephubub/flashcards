@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const ALLOWED_EMAIL = 'samthelegend68@gmail.com'
+const ALLOWED_EMAIL = process.env.PUSH_ADMIN_EMAIL || ''
 
 export async function GET(req: Request) {
   try {
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     )
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user || user.email !== ALLOWED_EMAIL) {
+    if (!ALLOWED_EMAIL || !user || user.email !== ALLOWED_EMAIL) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

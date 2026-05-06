@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 const canonical = `${siteUrl}/home/cookies-policy`;
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "support@example.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -96,7 +97,7 @@ export default function CookiesPolicyPage() {
               <h2><strong>5. Contact us</strong></h2>
               <p>
                 If you have any questions about our use of cookies, please contact us at{" "}
-                <a href="mailto:samthelegend68@gmail.com">samthelegend68@gmail.com</a>.
+                <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
               </p>
             </div>
           </div>

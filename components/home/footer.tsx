@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Brain, Github, Twitter, Linkedin, Mail } from "lucide-react";
 
+const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "support@example.com";
+
 const footerSections = [
   {
     title: "Product",
@@ -37,10 +39,10 @@ const footerSections = [
 ];
 
 const socialLinks = [
-  { name: "GitHub", icon: Github, href: "https://github.com/meephubub/flashcards" },
+  // Intentionally omit repo links from the public footer.
   { name: "Twitter", icon: Twitter, href: "#" },
   { name: "LinkedIn", icon: Linkedin, href: "#" },
-  { name: "Email", icon: Mail, href: "mailto:samthelegend68@gmail.com" }
+  { name: "Email", icon: Mail, href: `mailto:${CONTACT_EMAIL}` }
 ];
 
 export function Footer() {

@@ -33,9 +33,11 @@ interface StudyModeProps {
   onCardChange?: (card: any) => void
   initialSide?: "front" | "back" | "mixed"
   tag?: string
+  practice?: boolean
+  deckOverride?: any
 }
 
-export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = "front", tag }: StudyModeProps) {
+export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = "front", tag, practice = false, deckOverride }: StudyModeProps) {
   const { getDeck, loading, getDueCards, updateCardProgress, updateCard } = useDecks()
   const { settings } = useSettings()
   const router = useTransitionRouter()
@@ -43,7 +45,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const { totalXp, addXp } = useXp()
   const searchParams = useSearchParams()
 
-  const deck = getDeck(deckId)
+  const deck = deckOverride ?? getDeck(deckId)
   const rawStudy: any = settings?.studySettings ?? {}
   const normalizedStudy = {
     cardsPerSession:
@@ -57,7 +59,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     fsrsParams: rawStudy.fsrsParams,
   }
   // Check both global setting AND deck-specific exclusion
-  const isSpacedRepetitionEnabled = normalizedStudy.enableSpacedRepetition && !(deck?.exclude_from_srs)
+  const isSpacedRepetitionEnabled = !practice && normalizedStudy.enableSpacedRepetition && !(deck?.exclude_from_srs)
 
   const [cards, setCards] = useState<any[]>([])
   const [currentCardIndex, setCurrentCardIndex] = useState(0)
@@ -316,6 +318,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
 
   // Leech handling functions
   const handleResetLeech = async () => {
+    if (practice) return
     if (!currentCard) return
     const resetProgress = resetLeechStatus(currentCard.progress || DEFAULT_CARD_PROGRESS)
     const success = await updateCardProgress(deckId, currentCard.id, resetProgress)
@@ -336,11 +339,13 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   }
 
   const handleEditLeech = () => {
+    if (practice) return
     if (!currentCard) return
     router.push(`/deck/${deckId}/card/${currentCard.id}/edit`)
   }
 
   const handleSuspendLeech = async () => {
+    if (practice) return
     if (!currentCard) return
     // Mark card as excluded from SRS
     try {
@@ -421,15 +426,17 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     
     // Update card progress (rating 4 = Good/Easy pass)
     if (cardToUpdate) {
-      const nextProgress = calculateNextReview(
-        cardToUpdate.progress || DEFAULT_CARD_PROGRESS,
-        4 // Good/Easy rating for pass
-      )
-      await updateCardProgress(deckId, cardToUpdate.id, nextProgress)
-      // Update local state
-      const updatedCards = [...cards]
-      updatedCards[idx] = { ...cardToUpdate, progress: nextProgress }
-      setCards(updatedCards)
+      if (!practice) {
+        const nextProgress = calculateNextReview(
+          cardToUpdate.progress || DEFAULT_CARD_PROGRESS,
+          4 // Good/Easy rating for pass
+        )
+        await updateCardProgress(deckId, cardToUpdate.id, nextProgress)
+        // Update local state
+        const updatedCards = [...cards]
+        updatedCards[idx] = { ...cardToUpdate, progress: nextProgress }
+        setCards(updatedCards)
+      }
     }
     
     if (reviewMode) {
@@ -468,15 +475,17 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     
     // Update card progress (rating 1 = Again/fail)
     if (cardToUpdate) {
-      const nextProgress = calculateNextReview(
-        cardToUpdate.progress || DEFAULT_CARD_PROGRESS,
-        1 // Again rating for fail
-      )
-      await updateCardProgress(deckId, cardToUpdate.id, nextProgress)
-      // Update local state
-      const updatedCards = [...cards]
-      updatedCards[idx] = { ...cardToUpdate, progress: nextProgress }
-      setCards(updatedCards)
+      if (!practice) {
+        const nextProgress = calculateNextReview(
+          cardToUpdate.progress || DEFAULT_CARD_PROGRESS,
+          1 // Again rating for fail
+        )
+        await updateCardProgress(deckId, cardToUpdate.id, nextProgress)
+        // Update local state
+        const updatedCards = [...cards]
+        updatedCards[idx] = { ...cardToUpdate, progress: nextProgress }
+        setCards(updatedCards)
+      }
     }
     
     if (reviewMode) {
@@ -753,7 +762,7 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
       if (newStreak >= targetStreak) {
         const xp = calculateXp(newStreak, cardProgress);
         setXpBonus(xp);
-        addXp(xp); // Persist XP to database
+        if (!practice) addXp(xp); // Persist XP to database
         setShowXpPopup(true);
         
         // Reset for next round
@@ -802,9 +811,11 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
     const cardToRate = cards[idx]
     const currentProgress = cardToRate.progress || DEFAULT_CARD_PROGRESS
     const newProgress = calculateNextReview(currentProgress, rating, normalizedStudy.fsrsParams)
-    const success = await updateCardProgress(deckId, cardToRate.id, newProgress)
-    if (!success) {
-    throw new Error("Failed to update card progress")
+    if (!practice) {
+      const success = await updateCardProgress(deckId, cardToRate.id, newProgress)
+      if (!success) {
+        throw new Error("Failed to update card progress")
+      }
     }
     
     // Update the local card data

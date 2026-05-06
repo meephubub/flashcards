@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import webpush from 'web-push'
 
+const VAPID_CONTACT_EMAIL = process.env.VAPID_CONTACT_EMAIL || process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'support@example.com'
+const VAPID_CONTACT = VAPID_CONTACT_EMAIL.startsWith('mailto:') ? VAPID_CONTACT_EMAIL : `mailto:${VAPID_CONTACT_EMAIL}`
+
 export async function POST(req: Request) {
   try {
     // Auth: only cron secret
@@ -26,7 +29,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'VAPID keys missing' }, { status: 500 })
     }
 
-    webpush.setVapidDetails('mailto:samthelegend68@gmail.com', publicKey, privateKey)
+    webpush.setVapidDetails(VAPID_CONTACT, publicKey, privateKey)
 
     const admin = createAdminClient()
 

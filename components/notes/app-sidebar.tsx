@@ -90,6 +90,10 @@ const data = {
           url: "/study/stats",
         },
         {
+          title: "Islands",
+          url: "/islands",
+        },
+        {
           title: "Revision Calendar",
           url: "/study/calendar",
         },
