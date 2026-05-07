@@ -32,14 +32,14 @@ import { getUniqueTags, parseTags } from "@/lib/text-utils"
 // Heatmap Calendar Mock Component
 const ActivityHeatmap = () => {
   // Generate a mock grid of 52 weeks x 7 days
-  const weeks = Array.from({ length: 52 }, () => 
+  const weeks = Array.from({ length: 52 }, () =>
     Array.from({ length: 7 }, () => Math.random() > 0.8 ? Math.floor(Math.random() * 3) + 1 : 0)
   );
   // Guarantee a single darker square toward the far right
   weeks[50][3] = 4;
 
   const getColor = (level: number) => {
-    switch(level) {
+    switch (level) {
       case 0: return 'bg-zinc-100 dark:bg-zinc-800/50';
       case 1: return 'bg-zinc-200 dark:bg-zinc-700';
       case 2: return 'bg-zinc-300 dark:bg-zinc-600';
@@ -102,7 +102,7 @@ export function DeckView({ deckId }: DeckViewProps) {
   const deck = getDeck(deckId)
   const isSpacedRepetitionEnabled = settings.studySettings.enableSpacedRepetition
   const [dueCards, setDueCards] = useState<Card[]>([])
-  
+
   const [isCardListVisible, setIsCardListVisible] = useState(false)
   const pullY = useMotionValue(0)
   const [hasTriggeredHaptic, setHasTriggeredHaptic] = useState(false)
@@ -114,10 +114,10 @@ export function DeckView({ deckId }: DeckViewProps) {
   useEffect(() => {
     const handleOpenExport = () => setIsExportDialogOpen(true);
     const handleOpenSchedule = () => setIsScheduleExamOpen(true);
-    
+
     window.addEventListener('open-export-modal', handleOpenExport);
     window.addEventListener('open-schedule-modal', handleOpenSchedule);
-    
+
     return () => {
       window.removeEventListener('open-export-modal', handleOpenExport);
       window.removeEventListener('open-schedule-modal', handleOpenSchedule);
@@ -234,7 +234,7 @@ export function DeckView({ deckId }: DeckViewProps) {
         <Skeleton className="h-10 w-10 rounded-xl mb-2" />
         <Skeleton className="h-10 w-64 rounded-full" />
         <Skeleton className="h-4 w-32 mt-2" />
-        
+
         <div className="flex gap-3 mt-8">
           <Skeleton className="h-12 w-32 rounded-full" />
           <Skeleton className="h-12 w-32 rounded-full" />
@@ -280,7 +280,7 @@ export function DeckView({ deckId }: DeckViewProps) {
 
   // Just a mock for "This week" to match the aesthetic if no real data is available,
   // or we could use recent reviews if we tracked them. We'll use 6 as requested or learning+mastered.
-  const thisWeekCount = 6; 
+  const thisWeekCount = 6;
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-12 py-8 animate-in fade-in duration-500">
@@ -305,8 +305,8 @@ export function DeckView({ deckId }: DeckViewProps) {
           <Button asChild className="h-11 rounded-none rounded-l-full pl-6 pr-4 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 text-sm font-medium border-r border-zinc-800 dark:border-zinc-200">
             <Link href={`/deck/${deckId}/study${selectedTag ? `?tag=${encodeURIComponent(selectedTag)}` : ""}`}>
               <Play className="h-4 w-4 mr-2 fill-current" />
-              {selectedTag 
-                ? `Study ${selectedTag}` 
+              {selectedTag
+                ? `Study ${selectedTag}`
                 : (isSpacedRepetitionEnabled && dueCards.length > 0 ? `Study ${dueCards.length}` : "Study")
               }
             </Link>
@@ -404,7 +404,7 @@ export function DeckView({ deckId }: DeckViewProps) {
             style={{ y: pullSpring }}
             className="flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing group"
           >
-            <motion.div 
+            <motion.div
               className="w-10 h-1 bg-zinc-200 dark:bg-zinc-800 rounded-full group-hover:bg-zinc-300 dark:group-hover:bg-zinc-700 transition-colors"
               animate={{
                 scale: hasTriggeredHaptic ? 1.2 : 1,
@@ -423,8 +423,8 @@ export function DeckView({ deckId }: DeckViewProps) {
 
       {isCardListVisible && (
         <div className="flex justify-center max-w-2xl mx-auto pt-4 pb-8">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={() => setIsCardListVisible(false)}
             className="rounded-full px-6 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-[10px] font-bold uppercase tracking-widest transition-colors"
           >
@@ -437,7 +437,7 @@ export function DeckView({ deckId }: DeckViewProps) {
       {/* ── Card List (Toggled) ── */}
       <AnimatePresence>
         {isCardListVisible && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
@@ -446,112 +446,112 @@ export function DeckView({ deckId }: DeckViewProps) {
           >
             <div className="pt-4">
               <div className="flex items-center justify-between px-1 pb-3">
-            <p className="text-[11px] uppercase tracking-widest font-bold text-zinc-400 dark:text-zinc-600">
-              Cards
-            </p>
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-600 tabular-nums">
-              {filteredCards.length} of {totalCards}
-            </p>
-          </div>
-
-          {/* Tag Filter Bar */}
-          {totalCards > 0 && (
-            <div className="flex items-center gap-2 px-1 mb-4 overflow-x-auto no-scrollbar pb-1">
-              <Button
-                variant={!selectedTag ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setSelectedTag(null)}
-                className="h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider"
-              >
-                All
-              </Button>
-              {getUniqueTags(deck.cards || []).map(tag => (
-                <Button
-                  key={tag}
-                  variant={selectedTag === tag ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
-                  className="h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap"
-                >
-                  {tag}
-                </Button>
-              ))}
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800 shadow-sm">
-            {filteredCards.map((card) => {
-              const progress = (card as any).progress
-              let stateLabel = ""
-              let dotColor = "bg-zinc-200 dark:bg-zinc-700"
-
-              if (isSpacedRepetitionEnabled && progress?.fsrs_state) {
-                const state = progress.fsrs_state.state
-                if (state === 0) {
-                  dotColor = "bg-zinc-200 dark:bg-zinc-700"
-                  stateLabel = "New"
-                } else if (state === 1 || state === 3) {
-                  dotColor = "bg-zinc-400 dark:bg-zinc-500"
-                  stateLabel = state === 1 ? "Learning" : "Relearning"
-                } else if (state === 2) {
-                  dotColor = "bg-zinc-800 dark:bg-zinc-200"
-                  stateLabel = "Mastered"
-                }
-              }
-
-              return (
-                <div
-                  key={card.id}
-                  className="group flex items-start gap-3 px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
-                >
-                  <div className="pt-1.5 shrink-0">
-                    <div className={`w-2 h-2 rounded-full ${dotColor}`} />
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                      {card.front}
-                    </p>
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500 truncate">
-                      {card.back}
-                    </p>
-                    {card.tag && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {parseTags(card.tag).map(tag => (
-                          <span key={tag} className="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[9px] font-bold uppercase tracking-tight text-zinc-500 dark:text-zinc-400 border border-zinc-200/50 dark:border-zinc-700/50">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 flex items-center gap-3 text-[10px] text-zinc-400 dark:text-zinc-600">
-                    {stateLabel && (
-                      <span className="uppercase tracking-wider font-bold">{stateLabel}</span>
-                    )}
-                    {isSpacedRepetitionEnabled && progress?.due_date && (
-                      <span className="tabular-nums hidden sm:inline">{formatDate(progress.due_date, 'short')}</span>
-                    )}
-                    <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </div>
-              )
-            }) || []}
-
-            {totalCards === 0 && (
-              <div className="py-16 text-center">
-                <p className="text-sm text-zinc-400">No cards yet</p>
-                <Button variant="outline" size="sm" className="mt-4 rounded-full text-xs" asChild>
-                  <Link href={`/deck/${deckId}/add`} style={{ viewTransitionName: 'add-card-button' }}>
-                    <Plus className="h-3.5 w-3.5 mr-1.5" />
-                    Add your first card
-                  </Link>
-                </Button>
+                <p className="text-[11px] uppercase tracking-widest font-bold text-zinc-400 dark:text-zinc-600">
+                  Cards
+                </p>
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-600 tabular-nums">
+                  {filteredCards.length} of {totalCards}
+                </p>
               </div>
-            )}
-          </div>
-        </div>
-      </motion.div>
-    )}
+
+              {/* Tag Filter Bar */}
+              {totalCards > 0 && (
+                <div className="flex items-center gap-2 px-1 mb-4 overflow-x-auto no-scrollbar pb-1">
+                  <Button
+                    variant={!selectedTag ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setSelectedTag(null)}
+                    className="h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                  >
+                    All
+                  </Button>
+                  {getUniqueTags(deck.cards || []).map(tag => (
+                    <Button
+                      key={tag}
+                      variant={selectedTag === tag ? "secondary" : "ghost"}
+                      size="sm"
+                      onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
+                      className="h-7 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap"
+                    >
+                      {tag}
+                    </Button>
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800 shadow-sm">
+                {filteredCards.map((card) => {
+                  const progress = (card as any).progress
+                  let stateLabel = ""
+                  let dotColor = "bg-zinc-200 dark:bg-zinc-700"
+
+                  if (isSpacedRepetitionEnabled && progress?.fsrs_state) {
+                    const state = progress.fsrs_state.state
+                    if (state === 0) {
+                      dotColor = "bg-zinc-200 dark:bg-zinc-700"
+                      stateLabel = "New"
+                    } else if (state === 1 || state === 3) {
+                      dotColor = "bg-zinc-400 dark:bg-zinc-500"
+                      stateLabel = state === 1 ? "Learning" : "Relearning"
+                    } else if (state === 2) {
+                      dotColor = "bg-zinc-800 dark:bg-zinc-200"
+                      stateLabel = "Mastered"
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={card.id}
+                      className="group flex items-start gap-3 px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                    >
+                      <div className="pt-1.5 shrink-0">
+                        <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                          {card.front}
+                        </p>
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500 truncate">
+                          {card.back}
+                        </p>
+                        {card.tag && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {parseTags(card.tag).map(tag => (
+                              <span key={tag} className="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[9px] font-bold uppercase tracking-tight text-zinc-500 dark:text-zinc-400 border border-zinc-200/50 dark:border-zinc-700/50">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-3 text-[10px] text-zinc-400 dark:text-zinc-600">
+                        {stateLabel && (
+                          <span className="uppercase tracking-wider font-bold">{stateLabel}</span>
+                        )}
+                        {isSpacedRepetitionEnabled && progress?.due_date && (
+                          <span className="tabular-nums hidden sm:inline">{formatDate(progress.due_date, 'short')}</span>
+                        )}
+                        <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+                  )
+                }) || []}
+
+                {totalCards === 0 && (
+                  <div className="py-16 text-center">
+                    <p className="text-sm text-zinc-400">No cards yet</p>
+                    <Button variant="outline" size="sm" className="mt-4 rounded-full text-xs" asChild>
+                      <Link href={`/deck/${deckId}/add`} style={{ viewTransitionName: 'add-card-button' }}>
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />
+                        Add your first card
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Export Options Dialog */}

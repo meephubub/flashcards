@@ -16,6 +16,8 @@ import {
   FileText,
   Upload,
   Tag,
+  Lightbulb,
+  LightbulbOff,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -913,6 +915,47 @@ export function DecksActionSearchBar() {
                 ? "login"
                 : "default";
 
+  // Light control functions
+  const triggerLightOn = async () => {
+    try {
+      const token = process.env.VOICEMONKEY_TOKEN;
+      if (!token) {
+        toast.error("VoiceMonkey token not configured");
+        return;
+      }
+      
+      const response = await fetch(`https://api-v2.voicemonkey.io/trigger?token=${token}&device=fan-on`);
+      if (!response.ok) {
+        throw new Error("Failed to trigger light on");
+      }
+      toast.success("Lights turned on");
+      setOpen(false);
+    } catch (error) {
+      console.error("Light on error:", error);
+      toast.error("Failed to turn lights on");
+    }
+  };
+
+  const triggerLightOff = async () => {
+    try {
+      const token = process.env.VOICEMONKEY_TOKEN;
+      if (!token) {
+        toast.error("VoiceMonkey token not configured");
+        return;
+      }
+      
+      const response = await fetch(`https://api-v2.voicemonkey.io/trigger?token=${token}&device=fan-off`);
+      if (!response.ok) {
+        throw new Error("Failed to trigger light off");
+      }
+      toast.success("Lights turned off");
+      setOpen(false);
+    } catch (error) {
+      console.error("Light off error:", error);
+      toast.error("Failed to turn lights off");
+    }
+  };
+
   // ── Action Items ──
   const staticItems: Item[] = [
     {
@@ -1037,6 +1080,20 @@ export function DecksActionSearchBar() {
         setIsImportMarkdownOpen(true);
         setOpen(false);
       },
+    },
+    {
+      id: "lights-on",
+      label: "Lights On",
+      icon: <Lightbulb size={16} strokeWidth={1.5} />,
+      section: "CONTROL",
+      run: triggerLightOn,
+    },
+    {
+      id: "lights-off",
+      label: "Lights Off",
+      icon: <LightbulbOff size={16} strokeWidth={1.5} />,
+      section: "CONTROL",
+      run: triggerLightOff,
     },
   ];
 
