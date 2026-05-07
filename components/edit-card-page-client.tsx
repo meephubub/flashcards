@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/auth-context";
 import { useDecks } from "@/context/deck-context";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { AppSidebar } from "@/components/notes/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -31,6 +32,8 @@ import { Folder, Bold, Italic, Brackets, Sigma, Code2, Tag, ChevronDown, Eye, Bo
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "next-view-transitions";
+import { MultiTagSelector } from "@/components/ui/multi-tag-selector";
+import { getUserTags, getCardTags, updateCardTags } from "@/lib/tags";
 
 const NOTE_TYPES = ["Basic", "Basic (reversed)", "Cloze", "Image Occlusion"];
 
@@ -118,15 +121,17 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
   const { session, isLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const supabase = createClient();
   
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
-  const [tag, setTag] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<number>(deckId);
   const [selectedType, setSelectedType] = useState("Basic");
   const [activeField, setActiveField] = useState<"front" | "back" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [tagInputOpen, setTagInputOpen] = useState(false);
+  const [isLoadingTags, setIsLoadingTags] = useState(false);
 
   const selectedDeck = useMemo(() => decks.find(d => d.id === selectedDeckId), [decks, selectedDeckId]);
   const originalCard = useMemo(() => {
@@ -138,13 +143,54 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
     if (originalCard) {
       setFront(originalCard.front);
       setBack(originalCard.back);
-      setTag(originalCard.tag || "");
+      // Load tags for this card
+      loadCardTags();
     }
   }, [originalCard]);
 
   useEffect(() => {
+    if (session?.user) {
+      loadAvailableTags();
+    }
+  }, [session]);
+
+  useEffect(() => {
     if (!isLoading && !session) router.push("/");
   }, [session, isLoading, router]);
+
+  const loadAvailableTags = async () => {
+    if (!session?.user?.id) return;
+    
+    setIsLoadingTags(true);
+    try {
+      const tags = await getUserTags(supabase, session.user.id);
+      setAvailableTags(tags);
+    } catch (error) {
+      console.error("Error loading available tags:", error);
+    } finally {
+      setIsLoadingTags(false);
+    }
+  };
+
+  const loadCardTags = async () => {
+    if (!originalCard?.id) return;
+    
+    try {
+      const tags = await getCardTags(supabase, originalCard.id);
+      setSelectedTags(tags);
+    } catch (error) {
+      console.error("Error loading card tags:", error);
+    }
+  };
+
+  const handleTagsChange = async (newTags: string[]) => {
+    setSelectedTags(newTags);
+    // Update available tags if new tag was created
+    const newTag = newTags.find(tag => !availableTags.includes(tag));
+    if (newTag && session?.user?.id) {
+      setAvailableTags(prev => [...prev, newTag].sort());
+    }
+  };
 
   const handleSave = async () => {
     if (!front.trim()) {
@@ -154,7 +200,12 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
 
     setIsSaving(true);
     try {
-      await updateCard(selectedDeckId, cardId, front, back, tag || null, originalCard?.front_img_url, originalCard?.back_img_url);
+      // Update card with new multi-tag system
+      await updateCard(selectedDeckId, cardId, front, back, null, originalCard?.front_img_url, originalCard?.back_img_url);
+      
+      // Update tags separately
+      await updateCardTags(supabase, cardId, selectedTags);
+      
       toast({ title: "Card updated", description: "Changes saved successfully." });
 
       // Check if user came from study mode and redirect back with preserved state
@@ -332,62 +383,15 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
                   </AnimatePresence>
                 </div>
                 <div className="px-5 py-3 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/50">
-                  <div className="flex items-center gap-2">
-                  <AnimatePresence mode="wait">
-                    {tagInputOpen ? (
-                      <motion.div
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: "auto", opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="flex items-center gap-1"
-                      >
-                        <input
-                          type="text"
-                          value={tag}
-                          onChange={(e) => setTag(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              setTagInputOpen(false);
-                            }
-                            if (e.key === "Escape") {
-                              setTagInputOpen(false);
-                            }
-                          }}
-                          onBlur={() => setTagInputOpen(false)}
-                          placeholder="Add tags..."
-                          autoFocus
-                          className="w-32 px-2 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                        />
-                      </motion.div>
-                    ) : tag ? (
-                      <motion.button
-                        type="button"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        onClick={() => setTagInputOpen(true)}
-                        className="flex items-center gap-1 px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                      >
-                        <Tag className="w-3 h-3" />
-                        <span className="max-w-[100px] truncate">{tag}</span>
-                      </motion.button>
-                    ) : (
-                      <motion.button
-                        type="button"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setTagInputOpen(true)}
-                        className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
-                      >
-                        <Tag className="w-3.5 h-3.5" />
-                        <span>+ tag</span>
-                      </motion.button>
-                    )}
-                  </AnimatePresence>
-                </div>
+                  <div className="flex-1 mr-4">
+                    <MultiTagSelector
+                      availableTags={availableTags}
+                      selectedTags={selectedTags}
+                      onTagsChange={handleTagsChange}
+                      placeholder="Add tags..."
+                      className="w-full"
+                    />
+                  </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-zinc-500 h-7 px-2"><LayoutGrid className="w-3.5 h-3.5" />{selectedType}<ChevronDown className="w-3 h-3" /></Button>

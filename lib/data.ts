@@ -246,10 +246,17 @@ export async function getDeck(supabase: SupabaseClient, deckId: number, userId: 
     deck.cards = []
 
     try {
-      // Fetch cards for this deck
+      // Fetch cards for this deck with tags
       const { data: cards, error: cardsError } = await supabase
         .from("cards")
-        .select("*")
+        .select(`
+          *,
+          card_tags (
+            tags (
+              name
+            )
+          )
+        `)
         .eq("deck_id", deckId)
         .limit(10000)
 
@@ -258,8 +265,24 @@ export async function getDeck(supabase: SupabaseClient, deckId: number, userId: 
         // We'll still return the deck, just with empty cards array
       } else {
         console.log(`For deck ${deckId} (user ${userId}), received ${cards?.length || 0} cards from DB query:`, cards);
-        // Attach cards to the deck
-        deck.cards = cards || []
+        
+        // Process cards and extract tags
+        const processedCards = (cards || []).map((card: any) => {
+          // Extract tag names from the card_tags relationship
+          const tagNames = card.card_tags 
+            ? card.card_tags.map((ct: any) => ct.tags?.name).filter(Boolean)
+            : [];
+          
+          return {
+            ...card,
+            tag: tagNames.length > 0 ? tagNames.join(', ') : null,
+            // Remove card_tags from the card object to avoid circular references
+            card_tags: undefined
+          };
+        });
+        
+        // Attach processed cards to the deck
+        deck.cards = processedCards
 
         // Fetch progress data for each card
         if (cards && cards.length > 0) {
@@ -1606,8 +1629,8 @@ export async function getAllUniqueTags(supabase: SupabaseClient): Promise<string
       for (const card of cards) {
         if (card.tag) {
           // Parse tags from the tag string (comma-separated or slash-separated)
-          const tags = card.tag.split(/[,\/]/).map(t => t.trim()).filter(t => t.length > 0);
-          tags.forEach(tag => tagSet.add(tag));
+          const tags = card.tag.split(/[,\/]/).map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+          tags.forEach((tag: string) => tagSet.add(tag));
         }
       }
     }

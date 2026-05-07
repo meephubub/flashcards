@@ -918,7 +918,7 @@ export function DecksActionSearchBar() {
   // Light control functions
   const triggerLightOn = async () => {
     try {
-      const token = process.env.VOICEMONKEY_TOKEN;
+      const token = process.env.NEXT_PUBLIC_VOICEMONKEY_TOKEN;
       if (!token) {
         toast.error("VoiceMonkey token not configured");
         return;
@@ -938,7 +938,7 @@ export function DecksActionSearchBar() {
 
   const triggerLightOff = async () => {
     try {
-      const token = process.env.VOICEMONKEY_TOKEN;
+      const token = process.env.NEXT_PUBLIC_VOICEMONKEY_TOKEN;
       if (!token) {
         toast.error("VoiceMonkey token not configured");
         return;
