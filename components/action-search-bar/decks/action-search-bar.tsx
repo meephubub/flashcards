@@ -1601,7 +1601,11 @@ export function DecksActionSearchBar() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.18 }}
-                className="w-[600px] max-w-[95vw] mx-auto"
+                className={`mx-auto ${
+                  effectiveMode === 'deck-pick' || effectiveMode === 'deck-view' || effectiveMode === 'note-pick' 
+                    ? 'w-[780px] max-w-[95vw]' 
+                    : 'w-[600px] max-w-[95vw]'
+                }`}
               >
                 {renderContent()}
               </motion.div>

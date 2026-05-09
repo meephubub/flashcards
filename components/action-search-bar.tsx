@@ -520,7 +520,9 @@ function ActionSearchBar({ actions = allActions }: { actions?: Action[] }) {
               transition={{ duration: 0.15 }}
             >
               <motion.div
-                className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden bg-white/95 dark:bg-neutral-900/90 backdrop-blur-lg border border-black/5 dark:border-white/10 shadow-2xl text-gray-900 dark:text-gray-50"
+                className={`w-full mx-auto rounded-2xl overflow-hidden bg-white/95 dark:bg-neutral-900/90 backdrop-blur-lg border border-black/5 dark:border-white/10 shadow-2xl text-gray-900 dark:text-gray-50 ${
+                  showNoteSearch ? 'max-w-4xl' : 'max-w-2xl'
+                }`}
                 onClick={(e) => e.stopPropagation()}
                 initial={{ opacity: 0, y: 8, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
