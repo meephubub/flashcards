@@ -29,13 +29,13 @@ import { createClient } from "@/lib/supabase/client";
 import { useNoteContextStore } from "@/hooks/use-note-context";
 import { useNoteDialogStore } from "@/hooks/use-note-dialog";
 import { getUniqueTags, parseTags } from "@/lib/text-utils";
-import { 
-  getCardsByTag, 
-  getCardsByMultipleTags, 
-  getCardsByMultipleDecks, 
-  getDueCardsByMultipleTags, 
-  getDueCardsByMultipleDecks, 
-  getAllUniqueTags 
+import {
+  getCardsByTag,
+  getCardsByMultipleTags,
+  getCardsByMultipleDecks,
+  getDueCardsByMultipleTags,
+  getDueCardsByMultipleDecks,
+  getAllUniqueTags,
 } from "@/lib/data";
 import {
   DropdownMenu,
@@ -142,16 +142,20 @@ function DeckView({
   const router = useRouter();
 
   const filteredCards = (deck.cards || []).filter((c) => {
-    const matchesQuery = !cardQuery.trim() || 
+    const matchesQuery =
+      !cardQuery.trim() ||
       c.front.toLowerCase().includes(cardQuery.toLowerCase()) ||
       c.back.toLowerCase().includes(cardQuery.toLowerCase());
-    
+
     const matchesTag = !selectedTag || (c.tag && c.tag.includes(selectedTag));
-    
+
     return matchesQuery && matchesTag;
   });
 
-  const uniqueTags = useMemo(() => getUniqueTags(deck.cards || []), [deck.cards]);
+  const uniqueTags = useMemo(
+    () => getUniqueTags(deck.cards || []),
+    [deck.cards],
+  );
 
   const activeCard = filteredCards[activeCardIdx] ?? null;
 
@@ -241,7 +245,9 @@ function DeckView({
               {uniqueTags.map((tag) => (
                 <button
                   key={tag}
-                  onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
+                  onClick={() =>
+                    setSelectedTag(tag === selectedTag ? null : tag)
+                  }
                   className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors shrink-0 ${
                     tag === selectedTag
                       ? "bg-primary text-primary-foreground"
@@ -742,7 +748,15 @@ function NoteExplorer({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type Mode = "default" | "deck-pick" | "deck-view" | "note-pick" | "tag-view" | "multi-deck-study" | "multi-tag-study" | "login";
+type Mode =
+  | "default"
+  | "deck-pick"
+  | "deck-view"
+  | "note-pick"
+  | "tag-view"
+  | "multi-deck-study"
+  | "multi-tag-study"
+  | "login";
 
 export function DecksActionSearchBar() {
   const [open, setOpen] = useState(false);
@@ -867,7 +881,10 @@ export function DecksActionSearchBar() {
     const handler = () => setIsImportMarkdownOpen(true);
     window.addEventListener("open-import-markdown", handler as EventListener);
     return () =>
-      window.removeEventListener("open-import-markdown", handler as EventListener);
+      window.removeEventListener(
+        "open-import-markdown",
+        handler as EventListener,
+      );
   }, [isIncluded]);
 
   // Reset state when closing
@@ -882,12 +899,26 @@ export function DecksActionSearchBar() {
   }, [open]);
 
   // Parse deck: prefix (with aliases)
-  const isDeckPrefix = query.toLowerCase().startsWith("deck:") || query.toLowerCase().startsWith("decks:");
-  const deckQuery = isDeckPrefix ? (query.toLowerCase().startsWith("deck:") ? query.slice(5) : query.slice(6)).trimStart() : "";
+  const isDeckPrefix =
+    query.toLowerCase().startsWith("deck:") ||
+    query.toLowerCase().startsWith("decks:");
+  const deckQuery = isDeckPrefix
+    ? (query.toLowerCase().startsWith("deck:")
+        ? query.slice(5)
+        : query.slice(6)
+      ).trimStart()
+    : "";
 
   // Parse notes: prefix (with aliases)
-  const isNotePrefix = query.toLowerCase().startsWith("notes:") || query.toLowerCase().startsWith("notes;");
-  const noteQuery = isNotePrefix ? (query.toLowerCase().startsWith("notes:") ? query.slice(6) : query.slice(6)).trimStart() : "";
+  const isNotePrefix =
+    query.toLowerCase().startsWith("notes:") ||
+    query.toLowerCase().startsWith("notes;");
+  const noteQuery = isNotePrefix
+    ? (query.toLowerCase().startsWith("notes:")
+        ? query.slice(6)
+        : query.slice(6)
+      ).trimStart()
+    : "";
 
   // Parse tag: prefix
   const isTagPrefix = query.toLowerCase().startsWith("tag:");
@@ -900,20 +931,20 @@ export function DecksActionSearchBar() {
   const effectiveMode: Mode = isLoginPrefix
     ? "login"
     : isDeckPrefix
-    ? "deck-pick"
-    : isNotePrefix
-      ? "note-pick"
-      : isTagPrefix
-        ? "tag-view"
-        : mode === "deck-view"
-          ? "deck-view"
-          : mode === "multi-tag-study"
-            ? "multi-tag-study"
-            : mode === "multi-deck-study"
-              ? "multi-deck-study"
-              : mode === "login"
-                ? "login"
-                : "default";
+      ? "deck-pick"
+      : isNotePrefix
+        ? "note-pick"
+        : isTagPrefix
+          ? "tag-view"
+          : mode === "deck-view"
+            ? "deck-view"
+            : mode === "multi-tag-study"
+              ? "multi-tag-study"
+              : mode === "multi-deck-study"
+                ? "multi-deck-study"
+                : mode === "login"
+                  ? "login"
+                  : "default";
 
   // Light control functions
   const triggerLightOn = async () => {
@@ -923,8 +954,10 @@ export function DecksActionSearchBar() {
         toast.error("VoiceMonkey token not configured");
         return;
       }
-      
-      const response = await fetch(`https://api-v2.voicemonkey.io/trigger?token=${token}&device=fan-on`);
+
+      const response = await fetch(
+        `https://api-v2.voicemonkey.io/trigger?token=${token}&device=fan-on`,
+      );
       if (!response.ok) {
         throw new Error("Failed to trigger light on");
       }
@@ -943,8 +976,10 @@ export function DecksActionSearchBar() {
         toast.error("VoiceMonkey token not configured");
         return;
       }
-      
-      const response = await fetch(`https://api-v2.voicemonkey.io/trigger?token=${token}&device=fan-off`);
+
+      const response = await fetch(
+        `https://api-v2.voicemonkey.io/trigger?token=${token}&device=fan-off`,
+      );
       if (!response.ok) {
         throw new Error("Failed to trigger light off");
       }
@@ -1047,7 +1082,7 @@ export function DecksActionSearchBar() {
       section: "CREATE",
       run: () => {
         /* Trigger create deck dialog */
-        window.dispatchEvent(new CustomEvent('open-create-deck'));
+        window.dispatchEvent(new CustomEvent("open-create-deck"));
         setOpen(false);
       },
     },
@@ -1121,25 +1156,39 @@ export function DecksActionSearchBar() {
   const allSearchable = [...staticItems, ...dynamicItems, ...noteItems];
 
   const filtered =
-    query.trim() && !isDeckPrefix && !isNotePrefix && !isTagPrefix && !hasLoginPrefix
+    query.trim() &&
+    !isDeckPrefix &&
+    !isNotePrefix &&
+    !isTagPrefix &&
+    !hasLoginPrefix
       ? allSearchable.filter((item) =>
           item.label.toLowerCase().includes(query.toLowerCase()),
         )
       : isTagPrefix
-        ? decks.flatMap(d => (d.cards || []).map(c => ({
-            id: `card-${c.id}`,
-            label: c.front,
-            icon: <Tag size={14} />, // Updated to Tag icon
-            section: "TAG RESULTS",
-            run: () => {
-              const deck = decks.find(dk => dk.id === c.deck_id);
-              if (deck) handleDeckSelect(deck);
-              setOpen(false);
-            }
-          }))).filter(item => {
-            const card = (decks.flatMap(d => d.cards || [])).find(c => `card-${c.id}` === item.id);
-            return card && card.tag && card.tag.toLowerCase().includes(tagQuery.toLowerCase());
-          })
+        ? decks
+            .flatMap((d) =>
+              (d.cards || []).map((c) => ({
+                id: `card-${c.id}`,
+                label: c.front,
+                icon: <Tag size={14} />, // Updated to Tag icon
+                section: "TAG RESULTS",
+                run: () => {
+                  const deck = decks.find((dk) => dk.id === c.deck_id);
+                  if (deck) handleDeckSelect(deck);
+                  setOpen(false);
+                },
+              })),
+            )
+            .filter((item) => {
+              const card = decks
+                .flatMap((d) => d.cards || [])
+                .find((c) => `card-${c.id}` === item.id);
+              return (
+                card &&
+                card.tag &&
+                card.tag.toLowerCase().includes(tagQuery.toLowerCase())
+              );
+            })
         : allSearchable;
 
   const grouped = groupItems(filtered);
@@ -1211,7 +1260,7 @@ export function DecksActionSearchBar() {
 
     setImporting(true);
     const toastId = toast.loading(`Importing ${file.name}...`);
-    
+
     try {
       const {
         data: { user },
@@ -1225,19 +1274,21 @@ export function DecksActionSearchBar() {
       let totalCardsAdded = 0;
 
       // Group results by top-level deck to avoid creating many small decks
-      const groupedByRoot: { [rootName: string]: { subNames: string[], cards: any[] }[] } = {};
+      const groupedByRoot: {
+        [rootName: string]: { subNames: string[]; cards: any[] }[];
+      } = {};
       for (const result of results) {
         const parts = result.deckName.split("::");
         const rootName = parts[0];
-        const subNames = parts.slice(1); 
-        
+        const subNames = parts.slice(1);
+
         if (!groupedByRoot[rootName]) groupedByRoot[rootName] = [];
         groupedByRoot[rootName].push({ subNames, cards: result.cards });
       }
 
       for (const [rootName, entries] of Object.entries(groupedByRoot)) {
         // 1. Create/Find the root deck
-        let deck = decks.find(d => d.name === rootName);
+        let deck = decks.find((d) => d.name === rootName);
         if (!deck) {
           deck = await addDeck(rootName, "Imported from Anki");
         }
@@ -1252,16 +1303,18 @@ export function DecksActionSearchBar() {
             for (const [filename, blob] of Object.entries(cardData.media)) {
               const ext = filename.split(".").pop() || "png";
               const storagePath = `${user.id}/anki/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-              
+
               const { data, error } = await supabase.storage
                 .from("userFiles")
                 .upload(storagePath, blob);
 
               if (data) {
-                const { data: { publicUrl } } = supabase.storage
+                const {
+                  data: { publicUrl },
+                } = supabase.storage
                   .from("userFiles")
                   .getPublicUrl(storagePath);
-                
+
                 front = front.replace(new RegExp(filename, "g"), publicUrl);
                 back = back.replace(new RegExp(filename, "g"), publicUrl);
               }
@@ -1271,22 +1324,23 @@ export function DecksActionSearchBar() {
             const allTags = [...cardData.tags, ...entry.subNames];
 
             // 4. Add the card
-            await addCard(
-              deck.id,
-              front,
-              back,
-              allTags.join(", "), 
-            );
+            await addCard(deck.id, front, back, allTags.join(", "));
             totalCardsAdded++;
           }
         }
       }
 
-      toast.success(`Successfully imported ${totalCardsAdded} cards from Anki!`, { id: toastId });
+      toast.success(
+        `Successfully imported ${totalCardsAdded} cards from Anki!`,
+        { id: toastId },
+      );
       setOpen(false);
     } catch (err) {
       console.error("Anki import error:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to import Anki deck", { id: toastId });
+      toast.error(
+        err instanceof Error ? err.message : "Failed to import Anki deck",
+        { id: toastId },
+      );
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1364,7 +1418,9 @@ export function DecksActionSearchBar() {
             >
               <div className="rounded-lg border border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm font-medium">Enter password to continue</span>
+                  <span className="text-sm font-medium">
+                    Enter password to continue
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -1602,11 +1658,11 @@ export function DecksActionSearchBar() {
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.18 }}
                 className={`mx-auto ${
-                  effectiveMode === 'deck-view' || effectiveMode === 'note-pick'
-                    ? 'w-[900px] max-w-[95vw]' 
-                    : effectiveMode === 'deck-pick'
-                    ? 'w-[780px] max-w-[95vw]' 
-                    : 'w-[600px] max-w-[95vw]'
+                  effectiveMode === "deck-view" || effectiveMode === "note-pick"
+                    ? "w-[780px] max-w-[95vw]"
+                    : effectiveMode === "deck-pick"
+                      ? "w-[600px] max-w-[95vw]"
+                      : "w-[600px] max-w-[95vw]"
                 }`}
               >
                 {renderContent()}
@@ -1616,7 +1672,10 @@ export function DecksActionSearchBar() {
         </AnimatePresence>,
         document.body,
       )}
-      <ImportMarkdownDialog open={isImportMarkdownOpen} onOpenChange={setIsImportMarkdownOpen} />
+      <ImportMarkdownDialog
+        open={isImportMarkdownOpen}
+        onOpenChange={setIsImportMarkdownOpen}
+      />
     </>
   );
 }
