@@ -114,6 +114,10 @@ const data = {
           url: "/question",
         },
         {
+          title: "Exam Practice",
+          url: "/exam",
+        },
+        {
           title: "Email Summaries",
           url: "/summaries",
         },

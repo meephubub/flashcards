@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  experimental: {
+    proxyClientMaxBodySize: '50mb'
+
+  },
   // No path redirects between /notes and /notes/new
   async redirects() {
     return []
