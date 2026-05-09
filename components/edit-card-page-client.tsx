@@ -223,9 +223,12 @@ export function EditCardPageClient({ deckId, cardId }: EditCardPageClientProps) 
         if (reviewIndices) params.set('reviewIndices', reviewIndices);
 
         if (returnTo === 'study') {
-          router.push(`/deck/${selectedDeckId}/study?${params.toString()}`);
+          // Use original deckId (from URL) for study redirect, not selectedDeckId
+          const queryString = params.toString();
+          router.push(`/deck/${deckId}/study${queryString ? `?${queryString}` : ''}`);
         } else {
-          router.push(`/study/all-due?${params.toString()}`);
+          const queryString = params.toString();
+          router.push(`/study/all-due${queryString ? `?${queryString}` : ''}`);
         }
       } else {
         router.push(`/deck/${selectedDeckId}`);
