@@ -881,13 +881,13 @@ export function DecksActionSearchBar() {
     }
   }, [open]);
 
-  // Parse deck: prefix
-  const isDeckPrefix = query.toLowerCase().startsWith("deck:");
-  const deckQuery = isDeckPrefix ? query.slice(5).trimStart() : "";
+  // Parse deck: prefix (with aliases)
+  const isDeckPrefix = query.toLowerCase().startsWith("deck:") || query.toLowerCase().startsWith("decks:");
+  const deckQuery = isDeckPrefix ? (query.toLowerCase().startsWith("deck:") ? query.slice(5) : query.slice(6)).trimStart() : "";
 
-  // Parse notes: prefix
-  const isNotePrefix = query.toLowerCase().startsWith("notes:");
-  const noteQuery = isNotePrefix ? query.slice(6).trimStart() : "";
+  // Parse notes: prefix (with aliases)
+  const isNotePrefix = query.toLowerCase().startsWith("notes:") || query.toLowerCase().startsWith("notes;");
+  const noteQuery = isNotePrefix ? (query.toLowerCase().startsWith("notes:") ? query.slice(6) : query.slice(6)).trimStart() : "";
 
   // Parse tag: prefix
   const isTagPrefix = query.toLowerCase().startsWith("tag:");
@@ -1602,7 +1602,9 @@ export function DecksActionSearchBar() {
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.18 }}
                 className={`mx-auto ${
-                  effectiveMode === 'deck-pick' || effectiveMode === 'deck-view' || effectiveMode === 'note-pick' 
+                  effectiveMode === 'deck-view' || effectiveMode === 'note-pick'
+                    ? 'w-[900px] max-w-[95vw]' 
+                    : effectiveMode === 'deck-pick'
                     ? 'w-[780px] max-w-[95vw]' 
                     : 'w-[600px] max-w-[95vw]'
                 }`}
