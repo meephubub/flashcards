@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast"
 import { MarkdownCardContent } from "@/components/markdown-card-content"
 import { LeechAlert } from "@/components/leech-alert"
 import { resetLeechStatus } from "@/lib/spaced-repetition"
+import { Volume2, VolumeX } from "lucide-react"
 
 interface StudyModeProps {
   deckId: number
@@ -94,10 +95,69 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
   const [reviewIndices, setReviewIndices] = useState<number[]>([])
   const [reviewCurrent, setReviewCurrent] = useState(0)
 
+  // TTS state
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [speakingSide, setSpeakingSide] = useState<"front" | "back" | null>(null)
+
   // Reset leech alert dismissal when card changes
   useEffect(() => {
     setLeechAlertDismissed(false)
   }, [currentCardIndex, reviewCurrent, reviewMode])
+
+  // Stop TTS when card changes
+  useEffect(() => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+      setIsSpeaking(false)
+      setSpeakingSide(null)
+    }
+  }, [currentCardIndex, reviewCurrent, reviewMode])
+
+  // TTS function
+  const speakText = (text: string, side: "front" | "back") => {
+    if (!window.speechSynthesis) return
+
+    // Stop any ongoing speech
+    window.speechSynthesis.cancel()
+
+    // Strip HTML/markdown for TTS
+    const cleanText = text
+      .replace(/{{c\d+::(.*?)}}/g, '$1') // Remove cloze syntax
+      .replace(/[#*_`~\[\]]/g, '') // Remove markdown symbols
+      .replace(/\n+/g, ' ') // Replace newlines with spaces
+      .trim()
+
+    if (!cleanText) return
+
+    const utterance = new SpeechSynthesisUtterance(cleanText)
+    utterance.rate = 1.0
+    utterance.pitch = 1.0
+
+    utterance.onstart = () => {
+      setIsSpeaking(true)
+      setSpeakingSide(side)
+    }
+
+    utterance.onend = () => {
+      setIsSpeaking(false)
+      setSpeakingSide(null)
+    }
+
+    utterance.onerror = () => {
+      setIsSpeaking(false)
+      setSpeakingSide(null)
+    }
+
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+      setIsSpeaking(false)
+      setSpeakingSide(null)
+    }
+  }
 
   // Function to shuffle an array (Fisher-Yates algorithm)
   const shuffleArray = (array: any[]) => {
@@ -1034,7 +1094,25 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
                     <source src={currentCard.audio_url} />
                   </audio>
                 )}
-                <div className="w-full text-center">
+                <div className="w-full text-center relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (isSpeaking && speakingSide === 'front') {
+                        stopSpeaking()
+                      } else {
+                        speakText(parseCloze(currentCard.front, isFlipped), 'front')
+                      }
+                    }}
+                    className="absolute -left-8 top-1/2 -translate-y-1/2 text-neutral-300 hover:text-neutral-600 transition-colors opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-100"
+                    title={isSpeaking && speakingSide === 'front' ? 'Stop speaking' : 'Speak front'}
+                  >
+                    {isSpeaking && speakingSide === 'front' ? (
+                      <VolumeX className="h-4 w-4" />
+                    ) : (
+                      <Volume2 className="h-4 w-4" />
+                    )}
+                  </button>
                   <MarkdownCardContent
                     content={parseCloze(currentCard.front, isFlipped)}
                     className="text-2xl md:text-3xl text-neutral-900 leading-relaxed"
@@ -1072,7 +1150,25 @@ export function StudyMode({ deckId, onProgressInfo, onCardChange, initialSide = 
                         />
                       </div>
                     )}
-                    <div className="w-full text-center">
+                    <div className="w-full text-center relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (isSpeaking && speakingSide === 'back') {
+                            stopSpeaking()
+                          } else {
+                            speakText(currentCard.back, 'back')
+                          }
+                        }}
+                        className="absolute -left-8 top-1/2 -translate-y-1/2 text-neutral-300 hover:text-neutral-600 transition-colors opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-100"
+                        title={isSpeaking && speakingSide === 'back' ? 'Stop speaking' : 'Speak back'}
+                      >
+                        {isSpeaking && speakingSide === 'back' ? (
+                          <VolumeX className="h-4 w-4" />
+                        ) : (
+                          <Volume2 className="h-4 w-4" />
+                        )}
+                      </button>
                       <MarkdownCardContent content={currentCard.back} className="text-xl md:text-2xl text-neutral-600 leading-relaxed" />
                     </div>
                   </motion.div>
