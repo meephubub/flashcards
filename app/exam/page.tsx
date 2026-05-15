@@ -18,13 +18,15 @@ import React, { useState, useRef, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Upload, Loader2, Trash2, PenTool, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
-import * as ort from 'onnxruntime-web'
-import * as pdfjs from 'pdfjs-dist'
 
-// Polyfill for DOMMatrix if not available
-if (typeof window !== 'undefined' && !window.DOMMatrix) {
+// Client-only libraries will be dynamically imported to avoid SSR evaluation errors
+let ort: any = null
+let pdfjs: any = null
+
+// Polyfill for DOMMatrix if not available (only runs in browser)
+if (typeof window !== 'undefined' && !(window as any).DOMMatrix) {
   // @ts-ignore
-  window.DOMMatrix = class DOMMatrix {
+  ;(window as any).DOMMatrix = class DOMMatrix {
     a: number = 1
     b: number = 0
     c: number = 0
@@ -33,18 +35,10 @@ if (typeof window !== 'undefined' && !window.DOMMatrix) {
     f: number = 0
     constructor(init?: string | number[]) {
       if (Array.isArray(init)) {
-        [this.a, this.b, this.c, this.d, this.e, this.f] = init
+        ;[this.a, this.b, this.c, this.d, this.e, this.f] = init
       }
     }
   }
-}
-
-// Set up PDF.js worker
-if (typeof window !== 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url
-  ).toString()
 }
 
 interface Detection {
@@ -58,7 +52,7 @@ interface Detection {
 
 export default function ExamPage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null)
-  const [pdfDoc, setPdfDoc] = useState<pdfjs.PDFDocumentProxy | null>(null)
+  const [pdfDoc, setPdfDoc] = useState<any | null>(null) // pdfjs types are loaded dynamically
   const [numPages, setNumPages] = useState<number>(0)
   const [currentImage, setCurrentImage] = useState<string | null>(null)
   const [currentIndex, setCurrentIndex] = useState<number>(0)
@@ -69,10 +63,10 @@ export default function ExamPage() {
   const [writtenAnswers, setWrittenAnswers] = useState<Record<string, string>>({})
   const [canvasRefs, setCanvasRefs] = useState<Record<string, HTMLCanvasElement | null>>({})
   const [modelLoaded, setModelLoaded] = useState(false)
-  const [session, setSession] = useState<ort.InferenceSession | null>(null)
+  const [session, setSession] = useState<any | null>(null) // ort session
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
-  const renderTaskRef = useRef<pdfjs.RenderTask | null>(null)
+  const renderTaskRef = useRef<any | null>(null)
   
   // Drawing state
   const [activeDrawingQuestion, setActiveDrawingQuestion] = useState<string | null>(null)
@@ -82,29 +76,52 @@ export default function ExamPage() {
   const [penColor, setPenColor] = useState('#000000')
   const [penSize, setPenSize] = useState(2)
 
-  // Load ONNX model on mount
+  // Load client-only libs and model on mount
   useEffect(() => {
-    const loadModel = async () => {
+    const loadResources = async () => {
       try {
-        ort.env.wasm.numThreads = 1
-        ort.env.wasm.simd = true
-        
-        const modelPath = '/models/label/best.onnx'
-        const session = await ort.InferenceSession.create(modelPath)
-        setSession(session)
-        setModelLoaded(true)
-        console.log('ONNX model loaded successfully')
+        // Dynamically import pdfjs and set worker (client only)
+        if (typeof window !== 'undefined') {
+          if (!pdfjs) {
+            pdfjs = await import('pdfjs-dist')
+            pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+              'pdfjs-dist/build/pdf.worker.min.mjs',
+              import.meta.url
+            ).toString()
+          }
+        }
+
+        // Dynamically import ONNX runtime and load model
+        if (typeof window !== 'undefined') {
+          if (!ort) {
+            const ortModule = await import('onnxruntime-web')
+            ort = ortModule
+          }
+
+          try {
+            ort.env.wasm.numThreads = 1
+            ort.env.wasm.simd = true
+
+            const modelPath = '/models/label/best.onnx'
+            const sess = await ort.InferenceSession.create(modelPath)
+            setSession(sess)
+            setModelLoaded(true)
+            console.log('ONNX model loaded successfully')
+          } catch (error) {
+            console.error('Failed to load ONNX model:', error)
+            toast.error('Failed to load detection model. Please convert the model to ONNX format.')
+          }
+        }
       } catch (error) {
-        console.error('Failed to load ONNX model:', error)
-        toast.error('Failed to load detection model. Please convert the model to ONNX format.')
+        console.error('Failed to load client resources:', error)
       }
     }
 
-    loadModel()
+    loadResources()
   }, [])
 
   // Render a specific PDF page to an image
-  const renderPageToImage = useCallback(async (pdf: pdfjs.PDFDocumentProxy, pageNum: number): Promise<string> => {
+  const renderPageToImage = useCallback(async (pdf: any, pageNum: number): Promise<string> => {
     const page = await pdf.getPage(pageNum)
     
     // Cancel any previous render task
@@ -154,6 +171,15 @@ export default function ExamPage() {
     setWrittenAnswers({})
 
     try {
+      // Ensure pdfjs is loaded
+      if (!pdfjs && typeof window !== 'undefined') {
+        pdfjs = await import('pdfjs-dist')
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url
+        ).toString()
+      }
+
       // Load PDF using pdf.js
       const arrayBuffer = await file.arrayBuffer()
       const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise
@@ -179,7 +205,7 @@ export default function ExamPage() {
   const paddingRef = useRef<{ padX: number; padY: number; scale: number }>({ padX: 0, padY: 0, scale: 1 })
 
   // Preprocess image for YOLO model with letterboxing to maintain aspect ratio
-  const preprocessImage = useCallback(async (imageSrc: string): Promise<ort.Tensor> => {
+  const preprocessImage = useCallback(async (imageSrc: string): Promise<any> => {
     return new Promise((resolve, reject) => {
       const img = new Image()
       img.crossOrigin = 'anonymous'
@@ -228,6 +254,12 @@ export default function ExamPage() {
           input[i / 4 + 2 * width * height] = data[i + 2] / 255.0 // B
         }
 
+        // Create tensor using ort if available
+        if (!ort) {
+          reject(new Error('ONNX runtime not loaded'))
+          return
+        }
+
         const tensor = new ort.Tensor('float32', input, [1, 3, 640, 640])
         resolve(tensor)
       }
@@ -255,7 +287,7 @@ export default function ExamPage() {
   }, [])
 
   // Postprocess YOLOv8 output to get detections
-  const postprocessOutput = useCallback((output: ort.Tensor[], originalWidth: number, originalHeight: number): Detection[] => {
+  const postprocessOutput = useCallback((output: any[], originalWidth: number, originalHeight: number): Detection[] => {
     const detections: Detection[] = []
     const [output0] = output
     const data = output0.data as Float32Array
@@ -263,10 +295,6 @@ export default function ExamPage() {
     
     console.log('ONNX Output dims:', dims)
     console.log('ONNX Output sample:', data.slice(0, 10))
-    
-    // YOLOv8 ONNX export format: [batch, 4 + num_classes, num_anchors]
-    // Typically: [1, 84, 8400] for COCO (80 classes) or [1, 6, 8400] for 2 classes
-    // Where 84 = 4 (box) + 80 (classes), 6 = 4 (box) + 2 (classes)
     
     if (dims.length !== 3) {
       console.error('Unexpected output format:', dims)
@@ -285,15 +313,12 @@ export default function ExamPage() {
     const maxDetections = 50 // Cap at 50 detections
     
     // Transpose data: [features, anchors] -> [anchors, features]
-    // Each anchor: [x, y, w, h, class0_score, class1_score, ...]
     for (let i = 0; i < numAnchors; i++) {
-      // Get box coordinates (center x, center y, width, height)
       const x = data[i + 0 * numAnchors] // x center
       const y = data[i + 1 * numAnchors] // y center
       const w = data[i + 2 * numAnchors] // width
       const h = data[i + 3 * numAnchors] // height
       
-      // Find the class with highest score
       let maxClassScore = 0
       let maxClassIdx = 0
       for (let c = 0; c < numClasses; c++) {
@@ -304,46 +329,32 @@ export default function ExamPage() {
         }
       }
       
-      // YOLOv8 doesn't output objectness confidence separately
-      // The class score is the confidence
       const confidence = maxClassScore
       
       if (confidence > confidenceThreshold) {
-        // YOLO outputs x, y, w, h in the 640x640 input image space (including letterbox padding)
-        // We need to transform these back to original image coordinates
-        
-        // Get the padding info from preprocessing
         const { padX, padY, scale } = paddingRef.current
         
-        // Remove padding and scale back to original image coordinates
-        // x, y are center coordinates in 640x640 space
         const imgCenterX = (x - padX) / scale
         const imgCenterY = (y - padY) / scale
         const imgW = w / scale
         const imgH = h / scale
         
-        // Convert from center format to corner format
         const x1 = imgCenterX - imgW / 2
         const y1 = imgCenterY - imgH / 2
         const x2 = imgCenterX + imgW / 2
         const y2 = imgCenterY + imgH / 2
         
-        // Clamp to image bounds
         const clampedX1 = Math.max(0, Math.min(originalWidth, x1))
         const clampedY1 = Math.max(0, Math.min(originalHeight, y1))
         const clampedX2 = Math.max(0, Math.min(originalWidth, x2))
         const clampedY2 = Math.max(0, Math.min(originalHeight, y2))
         
-        // Only add if the box has valid size (at least partially within image)
         if (clampedX2 > clampedX1 && clampedY2 > clampedY1) {
-          // Convert to percentages for responsive UI
           const x1_pct = (clampedX1 / originalWidth) * 100
           const y1_pct = (clampedY1 / originalHeight) * 100
           const x2_pct = (clampedX2 / originalWidth) * 100
           const y2_pct = (clampedY2 / originalHeight) * 100
           
-          // Map class index to class name
-          // Class 0: multiple_choice, Class 1: written_question
           const classNames = ['multiple_choice', 'written_question']
           const className = classNames[maxClassIdx] || `class_${maxClassIdx}`
           
@@ -361,10 +372,8 @@ export default function ExamPage() {
     
     console.log(`Raw detections before NMS: ${detections.length}`)
     
-    // Sort by confidence (highest first)
     detections.sort((a, b) => b.confidence - a.confidence)
     
-    // Apply NMS
     const nmsDetections: Detection[] = []
     for (const det of detections) {
       if (nmsDetections.length >= maxDetections) break
@@ -455,6 +464,7 @@ export default function ExamPage() {
     setWrittenAnswers(prev => ({ ...prev, [questionId]: answer }))
   }, [])
 
+  
 
   const handleReset = useCallback(() => {
     setPdfFile(null)
