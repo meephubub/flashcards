@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Supply and Demand Diagram - Multiple Equilibriums</title>
+        <style>
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                margin: 20px;
+                background-color: #f9f9f9;
+                color: #333;
+            }
+            h1 {
+                text-align: center;
+                color: #2c3e50;
+                margin-bottom: 30px;
+            }
+            .container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+                justify-content: center;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            .controls {
+                flex: 1;
+                min-width: 320px;
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .visualization {
+                flex: 1.5;
+                min-width: 400px;
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .control-group {
+                margin-bottom: 20px;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 15px;
+            }
+            .control-group:last-child {
+                border-bottom: none;
+            }
+            h3 {
+                margin-top: 0;
+                color: #34495e;
+            }
+            .input-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 8px;
+                gap: 10px;
+            }
+            label {
+                font-weight: 500;
+                flex-grow: 1;
+            }
+            input[type="number"] {
+                width: 70px;
+                padding: 4px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-weight: bold;
+                color: #16a085;
+                text-align: center;
+            }
+            input[type="range"] {
+                width: 100%;
+                margin-bottom: 15px;
+            }
+            canvas {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+            .legend {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin-top: 15px;
+                font-size: 0.85em;
+            }
+            .legend-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .box {
+                width: 24px;
+                height: 4px;
+                border-radius: 1px;
+            }
+            .dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+            }
+            .btn-export {
+                display: block;
+                width: 100%;
+                padding: 10px;
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: bold;
+                cursor: pointer;
+                transition: background 0.2s;
+                margin-top: 15px;
+            }
+            .btn-export:hover {
+                background-color: #219653;
+            }
+            .stats-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                background: #f1f2f6;
+                padding: 12px;
+                border-radius: 4px;
+            }
+            .stats-box h4 {
+                margin: 0 0 5px 0;
+                font-size: 0.9em;
+                color: #2c3e50;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Supply & Demand - Multiple Equilibrium Simulator</h1>
+
+        <div class="container">
+            <div class="controls">
+                <div class="control-group">
+                    <h3>Elasticity (Slope)</h3>
+                    <div class="input-row">
+                        <label for="ped-num">Demand Elasticity (PED):</label>
+                        <input
+                            type="number"
+                            id="ped-num"
+                            min="0.2"
+                            max="4.0"
+                            step="0.1"
+                            value="1.0"
+                        />
+                    </div>
+                    <input
+                        type="range"
+                        id="ped-slide"
+                        min="0.2"
+                        max="4.0"
+                        step="0.1"
+                        value="1.0"
+                    />
+
+                    <div class="input-row">
+                        <label for="pes-num">Supply Elasticity (PES):</label>
+                        <input
+                            type="number"
+                            id="pes-num"
+                            min="0.2"
+                            max="4.0"
+                            step="0.1"
+                            value="1.0"
+                        />
+                    </div>
+                    <input
+                        type="range"
+                        id="pes-slide"
+                        min="0.2"
+                        max="4.0"
+                        step="0.1"
+                        value="1.0"
+                    />
+                </div>
+
+                <div class="control-group">
+                    <h3>Curve Shifts (Creates D₂ and S₂)</h3>
+                    <div class="input-row">
+                        <label for="demand-shift-num"
+                            >Demand Shift (Left/Right):</label
+                        >
+                        <input
+                            type="number"
+                            id="demand-shift-num"
+                            min="-120"
+                            max="120"
+                            step="5"
+                            value="50"
+                        />
+                    </div>
+                    <input
+                        type="range"
+                        id="demand-shift-slide"
+                        min="-120"
+                        max="120"
+                        step="5"
+                        value="50"
+                    />
+
+                    <div class="input-row">
+                        <label for="supply-shift-num"
+                            >Supply Shift (Left/Right):</label
+                        >
+                        <input
+                            type="number"
+                            id="supply-shift-num"
+                            min="-120"
+                            max="120"
+                            step="5"
+                            value="0"
+                        />
+                    </div>
+                    <input
+                        type="range"
+                        id="supply-shift-slide"
+                        min="-120"
+                        max="120"
+                        step="5"
+                        value="0"
+                    />
+                </div>
+
+                <div class="control-group">
+                    <h3>Equilibrium Tracking</h3>
+                    <div class="stats-grid">
+                        <div
+                            class="stats-box"
+                            style="
+                                border-right: 1px solid #ccc;
+                                padding-right: 5px;
+                            "
+                        >
+                            <h4>Original (E₁)</h4>
+                            <p style="margin: 2px 0; font-size: 0.9em">
+                                <strong>P₁*:</strong> <span id="eq1-p">--</span>
+                            </p>
+                            <p style="margin: 2px 0; font-size: 0.9em">
+                                <strong>Q₁*:</strong> <span id="eq1-q">--</span>
+                            </p>
+                        </div>
+                        <div class="stats-box" style="padding-left: 5px">
+                            <h4>New (E₂)</h4>
+                            <p
+                                style="
+                                    margin: 2px 0;
+                                    font-size: 0.9em;
+                                    color: #c0392b;
+                                "
+                            >
+                                <strong>P₂*:</strong> <span id="eq2-p">--</span>
+                            </p>
+                            <p
+                                style="
+                                    margin: 2px 0;
+                                    font-size: 0.9em;
+                                    color: #c0392b;
+                                "
+                            >
+                                <strong>Q₂*:</strong> <span id="eq2-q">--</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-export" id="btn-svg">
+                    Export Diagram as SVG
+                </button>
+            </div>
+
+            <div class="visualization">
+                <canvas id="diagram" width="550" height="550"></canvas>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="box" style="background: #7f8c8d"></div>
+                        Base Demand (D₁)
+                    </div>
+                    <div class="legend-item">
+                        <div class="box" style="background: #e74c3c"></div>
+                        Shifted Demand (D₂)
+                    </div>
+                    <div class="legend-item">
+                        <div class="box" style="background: #bdc3c7"></div>
+                        Base Supply (S₁)
+                    </div>
+                    <div class="legend-item">
+                        <div class="box" style="background: #3498db"></div>
+                        Shifted Supply (S₂)
+                    </div>
+                    <div class="legend-item">
+                        <div class="dot" style="background: #7f8c8d"></div>
+                        Initial Eq. (E₁)
+                    </div>
+                    <div class="legend-item">
+                        <div class="dot" style="background: #27ae60"></div>
+                        New Eq. (E₂)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const canvas = document.getElementById("diagram");
+            const ctx = canvas.getContext("2d");
+
+            // Synchronize Sliders and Precision Numeric Boxes
+            function setupDualInput(sliderId, numberId) {
+                const slider = document.getElementById(sliderId);
+                const number = document.getElementById(numberId);
+                slider.addEventListener("input", () => {
+                    number.value = slider.value;
+                    drawGraph();
+                });
+                number.addEventListener("input", () => {
+                    if (parseFloat(number.value) > parseFloat(number.max))
+                        number.value = number.max;
+                    if (parseFloat(number.value) < parseFloat(number.min))
+                        number.value = number.min;
+                    slider.value = number.value;
+                    drawGraph();
+                });
+            }
+
+            setupDualInput("ped-slide", "ped-num");
+            setupDualInput("pes-slide", "pes-num");
+            setupDualInput("demand-shift-slide", "demand-shift-num");
+            setupDualInput("supply-shift-slide", "supply-shift-num");
+
+            // Layout Parameters
+            const padding = 65;
+            const graphWidth = canvas.width - padding * 2;
+            const graphHeight = canvas.height - padding * 2;
+            const originX = padding;
+            const originY = canvas.height - padding;
+
+            let globalState = {}; // Cached data container for vector conversion
+
+            // Boundary intersection resolver (stops lines stretching past axes)
+            function getBoundedPoints(slope, intercept, isDemand) {
+                let points = [];
+                const s = isDemand ? -slope : slope;
+
+                if (intercept >= 0 && intercept <= graphHeight)
+                    points.push({ x: 0, y: intercept });
+                let yAtXMax = s * graphWidth + intercept;
+                if (yAtXMax >= 0 && yAtXMax <= graphHeight)
+                    points.push({ x: graphWidth, y: yAtXMax });
+                let xAtY0 = -intercept / s;
+                if (xAtY0 >= 0 && xAtY0 <= graphWidth)
+                    points.push({ x: xAtY0, y: 0 });
+                let xAtYMax = (graphHeight - intercept) / s;
+                if (xAtYMax >= 0 && xAtYMax <= graphWidth)
+                    points.push({ x: xAtYMax, y: graphHeight });
+
+                let unique = [];
+                points.forEach((p) => {
+                    if (
+                        !unique.some(
+                            (up) =>
+                                Math.abs(up.x - p.x) < 0.01 &&
+                                Math.abs(up.y - p.y) < 0.01,
+                        )
+                    )
+                        unique.push(p);
+                });
+                return unique.sort((a, b) => a.x - b.x);
+            }
+
+            function calculateState() {
+                const ped =
+                    parseFloat(document.getElementById("ped-num").value) || 1;
+                const pes =
+                    parseFloat(document.getElementById("pes-num").value) || 1;
+                const dShift =
+                    parseFloat(
+                        document.getElementById("demand-shift-num").value,
+                    ) || 0;
+                const sShift =
+                    parseFloat(
+                        document.getElementById("supply-shift-num").value,
+                    ) || 0;
+
+                const midX = graphWidth / 2;
+                const midY = graphHeight / 2;
+                const dSlope = 1 / ped;
+                const sSlope = 1 / pes;
+
+                // Base Intercepts (D1, S1)
+                const baseDIntercept = midY + dSlope * midX;
+                const baseSIntercept = midY - sSlope * midX;
+
+                // Shifted Intercepts (D2, S2)
+                const shiftDIntercept = baseDIntercept + dSlope * dShift;
+                const shiftSIntercept = baseSIntercept - sSlope * sShift;
+
+                // Generate verified coordinates inside bounds
+                const d1Points = getBoundedPoints(dSlope, baseDIntercept, true);
+                const d2Points = getBoundedPoints(
+                    dSlope,
+                    shiftDIntercept,
+                    true,
+                );
+                const s1Points = getBoundedPoints(
+                    sSlope,
+                    baseSIntercept,
+                    false,
+                );
+                const s2Points = getBoundedPoints(
+                    sSlope,
+                    shiftSIntercept,
+                    false,
+                );
+
+                // Intersection 1 (Base: D1 crossing S1)
+                const eq1X =
+                    (baseDIntercept - baseSIntercept) / (dSlope + sSlope);
+                const eq1Y = -dSlope * eq1X + baseDIntercept;
+
+                // Intersection 2 (New market position: D2 crossing S2)
+                const eq2X =
+                    (shiftDIntercept - shiftSIntercept) / (dSlope + sSlope);
+                const eq2Y = -dSlope * eq2X + shiftDIntercept;
+
+                return {
+                    d1Points,
+                    d2Points,
+                    s1Points,
+                    s2Points,
+                    eq1X,
+                    eq1Y,
+                    eq2X,
+                    eq2Y,
+                };
+            }
+
+            function drawGraph() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const state = calculateState();
+                globalState = state;
+
+                // Draw Core Frame Structure
+                ctx.beginPath();
+                ctx.strokeStyle = "#2c3e50";
+                ctx.lineWidth = 2.5;
+                ctx.moveTo(originX, padding - 15);
+                ctx.lineTo(originX, originY);
+                ctx.lineTo(canvas.width - padding + 15, originY);
+                ctx.stroke();
+
+                // Label Structural Dimensions
+                ctx.font = "bold 14px sans-serif";
+                ctx.fillStyle = "#2c3e50";
+                ctx.fillText("Price (P)", originX - 55, padding - 5);
+                ctx.fillText(
+                    "Quantity (Q)",
+                    canvas.width - padding - 10,
+                    originY + 32,
+                );
+
+                // Helper line drawer
+                function drawCurve(points, color, label, isDashed = false) {
+                    if (points.length < 2) return;
+                    ctx.beginPath();
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = isDashed ? 2 : 3;
+                    if (isDashed) ctx.setLineDash([6, 4]);
+                    ctx.moveTo(originX + points[0].x, originY - points[0].y);
+                    ctx.lineTo(originX + points[1].x, originY - points[1].y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Place Label text tags near edge terminations
+                    ctx.fillStyle = color;
+                    ctx.font = "bold 13px sans-serif";
+                    ctx.fillText(
+                        label,
+                        originX + points[1].x + 6,
+                        originY - points[1].y + 4,
+                    );
+                }
+
+                // Draw all 4 curves sequentially
+                drawCurve(state.d1Points, "#7f8c8d", "D₁");
+                drawCurve(state.d2Points, "#e74c3c", "D₂");
+                drawCurve(state.s1Points, "#bdc3c7", "S₁");
+                drawCurve(state.s2Points, "#3498db", "S₂");
+
+                // Projection dashboard elements tracking
+                function drawEquilibrium(
+                    eqX,
+                    eqY,
+                    dotColor,
+                    pLabel,
+                    qLabel,
+                    pId,
+                    qId,
+                    dashStyle,
+                ) {
+                    const pDisplay = document.getElementById(pId);
+                    const qDisplay = document.getElementById(qId);
+
+                    if (
+                        eqX >= 0 &&
+                        eqX <= graphWidth &&
+                        eqY >= 0 &&
+                        eqY <= graphHeight
+                    ) {
+                        const absX = originX + eqX;
+                        const absY = originY - eqY;
+
+                        // Plot coordinates dashed lines
+                        ctx.beginPath();
+                        ctx.strokeStyle = dotColor;
+                        ctx.lineWidth = 1.2;
+                        ctx.setLineDash(dashStyle);
+                        ctx.moveTo(absX, absY);
+                        ctx.lineTo(originX, absY);
+                        ctx.moveTo(absX, absY);
+                        ctx.lineTo(absX, originY);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+
+                        // Intersection Circle Node
+                        ctx.beginPath();
+                        ctx.fillStyle = dotColor;
+                        ctx.arc(absX, absY, 5.5, 0, 2 * Math.PI);
+                        ctx.fill();
+
+                        // Text Indicators on Axis Lines
+                        ctx.font = "bold 12px sans-serif";
+                        ctx.fillText(pLabel, originX - 25, absY + 4);
+                        ctx.fillText(qLabel, absX - 8, originY + 18);
+
+                        pDisplay.innerText = (eqY * 0.5).toFixed(2);
+                        qDisplay.innerText = (eqX * 0.5).toFixed(0);
+                    } else {
+                        pDisplay.innerText = "N/A";
+                        qDisplay.innerText = "N/A";
+                    }
+                }
+
+                // Equilibrium E1 (Original Context)
+                drawEquilibrium(
+                    state.eq1X,
+                    state.eq1Y,
+                    "#7f8c8d",
+                    "P₁",
+                    "Q₁",
+                    "eq1-p",
+                    "eq1-q",
+                    [4, 4],
+                );
+
+                // Equilibrium E2 (Post Shift Context)
+                drawEquilibrium(
+                    state.eq2X,
+                    state.eq2Y,
+                    "#27ae60",
+                    "P₂",
+                    "Q₂",
+                    "eq2-p",
+                    "eq2-q",
+                    [3, 3],
+                );
+            }
+
+            // Vector Export Compiler
+            document.getElementById("btn-svg").addEventListener("click", () => {
+                const s = globalState;
+
+                function svgLine(pts, color, lbl, dashed = false) {
+                    if (pts.length < 2) return "";
+                    const dashAttr = dashed ? 'stroke-dasharray="6,4"' : "";
+                    return `
+                <line x1="${originX + pts[0].x}" y1="${originY - pts[0].y}" x2="${originX + pts[1].x}" y2="${originY - pts[1].y}" stroke="${color}" stroke-width="${dashed ? 2 : 3}" ${dashAttr} />
+                <text x="${originX + pts[1].x + 6}" y="${originY - pts[1].y + 4}" fill="${color}" font-family="sans-serif" font-weight="bold" font-size="13">${lbl}</text>`;
+                }
+
+                function svgEq(eqX, eqY, color, pLbl, qLbl, dash) {
+                    if (
+                        !(
+                            eqX >= 0 &&
+                            eqX <= graphWidth &&
+                            eqY >= 0 &&
+                            eqY <= graphHeight
+                        )
+                    )
+                        return "";
+                    const absX = originX + eqX;
+                    const absY = originY - eqY;
+                    return `
+                <line x1="${absX}" y1="${absY}" x2="${originX}" y2="${absY}" stroke="${color}" stroke-width="1.2" stroke-dasharray="${dash}" />
+                <line x1="${absX}" y1="${absY}" x2="${absX}" y2="${originY}" stroke="${color}" stroke-width="1.2" stroke-dasharray="${dash}" />
+                <circle cx="${absX}" cy="${absY}" r="5.5" fill="${color}" />
+                <text x="${originX - 25}" y="${absY + 4}" fill="${color}" font-family="sans-serif" font-weight="bold" font-size="12">${pLbl}</text>
+                <text x="${absX - 8}" y="${originY + 18}" fill="${color}" font-family="sans-serif" font-weight="bold" font-size="12">${qLbl}</text>`;
+                }
+
+                const outSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 550 550" width="550" height="550" style="background:#ffffff;">
+                <line x1="${originX}" y1="${padding - 15}" x2="${originX}" y2="${originY}" stroke="#2c3e50" stroke-width="2.5" />
+                <line x1="${originX}" y1="${originY}" x2="${canvas.width - padding + 15}" y2="${originY}" stroke="#2c3e50" stroke-width="2.5" />
+                <text x="${originX - 55}" y="${padding - 5}" fill="#2c3e50" font-family="sans-serif" font-weight="bold" font-size="14">Price (P)</text>
+                <text x="${canvas.width - padding - 10}" y="${originY + 32}" fill="#2c3e50" font-family="sans-serif" font-weight="bold" font-size="14">Quantity (Q)</text>
+                ${svgLine(s.d1Points, "#7f8c8d", "D₁")}
+                ${svgLine(s.d2Points, "#e74c3c", "D₂")}
+                ${svgLine(s.s1Points, "#bdc3c7", "S₁")}
+                ${svgLine(s.s2Points, "#3498db", "S₂")}
+                ${svgLine(s.d2Points.length && s.d1Points.length ? [] : [], "#fff", "")}
+                ${svgEq(s.eq1X, s.eq1Y, "#7f8c8d", "P₁", "Q₁", "4,4")}
+                ${svgEq(s.eq2X, s.eq2Y, "#27ae60", "P₂", "Q₂", "3,3")}
+            </svg>`;
+
+                const blob = new Blob([outSvg], {
+                    type: "image/svg+xml;charset=utf-8",
+                });
+                const downloadLink = document.createElement("a");
+                downloadLink.href = URL.createObjectURL(blob);
+                downloadLink.download = "multi_equilibrium_diagram.svg";
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            });
+
+            // First paint trigger
+            drawGraph();
+        </script>
+    </body>
+</html>
