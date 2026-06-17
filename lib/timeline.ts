@@ -1,4 +1,5 @@
 import { type TimelineEvent, type TimelineDay, type TimelineRange, type WorkloadForecast, type TimelineStats } from './timeline-types'
+import { getEffectiveDueDate } from './spaced-repetition'
 import { format, parseISO, isSameDay, isPast, isFuture, isWithinInterval, addDays, startOfDay, endOfDay, eachDayOfInterval } from 'date-fns'
 
 const TYPE_COLORS = {
@@ -49,13 +50,14 @@ export function aggregateTimelineEvents(
 
   // Process card reviews (due cards)
   cardReviews.forEach(card => {
-    if (!card.due_date) return
+    const effectiveDue = getEffectiveDueDate(card)
+    if (!effectiveDue) return
     events.push({
       id: `review-${card.id}`,
       type: 'review',
       title: card.front?.substring(0, 50) || 'Card review',
       description: `Due for review`,
-      startDate: card.due_date.split('T')[0],
+      startDate: effectiveDue.toISOString().split('T')[0],
       color: TYPE_COLORS.review.dot,
       category: 'review',
       priority: 'medium',

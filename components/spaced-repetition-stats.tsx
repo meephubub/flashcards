@@ -19,6 +19,7 @@ import { GCSEAnalytics, getGCSEAnalytics } from "@/lib/stats"
 import { useAuth } from "@/context/auth-context"
 import { createClient } from "@/lib/supabase/client"
 import { useMemo } from "react"
+import { isProgressDue } from "@/lib/spaced-repetition"
 
 interface SpacedRepetitionStatsProps {
   deckId: number
@@ -51,12 +52,9 @@ export function SpacedRepetitionStats({ deckId }: SpacedRepetitionStatsProps) {
   const totalCards = deck.cards.length
   const cardsWithProgress = deck.cards.filter((card) => (card as any).progress).length
 
-  const now = new Date()
   const dueCards = deck.cards.filter((card) => {
     const progress = (card as any).progress
-    if (!progress) return true
-    const dueDate = new Date(progress.due_date)
-    return now >= dueDate
+    return isProgressDue(progress)
   }).length
 
   const percentInSystem = totalCards > 0 ? Math.round((cardsWithProgress / totalCards) * 100) : 0

@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getCachedExamData } from "@/lib/exam-cache"
 import type { Card } from "@/lib/supabase"
 import { formatDate } from "@/lib/date-utils"
+import { getEffectiveDueDate } from "@/lib/spaced-repetition"
 import { ScheduleExamModal } from "@/components/schedule-exam-modal"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion"
@@ -200,7 +201,8 @@ export function DeckView({ deckId }: DeckViewProps) {
           values.push(state)
         }
         if (exportOptions.includeNextReview) {
-          const nextReview = progress?.due_date ? formatDate(progress.due_date, 'short') : 'N/A'
+          const effectiveDue = progress ? getEffectiveDueDate(progress) : null
+          const nextReview = effectiveDue ? formatDate(effectiveDue.toISOString(), 'short') : 'N/A'
           values.push(nextReview)
         }
         if (exportOptions.includeEaseFactor) {
@@ -499,6 +501,8 @@ export function DeckView({ deckId }: DeckViewProps) {
                     }
                   }
 
+                  const effectiveDue = progress ? getEffectiveDueDate(progress) : null
+
                   return (
                     <div
                       key={card.id}
@@ -528,8 +532,8 @@ export function DeckView({ deckId }: DeckViewProps) {
                         {stateLabel && (
                           <span className="uppercase tracking-wider font-bold">{stateLabel}</span>
                         )}
-                        {isSpacedRepetitionEnabled && progress?.due_date && (
-                          <span className="tabular-nums hidden sm:inline">{formatDate(progress.due_date, 'short')}</span>
+                        {isSpacedRepetitionEnabled && effectiveDue && (
+                          <span className="tabular-nums hidden sm:inline">{formatDate(effectiveDue.toISOString(), 'short')}</span>
                         )}
                         <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>

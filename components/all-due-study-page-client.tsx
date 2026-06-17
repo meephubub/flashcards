@@ -166,7 +166,7 @@ import { useDecks } from "@/context/deck-context";
 import { useSettings } from "@/context/settings-context";
 import { useToast } from "@/hooks/use-toast";
 import type { ConfidenceRating } from "@/lib/spaced-repetition";
-import { calculateNextReview, DEFAULT_CARD_PROGRESS, getNextReviewText } from "@/lib/spaced-repetition";
+import { calculateNextReview, DEFAULT_CARD_PROGRESS, getEffectiveDueDate, getNextReviewText, isProgressDue } from "@/lib/spaced-repetition";
 import { haptics } from "@/lib/haptics";
 import { MarkdownCardContent } from "@/components/markdown-card-content";
 import { motion, AnimatePresence } from "framer-motion";
@@ -260,17 +260,14 @@ function AllDueStudyMode({
     
     switch (mode) {
       case "due":
-        // Cards with due_date <= now
-        return allCards.filter(c => {
-          if (!c.progress?.due_date) return false;
-          return new Date(c.progress.due_date) <= now;
-        });
+        return allCards.filter(c => c.progress && isProgressDue(c.progress, now));
       
       case "ahead":
         // Cards due within X days
         return allCards.filter(c => {
-          if (!c.progress?.due_date) return c.progress?.repetitions > 0;
-          const dueDate = new Date(c.progress.due_date);
+          if (!c.progress) return false;
+          const dueDate = getEffectiveDueDate(c.progress);
+          if (!dueDate) return c.progress.repetitions > 0;
           const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           return daysUntilDue <= days && daysUntilDue >= 0;
         });

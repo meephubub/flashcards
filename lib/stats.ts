@@ -1,6 +1,7 @@
 // stats.ts - Data fetching utilities for FSRS statistics
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Card } from './supabase'
+import { isProgressDue } from './spaced-repetition'
 
 export interface UserStats {
     totalCards: number
@@ -67,10 +68,7 @@ export async function getUserStats(supabase: SupabaseClient, userId: string): Pr
             .eq('user_id', userId)
 
         // Calculate due today from progress records
-        const cardsDueToday = progressRecords?.filter(record => {
-            const dueDate = new Date(record.due_date)
-            return dueDate <= today
-        }).length || 0
+        const cardsDueToday = progressRecords?.filter(record => isProgressDue(record, today)).length || 0
 
         // Get cards studied today
         const todayStart = new Date()

@@ -1,7 +1,7 @@
 // data-storage.ts
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Deck, Card, CardProgressInput, CardProgress as SupabaseCardProgress, ParsedDeckImport } from "./supabase"
-import type { CardProgress } from "./spaced-repetition"
+import { isProgressDue, type CardProgress } from "./spaced-repetition"
 import { generateFlashcards } from "./groq"
 
 // Initialize data storage - no-op since we're using Supabase
@@ -1077,8 +1077,7 @@ export async function getDueCards(supabase: SupabaseClient, deckId: number): Pro
         lastResult: leechData?.lastResult as 'pass' | 'fail' | undefined,
       };
 
-      const dueDate = new Date(progress.due_date);
-      if (now >= dueDate) {
+      if (isProgressDue(progress, now)) {
         dueCards.push({
           ...typedCard,
           progress: progressWithLeech,
@@ -1488,8 +1487,7 @@ export async function getDueCardsByMultipleTags(supabase: SupabaseClient, tags: 
         continue;
       }
 
-      const dueDate = new Date(progress.due_date);
-      if (now >= dueDate) {
+      if (isProgressDue(progress, now)) {
         dueCards.push(typedCard);
       }
     }
@@ -1585,8 +1583,7 @@ export async function getDueCardsByMultipleDecks(supabase: SupabaseClient, deckI
         continue;
       }
 
-      const dueDate = new Date(progress.due_date);
-      if (now >= dueDate) {
+      if (isProgressDue(progress, now)) {
         dueCards.push(typedCard);
       }
     }

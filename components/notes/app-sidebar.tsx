@@ -159,10 +159,6 @@ const data = {
           title: "Google Drive",
           url: "https://drive.google.com/",
         },
-        {
-          title: "Daos",
-          url: "https://damealiceowens.herts.sch.uk/",
-        },
       ],
     },
     {
@@ -259,13 +255,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         });
         if (!mounted) return;
         setUpcomingTasks(
-          pending
-            .slice(0, 5)
-            .map((m) => ({
-              id: Number(m.id),
-              subject: m.subject,
-              due_date: m.due_date,
-            })),
+          pending.slice(0, 5).map((m) => ({
+            id: Number(m.id),
+            subject: m.subject,
+            due_date: m.due_date,
+          })),
         );
         return;
       }

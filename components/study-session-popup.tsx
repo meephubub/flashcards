@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import type { Deck } from "@/context/deck-context"
+import { getEffectiveDueDate, isProgressDue } from "@/lib/spaced-repetition"
 
 interface StudyOption {
   id: string
@@ -29,11 +30,9 @@ type CardStatus = "new" | "learning" | "due"
 
 function getCardStatus(card: any): CardStatus {
   if (!card.progress) return "new"
-  const { repetitions, due_date } = card.progress
-  const now = new Date()
-  const due = new Date(due_date)
-  
-  if (now >= due) return "due"
+  const { repetitions } = card.progress
+
+  if (isProgressDue(card.progress)) return "due"
   if (repetitions >= 2) return "learning"
   return "new"
 }
@@ -71,18 +70,16 @@ export function StudySessionPopup({ open, onOpenChange, decks }: StudySessionPop
     // Due now: cards with due_date <= now
     const dueNowCount = decks.reduce((acc, deck) => {
       if (!deck.cards) return acc
-      return acc + deck.cards.filter((c: any) => {
-        if (!c.progress?.due_date) return false
-        return new Date(c.progress.due_date) <= now
-      }).length
+      return acc + deck.cards.filter((c: any) => c.progress && isProgressDue(c.progress, now)).length
     }, 0)
 
     // Study ahead: due cards + cards due within selected days
     const aheadCount = decks.reduce((acc, deck) => {
       if (!deck.cards) return acc
       return acc + deck.cards.filter((c: any) => {
-        if (!c.progress?.due_date) return c.progress?.repetitions > 0
-        const dueDate = new Date(c.progress.due_date)
+        if (!c.progress) return false
+        const dueDate = getEffectiveDueDate(c.progress)
+        if (!dueDate) return c.progress.repetitions > 0
         const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         return daysUntilDue <= days && daysUntilDue >= 0
       }).length

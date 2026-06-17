@@ -20,6 +20,7 @@ import { StudySessionPopup } from "@/components/study-session-popup"
 import { DeckOptionsMenu } from "@/components/deck-options-menu"
 import { formatDate } from "@/lib/date-utils"
 import { cn } from "@/lib/utils"
+import { isProgressDue } from "@/lib/spaced-repetition"
 
 type CardStatus = "new" | "learning" | "mastered" | "due"
 
@@ -32,11 +33,9 @@ function getGreeting(): string {
 
 function getCardStatus(card: any): CardStatus {
   if (!card.progress) return "new"
-  const { repetitions, ease_factor, due_date } = card.progress
-  const now = new Date()
-  const due = new Date(due_date)
-  
-  if (now >= due) return "due"
+  const { repetitions, ease_factor } = card.progress
+
+  if (isProgressDue(card.progress)) return "due"
   if (repetitions >= 5 && ease_factor >= 2.5) return "mastered"
   if (repetitions >= 2) return "learning"
   return "new"

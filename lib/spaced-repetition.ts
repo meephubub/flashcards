@@ -19,6 +19,47 @@ export interface CardProgress {
 
 export type ConfidenceRating = 0 | 1 | 2 | 3 | 4 | 5
 
+/** Progress from DB (snake_case) or app layer (camelCase) */
+export type ProgressLike = {
+  dueDate?: string
+  due_date?: string | null
+  fsrsState?: { due?: string | Date } | null
+  fsrs_state?: { due?: string | Date } | null
+}
+
+/**
+ * Resolve the authoritative due date for a card.
+ * FSRS stores the scheduled date in fsrs_state.due; prefer that over due_date.
+ */
+export function getEffectiveDueDate(progress: ProgressLike | null | undefined): Date | null {
+  if (!progress) return null
+
+  const fsrsDue = progress.fsrsState?.due ?? progress.fsrs_state?.due
+  if (fsrsDue != null && fsrsDue !== "") {
+    return new Date(fsrsDue)
+  }
+
+  const dueDate = progress.dueDate ?? progress.due_date
+  if (dueDate != null && dueDate !== "") {
+    return new Date(dueDate)
+  }
+
+  return null
+}
+
+/**
+ * Check if a progress record is due for review (now or past).
+ * Cards with no progress are treated as due (new cards).
+ */
+export function isProgressDue(progress: ProgressLike | null | undefined, now: Date = new Date()): boolean {
+  if (!progress) return true
+
+  const dueDate = getEffectiveDueDate(progress)
+  if (!dueDate || Number.isNaN(dueDate.getTime())) return true
+
+  return now >= dueDate
+}
+
 // Leech threshold - card becomes a leech after this many consecutive failures
 export const LEECH_THRESHOLD = 3
 
@@ -48,9 +89,11 @@ export function calculateNextReview(
   const grade = ratingToGrade(rating)
 
   // Reconstruct the FSRS card object and ensure Dates are actual Date objects
+  const rawProgress = currentProgress as CardProgress & ProgressLike
+  const fsrsState = rawProgress.fsrsState ?? rawProgress.fsrs_state
   let baseCard: FsrsCard;
-  if (currentProgress.fsrsState) {
-    const state = currentProgress.fsrsState as any;
+  if (fsrsState) {
+    const state = fsrsState as any;
     baseCard = {
       ...state,
       due: new Date(state.due),
@@ -58,7 +101,8 @@ export function calculateNextReview(
     } as FsrsCard;
   } else {
     // For legacy cards or new cards, start fresh
-    baseCard = createEmptyCard(new Date(currentProgress.dueDate || now))
+    const effectiveDue = getEffectiveDueDate(rawProgress)
+    baseCard = createEmptyCard(effectiveDue ?? now)
     // If it's a new card (reps=0), make sure it's due now for the scheduler
     if (currentProgress.repetitions === 0) {
       baseCard.due = now
@@ -110,16 +154,14 @@ function ratingToGrade(rating: ConfidenceRating): Grade {
  * Check if a card is due for review
  */
 export function isCardDue(progress: CardProgress): boolean {
-  const now = new Date()
-  const dueDate = new Date(progress.dueDate)
-  return now >= dueDate
+  return isProgressDue(progress)
 }
 
 /**
  * Get a human-readable string for the next review date
  */
 export function getNextReviewText(progress: CardProgress): string {
-  const dueDate = new Date(progress.dueDate)
+  const dueDate = getEffectiveDueDate(progress) ?? new Date(progress.dueDate)
   const now = new Date()
 
   if (dueDate <= now) {

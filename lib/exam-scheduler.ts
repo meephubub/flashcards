@@ -3,6 +3,7 @@
 
 import { fsrs, createEmptyCard, type Card as FsrsCard, type Grade, generatorParameters } from "ts-fsrs"
 import type { FSRSParams } from "@/components/fsrs-controls"
+import { getEffectiveDueDate } from "./spaced-repetition"
 
 export interface CardWithProgress {
   id: number
@@ -91,7 +92,7 @@ export function calculateDeckRetrievability(
 
     const lastReviewed = card.progress?.last_reviewed ?? today
     const retrievability = calculateRetrievability(effectiveStability, lastReviewed, examDate)
-    const dueDate = card.progress?.due_date ?? today
+    const dueDate = getEffectiveDueDate(card.progress)?.toISOString().split("T")[0] ?? today
 
     const todayDate = new Date(today)
     const exam = new Date(examDate)
